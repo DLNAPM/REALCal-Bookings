@@ -68,17 +68,22 @@ const CheckoutForm: React.FC<{ clientSecret: string, bookingDetails: any }> = ({
            payload.accessCode = accessCode;
         }
 
-        await setDoc(doc(db, 'bookings', bookingId), payload);
+        if (db) {
+          await setDoc(doc(db, 'bookings', bookingId), payload);
+        }
         
         // Notify Managers
         try {
-           const managersSnap = await getDocs(query(collection(db, 'property_managers')));
-           const managers = managersSnap.docs.map(d => d.data()).filter(m => m.enabled);
+           let managers: any[] = [];
            let propertyName = "Villa";
-           try {
-              const propSnap = await getDoc(doc(db, 'properties', bookingDetails.propertyId));
-              if(propSnap.exists()) propertyName = propSnap.data().name;
-           } catch(e) {}
+           if (db) {
+             const managersSnap = await getDocs(query(collection(db, 'property_managers')));
+             managers = managersSnap.docs.map(d => d.data()).filter(m => m.enabled);
+             try {
+                const propSnap = await getDoc(doc(db, 'properties', bookingDetails.propertyId));
+                if(propSnap.exists()) propertyName = propSnap.data().name;
+             } catch(e) {}
+           }
 
            if (managers.length > 0) {
               await fetch('/api/notify-managers', {

@@ -23,10 +23,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!auth || !db) {
+      setLoading(false);
+      return;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         // Sync user to firestore
-        const userRef = doc(db, 'users', firebaseUser.uid);
+        const userRef = doc(db as Parameters<typeof doc>[0], 'users', firebaseUser.uid);
         const userSnap = await getDoc(userRef);
         
         let role: 'user' | 'admin' = 'user';

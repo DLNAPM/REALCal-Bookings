@@ -12,6 +12,7 @@ export const Home: React.FC = () => {
     const navigate = useNavigate();
 
     useEffect(() => {
+        if (!db) return;
         const unsub = onSnapshot(query(collection(db, 'properties')), (snap) => {
             setProperties(snap.docs.map(d => ({id: d.id, ...d.data() } as Property)));
         });

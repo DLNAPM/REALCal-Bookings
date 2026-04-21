@@ -19,7 +19,7 @@ export const Calendar: React.FC<{ propertyId: string }> = ({ propertyId }) => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!propertyId) return;
+    if (!propertyId || !db) return;
     const unsubRules = onSnapshot(query(collection(db, 'pricing_rules'), where('propertyId', '==', propertyId)), (snap) => {
       setPricingRules(snap.docs.map(d => ({ id: d.id, ...d.data() } as PricingRule)));
     });

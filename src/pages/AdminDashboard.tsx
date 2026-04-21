@@ -26,6 +26,7 @@ export const AdminDashboard: React.FC = () => {
   if (!user || user.role !== 'admin') return <Navigate to="/" />;
 
   useEffect(() => {
+    if (!db) return;
     onSnapshot(query(collection(db, 'users')), (snap) => setUsers(snap.docs.map(d => d.data())));
     onSnapshot(query(collection(db, 'bookings')), (snap) => setBookings(snap.docs.map(d => ({id: d.id, ...d.data() } as Booking))));
     onSnapshot(query(collection(db, 'blackout_dates')), (snap) => setBlackouts(snap.docs.map(d => ({id: d.id, ...d.data() } as BlackoutDate))));
@@ -36,7 +37,7 @@ export const AdminDashboard: React.FC = () => {
         setProperties(props);
         if (props.length > 0 && !activePropertyId) setActivePropertyId(props[0].id);
     });
-  }, []);
+  }, [activePropertyId]);
 
   const totalRevenue = bookings.filter(b => b.status === 'confirmed').reduce((sum, b) => sum + b.totalPrice, 0);
   const totalCancellations = bookings.filter(b => b.status === 'cancelled').length;
@@ -101,6 +102,7 @@ export const AdminDashboard: React.FC = () => {
 
   const handleCreateProperty = async (e: React.FormEvent) => {
       e.preventDefault();
+      if (!db) return alert("Firebase not configured");
       const fd = new FormData(e.target as HTMLFormElement);
       try {
           await addDoc(collection(db, 'properties'), {
@@ -115,6 +117,7 @@ export const AdminDashboard: React.FC = () => {
   }
 
   const handleDeleteProperty = async (id: string) => {
+      if (!db) return alert("Firebase not configured");
       if(window.confirm('Are you certain? This will orphans bookings...')){
           await deleteDoc(doc(db, 'properties', id));
           if (activePropertyId === id) setActivePropertyId(null);
@@ -123,6 +126,7 @@ export const AdminDashboard: React.FC = () => {
 
   const handleCreatePricingRule = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!db) return alert("Firebase not configured");
     if(!activePropertyId) return alert("Select a property first");
     const fd = new FormData(e.target as HTMLFormElement);
     try {
@@ -141,6 +145,7 @@ export const AdminDashboard: React.FC = () => {
 
   const handleCreateBlackout = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!db) return alert("Firebase not configured");
     if(!activePropertyId) return alert("Select a property first");
     const fd = new FormData(e.target as HTMLFormElement);
     try {
@@ -156,6 +161,7 @@ export const AdminDashboard: React.FC = () => {
 
   const handleCreateManager = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!db) return alert("Firebase not configured");
     const fd = new FormData(e.target as HTMLFormElement);
     try {
       await addDoc(collection(db, 'property_managers'), {
@@ -170,12 +176,14 @@ export const AdminDashboard: React.FC = () => {
   }
 
   const toggleManager = async (id: string, enabled: boolean) => {
+    if (!db) return alert("Firebase not configured");
     try {
       await updateDoc(doc(db, 'property_managers', id), { enabled: !enabled });
     } catch (err: any) { alert(err.message); }
   }
 
   const handleDeleteManager = async (id: string) => {
+    if (!db) return alert("Firebase not configured");
     if(window.confirm('Delete this contact?')) {
       await deleteDoc(doc(db, 'property_managers', id));
     }
@@ -183,6 +191,7 @@ export const AdminDashboard: React.FC = () => {
 
   const handleAdminCreateBooking = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!db) return alert("Firebase not configured");
     const fd = new FormData(e.target as HTMLFormElement);
     const formPropId = fd.get('propertyId') as string;
     const checkIn = fd.get('checkIn') as string;

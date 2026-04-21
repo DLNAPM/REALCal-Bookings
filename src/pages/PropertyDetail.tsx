@@ -13,11 +13,14 @@ export const PropertyDetail: React.FC = () => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (!id) return;
+        if (!id || !db) return;
         getDoc(doc(db, 'properties', id)).then(snap => {
             if (snap.exists()) {
                 setProperty({ id: snap.id, ...snap.data() } as Property);
             }
+            setLoading(false);
+        }).catch(err => {
+            console.error("Failed to load property:", err);
             setLoading(false);
         });
     }, [id]);
