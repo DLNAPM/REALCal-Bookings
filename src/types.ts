@@ -1,0 +1,51 @@
+export type RuleType = 'default' | 'weekend' | 'holiday' | 'custom';
+
+export interface Property {
+  id: string;
+  name: string;
+  description: string;
+  images: string[];
+  createdAt: any;
+}
+
+export interface PricingRule {
+  id: string;
+  propertyId: string;
+  type: RuleType;
+  rate: number;
+  startDate?: string;
+  endDate?: string;
+  name?: string;
+  createdAt: any;
+}
+
+export interface BlackoutDate {
+  id: string;
+  propertyId: string;
+  date: string;
+  reason?: string;
+  createdAt: any;
+}
+
+export interface PropertyManager {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  enabled: boolean;
+  createdAt: any;
+}
+
+export interface Booking {
+  id: string;
+  userId: string;
+  propertyId: string;
+  checkIn: string;
+  checkOut: string;
+  status: 'pending' | 'confirmed' | 'cancelled';
+  totalPrice: number;
+  guests: number;
+  accessCode?: string;
+  createdAt: any;
+  updatedAt: any;
+}

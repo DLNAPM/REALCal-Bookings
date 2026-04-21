@@ -1,0 +1,177 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ---------- PRIMITIVES ----------
+    function isSignedIn() { return request.auth != null; }
+    function isVerified() { return isSignedIn() && request.auth.token.email_verified == true; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    
+    // Bootstrap Admin + Explicit email check
+    function isAdmin() { 
+      return (isVerified() && request.auth.token.email == 'dlaniger.napm.consulting@gmail.com') ||
+             (isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'); 
+    }
+
+    // ---------- VALIDATION BLUEPRINTS ----------
+    
+    // Users Collection
+    function isValidUser(data) {
+      return data.keys().hasAll(['email', 'displayName', 'photoURL', 'role', 'createdAt']) && data.keys().size() == 5 &&
+        data.email is string && data.email.size() <= 256 &&
+        data.displayName is string && data.displayName.size() <= 128 &&
+        data.photoURL is string && data.photoURL.size() <= 1024 &&
+        data.role in ['user', 'admin'] &&
+        data.createdAt is timestamp;
+    }
+    
+    // Property Managers Collection
+    function isValidPropertyManager(data) {
+      return data.keys().hasAll(['name', 'email', 'phone', 'enabled', 'createdAt']) && data.keys().size() == 5 &&
+        data.name is string && data.name.size() <= 128 &&
+        data.email is string && data.email.size() <= 256 &&
+        data.phone is string && data.phone.size() <= 32 &&
+        data.enabled is bool &&
+        data.createdAt is timestamp;
+    }
+
+    // Properties Collection
+    function isValidProperty(data) {
+      return data.keys().hasAll(['name', 'description', 'images', 'createdAt']) && data.keys().size() == 4 &&
+        data.name is string && data.name.size() <= 128 &&
+        data.description is string && data.description.size() <= 2048 &&
+        data.images is list && data.images.size() <= 15 &&
+        (data.images.size() == 0 || data.images[0] is string) &&
+        data.createdAt is timestamp;
+    }
+
+    // Bookings Collection
+    function isValidBooking(data) {
+      return data.keys().hasAll(['userId', 'propertyId', 'checkIn', 'checkOut', 'status', 'totalPrice', 'guests', 'createdAt', 'updatedAt']) && data.keys().size() >= 9 && data.keys().size() <= 10 &&
+        data.userId is string && data.userId.size() <= 128 && data.userId == request.auth.uid &&
+        data.propertyId is string && data.propertyId.size() <= 128 &&
+        data.checkIn is string && data.checkIn.size() <= 32 &&
+        data.checkOut is string && data.checkOut.size() <= 32 &&
+        data.status in ['pending', 'confirmed', 'cancelled'] &&
+        data.totalPrice is number &&
+        data.guests is number &&
+        (data.keys().hasAll(['accessCode']) ? data.accessCode is string && data.accessCode.size() <= 64 : true) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    // Pricing Rule
+    function isValidPricingRule(data) {
+      return data.keys().hasAll(['propertyId', 'type', 'rate', 'createdAt']) && data.keys().size() >= 4 && data.keys().size() <= 7 &&
+        data.propertyId is string && data.propertyId.size() <= 128 &&
+        data.type in ['default', 'weekend', 'holiday', 'custom'] &&
+        data.rate is number &&
+        (data.keys().hasAll(['startDate']) ? data.startDate is string : true) &&
+        (data.keys().hasAll(['endDate']) ? data.endDate is string : true) &&
+        (data.keys().hasAll(['name']) ? data.name is string : true) &&
+        data.createdAt is timestamp;
+    }
+
+    // Blackout Date
+    function isValidBlackoutDate(data) {
+      return data.keys().hasAll(['propertyId', 'date', 'createdAt']) && data.keys().size() >= 3 && data.keys().size() <= 4 &&
+        data.propertyId is string && data.propertyId.size() <= 128 &&
+        data.date is string && data.date.size() <= 32 &&
+        (data.keys().hasAll(['reason']) ? data.reason is string : true) &&
+        data.createdAt is timestamp;
+    }
+
+    // ---------- MATCH BLOCKS ----------
+
+    match /property_managers/{managerId} {
+      allow get: if true; 
+      allow list: if true;
+      allow create: if isAdmin() && isValidId(managerId) && isValidPropertyManager(incoming()) && incoming().createdAt == request.time;
+      allow update: if isAdmin() && isValidId(managerId) && isValidPropertyManager(incoming()) && incoming().createdAt == existing().createdAt;
+      allow delete: if isAdmin();
+    }
+
+    match /properties/{propertyId} {
+      allow get: if true; 
+      allow list: if true;
+      allow create: if isAdmin() && isValidId(propertyId) && isValidProperty(incoming()) && incoming().createdAt == request.time;
+      allow update: if isAdmin() && isValidId(propertyId) && isValidProperty(incoming()) && incoming().createdAt == existing().createdAt;
+      allow delete: if isAdmin();
+    }
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      
+      allow create: if isVerified() && isValidId(userId) && request.auth.uid == userId &&
+        isValidUser(incoming()) && incoming().createdAt == request.time &&
+        (incoming().role == 'user' || (incoming().role == 'admin' && request.auth.token.email == 'dlaniger.napm.consulting@gmail.com'));
+        
+      allow update: if isVerified() && isValidId(userId) && request.auth.uid == userId &&
+        isValidUser(incoming()) && 
+        incoming().createdAt == existing().createdAt &&
+        (incoming().role == existing().role || isAdmin()) &&
+        (
+          isAdmin() ||
+          incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL'])
+        );
+        
+      allow delete: if isAdmin();
+    }
+
+    match /bookings/{bookingId} {
+      allow get: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      
+      allow create: if isVerified() && isValidId(bookingId) && 
+        isValidBooking(incoming()) && 
+        incoming().createdAt == request.time && 
+        incoming().updatedAt == request.time &&
+        incoming().status == 'pending' &&
+        exists(/databases/$(database)/documents/users/$(incoming().userId));
+        
+      allow update: if isVerified() && isValidId(bookingId) &&
+        isValidBooking(incoming()) &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          isAdmin() ||
+          (
+            existing().userId == request.auth.uid && 
+            existing().status != 'cancelled' &&
+            // Note: Users can cancel their bookings or update guests. 
+            // Realistically price would update but since calculation happens here we must be careful.
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']) &&
+            incoming().status == 'cancelled'
+          )
+        );
+        
+      allow delete: if isAdmin();
+    }
+
+    match /pricing_rules/{ruleId} {
+      allow get: if true; // Public read needed for calendar calculations
+      allow list: if true;
+      allow create: if isAdmin() && isValidId(ruleId) && isValidPricingRule(incoming()) && incoming().createdAt == request.time;
+      allow update: if isAdmin() && isValidId(ruleId) && isValidPricingRule(incoming()) && incoming().createdAt == existing().createdAt;
+      allow delete: if isAdmin();
+    }
+
+    match /blackout_dates/{blackoutId} {
+      allow get: if true; // Public read needed for calendar calculations
+      allow list: if true;
+      allow create: if isAdmin() && isValidId(blackoutId) && isValidBlackoutDate(incoming()) && incoming().createdAt == request.time;
+      allow update: if isAdmin() && isValidId(blackoutId) && isValidBlackoutDate(incoming()) && incoming().createdAt == existing().createdAt;
+      allow delete: if isAdmin();
+    }
+  }
+}

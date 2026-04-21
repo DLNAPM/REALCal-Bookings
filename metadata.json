@@ -1,0 +1,6 @@
+{
+  "name": "REALCal Bookings",
+  "description": "Real-Time Availability Calendar with Instant Pricing and Booking. Features dynamic nightly rates, blackout dates, instant price breakdown, and Stripe checkout.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

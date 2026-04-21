@@ -1,0 +1,77 @@
+{
+  "entities": {
+    "user_profile": {
+      "title": "User Profile",
+      "description": "Public profile information and roles.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "admin"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["email", "role", "createdAt"]
+    },
+    "booking": {
+      "title": "Booking",
+      "description": "User's booking reservation.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "checkIn": { "type": "string", "format": "date" },
+        "checkOut": { "type": "string", "format": "date" },
+        "status": { "type": "string", "enum": ["pending", "confirmed", "cancelled"] },
+        "totalPrice": { "type": "number" },
+        "guests": { "type": "number" },
+        "accessCode": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["userId", "checkIn", "checkOut", "status", "totalPrice", "guests", "createdAt", "updatedAt"]
+    },
+    "pricing_rule": {
+      "title": "Pricing Rule",
+      "description": "Dynamic pricing settings defined by Admin.",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["default", "weekend", "holiday", "custom"] },
+        "rate": { "type": "number" },
+        "startDate": { "type": "string", "format": "date" },
+        "endDate": { "type": "string", "format": "date" },
+        "name": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["type", "rate", "createdAt"]
+    },
+    "blackout_date": {
+      "title": "Blackout Date",
+      "description": "Disabled dates defined by Admin.",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string", "format": "date" },
+        "reason": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["date", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/user_profile" },
+      "description": "Store authenticating users."
+    },
+    "/bookings/{bookingId}": {
+      "schema": { "$ref": "#/entities/booking" },
+      "description": "Store all booking reservations."
+    },
+    "/pricing_rules/{ruleId}": {
+      "schema": { "$ref": "#/entities/pricing_rule" },
+      "description": "Store pricing variations."
+    },
+    "/blackout_dates/{blackoutId}": {
+      "schema": { "$ref": "#/entities/blackout_date" },
+      "description": "Store blackout/blocked dates."
+    }
+  }
+}
