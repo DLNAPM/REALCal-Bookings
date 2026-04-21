@@ -9,30 +9,31 @@ export const Confirmation: React.FC = () => {
     if (!bookingId) return <Navigate to="/" />;
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-            <div className="max-w-md w-full bg-white p-8 rounded-xl shadow-lg border text-center">
-                <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-                <h1 className="text-3xl font-bold mb-2">Booking Confirmed!</h1>
-                <p className="text-gray-600 mb-6">Your reservation has been successfully booked.</p>
-                <div className="bg-gray-50 p-4 rounded-lg mb-4 text-sm font-mono text-gray-500 break-all">
-                   Booking Ref: {bookingId}
+        <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4 font-sans text-slate-900">
+            <div className="max-w-md w-full bg-white p-8 rounded-3xl shadow-xl border border-slate-200 text-center">
+                <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm">
+                   <CheckCircle className="w-10 h-10 text-emerald-500" />
+                </div>
+                <h1 className="text-3xl font-bold mb-2 text-slate-800">Booking Confirmed!</h1>
+                <p className="text-slate-500 mb-8">Your reservation has been successfully booked.</p>
+                <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl mb-4 text-xs font-mono text-slate-500 break-all select-all">
+                   Ref: {bookingId}
                 </div>
                 
                 {accessCode && (
-                  <div className="bg-black text-white p-6 rounded-lg mb-8 shadow-inner relative overflow-hidden">
-                      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-gray-700 to-gray-500 border-b border-gray-800"></div>
+                  <div className="bg-indigo-600 text-white p-6 rounded-2xl mb-8 shadow-inner shadow-indigo-700 relative overflow-hidden">
                       <div className="flex justify-center mb-2">
-                          <Key className="w-8 h-8 text-yellow-400 opacity-90" />
+                          <Key className="w-8 h-8 text-indigo-200" />
                       </div>
-                      <p className="text-xs uppercase font-bold text-gray-400 mb-1 tracking-widest">Yale Smart Lock Pin</p>
+                      <p className="text-xs uppercase font-bold text-indigo-300 mb-1 tracking-widest">Digital Access Pin</p>
                       <p className="text-4xl font-mono tracking-[0.25em]">{accessCode}</p>
-                      <p className="text-xs text-gray-400 mt-3">Valid during your stay duration</p>
+                      <p className="text-xs text-indigo-200 mt-4 opacity-80">Valid during your stay duration</p>
                   </div>
                 )}
 
-                <p className="text-sm text-gray-500 mb-6">We've sent a receipt and full instructions to your email.</p>
-                <Link to="/" className="w-full block py-3 bg-black text-white font-bold rounded-lg hover:bg-gray-800">
-                    Return to Home
+                <p className="text-sm text-slate-500 mb-8">We've sent a receipt and full instructions to your email.</p>
+                <Link to="/" className="w-full block py-4 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-500 transition-colors shadow-sm">
+                    Return Home
                 </Link>
             </div>
         </div>

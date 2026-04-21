@@ -262,104 +262,121 @@ export const AdminDashboard: React.FC = () => {
   const activeBlackouts = blackouts.filter(b => b.propertyId === activePropertyId);
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 md:p-12">
-       <div className="max-w-7xl mx-auto space-y-8">
-          <div className="flex justify-between items-center bg-white p-6 rounded-xl border shadow-sm">
-             <h1 className="text-3xl font-bold flex items-center gap-3"><Settings className="text-gray-400" /> Admin Dashboard</h1>
-             <button onClick={exportCSV} className="bg-black text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 hover:bg-gray-800">
-               <FileDown size={18}/> Export Bookings
-             </button>
+    <div className="bg-slate-50 min-h-screen p-6 font-sans text-slate-900 overflow-hidden">
+       <div className="max-w-7xl mx-auto space-y-5">
+          {/* Header Navigation Bento Style */}
+          <header className="flex justify-between items-center mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200">
+                 <Settings size={20} />
+              </div>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-800">REALCal <span className="text-indigo-600">Admin</span></h1>
+            </div>
+            
+            <div className="flex items-center gap-4 bg-white py-1.5 pl-3 pr-4 rounded-full border border-slate-200 shadow-sm">
+                <div className="text-sm text-right leading-tight">
+                  <p className="font-semibold text-slate-800">{user?.displayName || 'Administrator'}</p>
+                  <p className="text-xs text-indigo-600 font-medium">Dashboard Control</p>
+                </div>
+            </div>
+          </header>
+
+          <div className="grid grid-cols-1 md:grid-cols-12 md:grid-rows-1 gap-5">
+             <div className="col-span-1 md:col-span-12 bg-indigo-50 rounded-3xl border border-indigo-100 p-6 flex flex-col md:flex-row gap-6 shadow-sm">
+                <div className="flex-1">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-bold text-indigo-900">Admin Quick Stats</h3>
+                    <button onClick={exportCSV} className="text-xs bg-white text-indigo-600 border border-indigo-200 font-bold px-3 py-1.5 rounded-lg hover:bg-indigo-600 hover:text-white transition-colors flex items-center gap-1">
+                       <FileDown size={14}/> Export CSV
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="bg-white p-4 rounded-2xl shadow-sm border border-indigo-100">
+                       <p className="text-xs text-slate-500 font-medium uppercase tracking-tight flex items-center gap-1"><TrendingUp size={14}/> Total Revenue</p>
+                       <p className="text-xl font-bold text-slate-900 mt-1">${(totalRevenue).toFixed(2)}</p>
+                    </div>
+                    <div className="bg-white p-4 rounded-2xl shadow-sm border border-indigo-100">
+                       <p className="text-xs text-slate-500 font-medium uppercase tracking-tight flex items-center gap-1"><Users size={14}/> Total Users</p>
+                       <p className="text-xl font-bold text-slate-900 mt-1">{users.length}</p>
+                    </div>
+                    <div className="bg-white p-4 rounded-2xl shadow-sm border border-indigo-100">
+                       <p className="text-xs text-slate-500 font-medium uppercase tracking-tight">Active Bookings</p>
+                       <p className="text-xl font-bold text-slate-900 mt-1">
+                          <span className="text-indigo-600">{bookings.filter(b => b.status==='confirmed').length}</span>
+                          <span className="text-slate-300 mx-1">/</span>
+                          <span className="text-red-400 text-sm">{totalCancellations} Cancels</span>
+                       </p>
+                    </div>
+                  </div>
+                </div>
+             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-             <div className="bg-white p-6 rounded-xl border shadow-sm flex items-center gap-4">
-                <div className="p-4 bg-gray-100 text-gray-700 rounded-full"><Users size={24}/></div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Total Users</p>
-                  <p className="text-2xl font-bold">{users.length}</p>
-                </div>
-             </div>
-             <div className="bg-white p-6 rounded-xl border shadow-sm flex items-center gap-4">
-                <div className="p-4 bg-gray-100 text-gray-700 rounded-full"><TrendingUp size={24}/></div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Confirmed Revenue</p>
-                  <p className="text-2xl font-bold">${(totalRevenue).toFixed(2)}</p>
-                </div>
-             </div>
-             <div className="bg-white p-6 rounded-xl border shadow-sm flex flex-col justify-center">
-                <p className="text-sm font-medium text-gray-500 mb-1">Bookings Overview</p>
-                <div className="flex gap-4">
-                  <span className="text-green-600 font-bold">{bookings.filter(b => b.status==='confirmed').length} Confirmed</span>
-                  <span className="text-red-500 font-bold">{totalCancellations} Canceled</span>
-                </div>
-             </div>
-          </div>
-
-          <div className="bg-white p-6 rounded-xl border shadow-sm">
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
              <h2 className="text-xl font-bold mb-6 flex items-center gap-2"><CalendarIcon size={20}/> Create Manual Booking</h2>
-             <form onSubmit={handleAdminCreateBooking} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end bg-gray-50 p-6 rounded-xl border border-dashed">
+             <form onSubmit={handleAdminCreateBooking} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end bg-slate-50 p-6 rounded-2xl border border-slate-300 border-dashed">
                 <div className="lg:col-span-1">
-                   <label className="text-xs font-bold text-gray-500 uppercase">Property</label>
-                   <select name="propertyId" required className="w-full border rounded-lg p-2 mt-1 required bg-white">
+                   <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Property</label>
+                   <select name="propertyId" required className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 required bg-white shadow-sm">
                       <option value="">Select...</option>
                       {properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                    </select>
                 </div>
                 <div className="lg:col-span-1">
-                   <label className="text-xs font-bold text-gray-500 uppercase">Check In</label>
-                   <input name="checkIn" type="date" required className="w-full border rounded-lg p-2 mt-1 bg-white" />
+                   <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Check In</label>
+                   <input name="checkIn" type="date" required className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm" />
                 </div>
                 <div className="lg:col-span-1">
-                   <label className="text-xs font-bold text-gray-500 uppercase">Check Out</label>
-                   <input name="checkOut" type="date" required className="w-full border rounded-lg p-2 mt-1 bg-white" />
+                   <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Check Out</label>
+                   <input name="checkOut" type="date" required className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm" />
                 </div>
                 <div className="lg:col-span-1">
-                   <label className="text-xs font-bold text-gray-500 uppercase">Guest Name</label>
-                   <input name="guestName" required placeholder="Guest Name" className="w-full border rounded-lg p-2 mt-1 bg-white" />
+                   <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Guest Name</label>
+                   <input name="guestName" required placeholder="Guest Name" className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm" />
                 </div>
                 <div className="lg:col-span-1">
-                   <label className="text-xs font-bold text-gray-500 uppercase">Total Price ($)</label>
-                   <input name="totalPrice" type="number" required placeholder="0.00" className="w-full border rounded-lg p-2 mt-1 bg-white" />
+                   <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Total Price ($)</label>
+                   <input name="totalPrice" type="number" required placeholder="0.00" className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm" />
                 </div>
                 <div className="md:col-span-2 lg:col-span-5 flex justify-end">
-                   <button type="submit" className="bg-black text-white px-6 py-3 rounded-lg font-bold hover:bg-gray-800">
+                   <button type="submit" className="w-full bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-indigo-500 transition-colors">
                       Create Override Booking
                    </button>
                 </div>
              </form>
           </div>
 
-          <div className="bg-white p-6 rounded-xl border shadow-sm">
-              <h2 className="text-xl font-bold mb-6 flex items-center gap-2"><Phone size={20}/> Property Management Contacts</h2>
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+              <h2 className="text-xl font-bold mb-6 flex items-center gap-2"><Phone className="text-indigo-600" size={20}/> Property Management Contacts</h2>
               
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                 <div className="col-span-1 border p-4 rounded-xl bg-gray-50">
-                    <h3 className="font-bold mb-4">Add Contact</h3>
+                 <div className="col-span-1 border border-slate-200 p-4 rounded-2xl bg-slate-50">
+                    <h3 className="font-bold mb-4 text-slate-800">Add Contact</h3>
                     <form onSubmit={handleCreateManager} className="space-y-4">
-                       <input name="name" required placeholder="Name (e.g. John Doe)" className="w-full border rounded-lg p-2 bg-white" />
-                       <input name="email" type="email" required placeholder="Email Address" className="w-full border rounded-lg p-2 bg-white" />
-                       <input name="phone" required placeholder="Phone Number (e.g. +1...)" className="w-full border rounded-lg p-2 bg-white" />
-                       <button type="submit" className="w-full bg-black text-white px-4 py-2 rounded-lg font-medium hover:bg-gray-800">Save Contact</button>
+                       <input name="name" required placeholder="Name (e.g. John Doe)" className="w-full border border-slate-200 rounded-xl p-2.5 bg-white shadow-sm" />
+                       <input name="email" type="email" required placeholder="Email Address" className="w-full border border-slate-200 rounded-xl p-2.5 bg-white shadow-sm" />
+                       <input name="phone" required placeholder="Phone Number (e.g. +1...)" className="w-full border border-slate-200 rounded-xl p-2.5 bg-white shadow-sm" />
+                       <button type="submit" className="w-full bg-indigo-600 text-white px-4 py-2.5 rounded-xl font-bold hover:bg-indigo-500 transition-colors">Save Contact</button>
                     </form>
                  </div>
                  
                  <div className="col-span-1 md:col-span-2 space-y-3">
-                    {propertyManagers.length === 0 && <div className="p-8 border border-dashed rounded-xl text-center text-gray-500 text-sm">No management contacts configured.</div>}
+                    {propertyManagers.length === 0 && <div className="p-8 border border-dashed rounded-2xl text-center text-slate-500 text-sm">No management contacts configured.</div>}
                     {propertyManagers.map(m => (
-                       <div key={m.id} className="border p-4 rounded-xl flex flex-col sm:flex-row justify-between sm:items-center gap-4 bg-white">
+                       <div key={m.id} className="border border-slate-200 p-4 rounded-2xl flex flex-col sm:flex-row justify-between sm:items-center gap-4 bg-white shadow-sm">
                           <div>
-                             <h4 className="font-bold">{m.name}</h4>
-                             <div className="flex gap-4 text-sm text-gray-600 mt-1">
+                             <h4 className="font-bold text-slate-800">{m.name}</h4>
+                             <div className="flex gap-4 text-sm text-slate-500 mt-1">
                                 <span className="flex items-center gap-1"><Mail size={14}/> {m.email}</span>
                                 <span className="flex items-center gap-1"><Phone size={14}/> {m.phone}</span>
                              </div>
                           </div>
                           <div className="flex items-center gap-4">
                              <label className="flex items-center gap-2 cursor-pointer">
-                               <input type="checkbox" checked={m.enabled} onChange={() => toggleManager(m.id, m.enabled)} className="w-4 h-4 rounded text-black" />
-                               <span className="text-sm font-medium">{m.enabled ? 'Enabled' : 'Disabled'}</span>
+                               <input type="checkbox" checked={m.enabled} onChange={() => toggleManager(m.id, m.enabled)} className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500" />
+                               <span className="text-sm font-medium text-slate-700">{m.enabled ? 'Enabled' : 'Disabled'}</span>
                              </label>
-                             <button type="button" onClick={() => handleDeleteManager(m.id)} className="text-red-500 hover:bg-red-50 p-2 rounded-lg"><Trash2 size={18}/></button>
+                             <button type="button" onClick={() => handleDeleteManager(m.id)} className="text-red-500 hover:bg-red-50 p-2 rounded-xl transition-colors"><Trash2 size={18}/></button>
                           </div>
                        </div>
                     ))}
@@ -367,19 +384,19 @@ export const AdminDashboard: React.FC = () => {
               </div>
           </div>
 
-          <div className="bg-white p-6 rounded-xl border shadow-sm">
-             <h2 className="text-2xl font-bold mb-6">Manage Properties</h2>
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+             <h2 className="text-2xl font-bold mb-6 text-slate-800">Manage Properties</h2>
              
-             <form onSubmit={handleCreateProperty} className="mb-8 p-6 bg-gray-50 rounded-xl border border-dashed">
-                 <h3 className="font-bold mb-4">Add New Property</h3>
+             <form onSubmit={handleCreateProperty} className="mb-8 p-6 bg-slate-50 rounded-2xl border border-dashed border-slate-300">
+                 <h3 className="font-bold mb-4 text-slate-800">Add New Property</h3>
                  <div className="space-y-4">
-                     <input name="name" required placeholder="Property Name" className="w-full border rounded-lg p-3 bg-white" />
-                     <textarea name="description" required placeholder="Description..." rows={3} className="w-full border rounded-lg p-3 bg-white" />
+                     <input name="name" required placeholder="Property Name" className="w-full border border-slate-200 rounded-xl p-3 bg-white shadow-sm" />
+                     <textarea name="description" required placeholder="Description..." rows={3} className="w-full border border-slate-200 rounded-xl p-3 bg-white shadow-sm" />
                      
-                     <div className="bg-white p-4 rounded-lg border">
+                     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                          <div className="flex justify-between items-center mb-2">
-                             <span className="font-medium">Images ({previewImages.length}/15)</span>
-                             <label className="bg-gray-200 hover:bg-gray-300 text-black px-4 py-2 rounded cursor-pointer text-sm font-bold flex gap-2 items-center">
+                             <span className="font-medium text-slate-700">Images ({previewImages.length}/15)</span>
+                             <label className="bg-slate-100 hover:bg-slate-200 text-slate-800 px-4 py-2 rounded-lg cursor-pointer text-sm font-bold flex gap-2 items-center transition-colors">
                                  <ImageIcon size={16} /> Upload Photos
                                  <input type="file" multiple accept="image/*" className="hidden" onChange={handleImageSelect} disabled={uploadingProperty || previewImages.length >= 15} />
                              </label>
@@ -387,42 +404,42 @@ export const AdminDashboard: React.FC = () => {
                          <div className="flex flex-wrap gap-2">
                              {previewImages.map((src, i) => (
                                  <div key={i} className="relative w-20 h-20 group">
-                                     <img src={src} className="w-full h-full object-cover rounded" />
+                                     <img src={src} className="w-full h-full object-cover rounded-lg" />
                                      <button type="button" onClick={() => setPreviewImages(p => p.filter((_, idx)=>idx!==i))} className="absolute hidden group-hover:flex top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 items-center justify-center text-xs">x</button>
                                  </div>
                              ))}
-                             {uploadingProperty && <div className="w-20 h-20 flex items-center justify-center bg-gray-100 rounded text-xs text-gray-500">Processing...</div>}
+                             {uploadingProperty && <div className="w-20 h-20 flex items-center justify-center bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-500">Processing...</div>}
                          </div>
                      </div>
-                     <button type="submit" disabled={uploadingProperty} className="bg-black text-white px-6 py-3 rounded-lg font-bold">Save Property</button>
+                     <button type="submit" disabled={uploadingProperty} className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-indigo-500 transition-colors">Save Property</button>
                  </div>
              </form>
              
              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                  {properties.map(p => (
-                     <div key={p.id} className={`border p-4 rounded-xl cursor-pointer transition-colors ${activePropertyId === p.id ? 'ring-2 ring-black bg-gray-50' : 'hover:bg-gray-50'}`} onClick={() => setActivePropertyId(p.id)}>
-                         {p.images.length > 0 && <img src={p.images[0]} className="w-full h-40 object-cover rounded-lg mb-3" />}
+                     <div key={p.id} className={`border p-4 rounded-2xl cursor-pointer transition-colors shadow-sm ${activePropertyId === p.id ? 'ring-2 ring-indigo-600 bg-indigo-50 border-indigo-200' : 'hover:bg-slate-50 border-slate-200 bg-white'}`} onClick={() => setActivePropertyId(p.id)}>
+                         {p.images.length > 0 && <img src={p.images[0]} className="w-full h-40 object-cover rounded-xl mb-3 shadow-sm" />}
                          <div className="flex justify-between items-start">
-                             <h4 className="font-bold text-lg">{p.name}</h4>
-                             <button type="button" onClick={(e) => { e.stopPropagation(); handleDeleteProperty(p.id); }} className="text-red-500 hover:text-red-700 p-1"><Trash2 size={16}/></button>
+                             <h4 className="font-bold text-lg text-slate-800">{p.name}</h4>
+                             <button type="button" onClick={(e) => { e.stopPropagation(); handleDeleteProperty(p.id); }} className="text-slate-400 hover:text-red-500 p-1 transition-colors"><Trash2 size={16}/></button>
                          </div>
-                         <p className="text-sm text-gray-600 line-clamp-2">{p.description}</p>
-                         <div className="mt-2 text-xs font-bold text-gray-400">{p.images.length} Photos</div>
+                         <p className="text-sm text-slate-500 line-clamp-2 mt-1">{p.description}</p>
+                         <div className="mt-3 text-xs font-bold text-slate-400 uppercase tracking-widest">{p.images.length} Photos</div>
                      </div>
                  ))}
-                 {properties.length === 0 && <div className="col-span-full text-center text-gray-500 p-8 border border-dashed rounded-xl">No properties configured yet.</div>}
+                 {properties.length === 0 && <div className="col-span-full text-center text-slate-400 p-8 border border-dashed rounded-2xl">No properties configured yet.</div>}
              </div>
           </div>
           
           {activePropertyId && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 border-t pt-8">
-                <div className="bg-white p-6 rounded-xl border shadow-sm">
-                   <h2 className="text-xl font-bold mb-4 flex items-center gap-2">Pricing Rules ({properties.find(p => p.id === activePropertyId)?.name})</h2>
-                   <form onSubmit={handleCreatePricingRule} className="space-y-4 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+                 <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+                   <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-slate-800">Pricing Rules <span className="text-sm font-normal text-slate-500 ml-2 bg-slate-100 px-2 py-1 rounded-md">{properties.find(p => p.id === activePropertyId)?.name}</span></h2>
+                   <form onSubmit={handleCreatePricingRule} className="space-y-4 mb-6 p-4 bg-slate-50 rounded-2xl border border-slate-200">
                       <div className="grid grid-cols-2 gap-4">
                          <div>
-                            <label className="text-xs font-bold text-gray-500 uppercase">Type</label>
-                            <select name="type" className="w-full border rounded-lg p-2 mt-1 required">
+                            <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Type</label>
+                            <select name="type" className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 required bg-white shadow-sm">
                                <option value="default">Default Layer</option>
                                <option value="weekend">Weekend Override</option>
                                <option value="holiday">Holiday Promo/Surge</option>
@@ -430,51 +447,51 @@ export const AdminDashboard: React.FC = () => {
                             </select>
                          </div>
                          <div>
-                             <label className="text-xs font-bold text-gray-500 uppercase">Per Night ($)</label>
-                             <input name="rate" type="number" required className="w-full border rounded-lg p-2 mt-1" placeholder="150" />
+                             <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Per Night ($)</label>
+                             <input name="rate" type="number" required className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm" placeholder="150" />
                          </div>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                           <div>
-                              <label className="text-xs font-bold text-gray-500 uppercase">Start Date</label>
-                              <input name="startDate" type="date" className="w-full border rounded-lg p-2 mt-1" />
+                              <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Start Date</label>
+                              <input name="startDate" type="date" className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm" />
                           </div>
                           <div>
-                              <label className="text-xs font-bold text-gray-500 uppercase">End Date</label>
-                              <input name="endDate" type="date" className="w-full border rounded-lg p-2 mt-1" />
+                              <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">End Date</label>
+                              <input name="endDate" type="date" className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm" />
                           </div>
                       </div>
-                      <button type="submit" className="w-full bg-black text-white font-medium py-2 rounded-lg hover:bg-gray-800">Add Rule</button>
+                      <button type="submit" className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl hover:bg-indigo-500 transition-colors">Add Rule</button>
                    </form>
 
                    <div className="space-y-2">
-                       {activeRules.length === 0 && <p className="text-sm text-gray-500 text-center">No rules configured for this property.</p>}
+                       {activeRules.length === 0 && <p className="text-sm text-slate-500 text-center">No rules configured for this property.</p>}
                       {activeRules.map(r => (
-                         <div key={r.id} className="border p-3 rounded-lg flex justify-between items-center text-sm">
+                         <div key={r.id} className="border border-slate-200 p-3 rounded-xl flex justify-between items-center text-sm shadow-sm bg-white">
                             <div>
-                               <span className="font-bold capitalize">{r.type}</span>
-                               {r.startDate && <span className="text-gray-500 ml-2">({r.startDate} to {r.endDate})</span>}
+                               <span className="font-bold capitalize text-slate-800">{r.type}</span>
+                               {r.startDate && <span className="text-slate-500 ml-2">({r.startDate} to {r.endDate})</span>}
                             </div>
-                            <span className="font-bold">${(r.rate)}/nt</span>
+                            <span className="font-bold text-indigo-600">${(r.rate)}/nt</span>
                          </div>
                       ))}
                    </div>
                 </div>
 
-                <div className="bg-white p-6 rounded-xl border shadow-sm">
-                   <h2 className="text-xl font-bold mb-4 flex items-center gap-2">Blackout Dates ({properties.find(p => p.id === activePropertyId)?.name})</h2>
-                   <form onSubmit={handleCreateBlackout} className="flex gap-4 mb-6">
-                      <input name="date" type="date" required className="flex-1 border rounded-lg p-2" />
-                      <input name="reason" type="text" placeholder="Reason (e.g. Maintenance)" className="flex-2 border rounded-lg p-2" />
-                      <button type="submit" className="bg-black text-white px-4 rounded-lg font-medium hover:bg-gray-800">Add</button>
+                <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+                   <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-slate-800">Blackout Dates <span className="text-sm font-normal text-slate-500 ml-2 bg-slate-100 px-2 py-1 rounded-md">{properties.find(p => p.id === activePropertyId)?.name}</span></h2>
+                   <form onSubmit={handleCreateBlackout} className="flex flex-col sm:flex-row gap-4 mb-6 p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                      <input name="date" type="date" required className="flex-1 border border-slate-200 rounded-xl p-2.5 bg-white shadow-sm" />
+                      <input name="reason" type="text" placeholder="Reason (e.g. Maintenance)" className="flex-1 md:flex-2 border border-slate-200 rounded-xl p-2.5 bg-white shadow-sm" />
+                      <button type="submit" className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-500 transition-colors">Add</button>
                    </form>
 
-                   <div className="space-y-2 max-h-64 overflow-y-auto">
-                       {activeBlackouts.length === 0 && <p className="text-sm text-gray-500 text-center">No blackouts configured for this property.</p>}
+                   <div className="space-y-2 max-h-[340px] overflow-y-auto pr-2">
+                       {activeBlackouts.length === 0 && <p className="text-sm text-slate-500 text-center">No blackouts configured for this property.</p>}
                       {activeBlackouts.map(b => (
-                         <div key={b.id} className="border p-3 rounded-lg flex justify-between items-center text-sm">
-                            <span className="font-bold">{b.date}</span>
-                            <span className="text-gray-500">{b.reason || 'No reason'}</span>
+                         <div key={b.id} className="border border-slate-200 p-3 rounded-xl flex justify-between items-center text-sm shadow-sm bg-white">
+                            <span className="font-bold text-slate-800">{b.date}</span>
+                            <span className="text-slate-500">{b.reason || 'No reason'}</span>
                          </div>
                       ))}
                    </div>

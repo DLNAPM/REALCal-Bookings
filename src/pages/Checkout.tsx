@@ -115,7 +115,7 @@ const CheckoutForm: React.FC<{ clientSecret: string, bookingDetails: any }> = ({
       <button 
         type="submit" 
         disabled={!stripe || processing}
-        className="w-full bg-black text-white py-3 rounded-lg font-bold disabled:bg-gray-400"
+        className="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-4 rounded-2xl font-bold disabled:bg-slate-400 transition-colors shadow-sm mt-6"
       >
         {processing ? 'Processing...' : 'Pay & Confirm Booking'}
       </button>
@@ -148,51 +148,67 @@ export const Checkout: React.FC = () => {
   }, [priceDetails]);
 
   return (
-    <div className="max-w-3xl mx-auto p-4 py-12">
-      <h1 className="text-3xl font-bold mb-8">Secure Checkout</h1>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div className="bg-gray-50 p-6 rounded-xl border">
-          <h3 className="font-bold text-lg border-b pb-4 mb-4">Booking Summary</h3>
-          <p><strong>Check In:</strong> {new Date(checkIn).toLocaleDateString()}</p>
-          <p className="mb-4"><strong>Check Out:</strong> {new Date(checkOut).toLocaleDateString()}</p>
-          
-          <div className="space-y-2 border-t pt-4 text-sm text-gray-600">
-             <div className="flex justify-between">
-                <span>Base Rate ({priceDetails.nights} nights)</span>
-                <span>$\{(priceDetails.baseTotal).toFixed(2)}</span>
-             </div>
-             {priceDetails.discount > 0 && (
-                 <div className="flex justify-between text-green-600">
-                    <span>Discount</span>
-                    <span>-$\{(priceDetails.discount).toFixed(2)}</span>
-                 </div>
-             )}
-             <div className="flex justify-between">
-                <span>Cleaning Fee</span>
-                <span>$\{(priceDetails.cleaningFee).toFixed(2)}</span>
-             </div>
-             <div className="flex justify-between">
-                <span>Taxes</span>
-                <span>$\{(priceDetails.taxes).toFixed(2)}</span>
-             </div>
-             <div className="flex justify-between font-bold text-black border-t pt-2 mt-2 text-lg">
-                <span>Total Due</span>
-                <span>$\{(priceDetails.grandTotal).toFixed(2)}</span>
-             </div>
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
+      <div className="max-w-4xl mx-auto w-full p-6 py-12">
+        <h1 className="text-3xl font-bold mb-8 text-slate-800">Complete your booking</h1>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="bg-slate-900 text-white p-8 rounded-3xl shadow-xl flex flex-col h-full border border-slate-800">
+            <h3 className="font-bold text-xl mb-6">Booking Summary</h3>
+            <div className="space-y-4 mb-8">
+               <div className="flex justify-between items-center text-slate-400">
+                 <span>Check-in</span>
+                 <span className="text-white font-medium">{new Date(checkIn).toLocaleDateString()}</span>
+               </div>
+               <div className="flex justify-between items-center text-slate-400">
+                 <span>Check-out</span>
+                 <span className="text-white font-medium">{new Date(checkOut).toLocaleDateString()}</span>
+               </div>
+            </div>
+            
+            <div className="space-y-3 border-t border-slate-800 pt-6 text-sm text-slate-400">
+               <div className="flex justify-between">
+                  <span>Base Rate ({priceDetails.nights} nights)</span>
+                  <span className="font-mono text-white">${(priceDetails.baseTotal).toFixed(2)}</span>
+               </div>
+               {priceDetails.discount > 0 && (
+                   <div className="flex justify-between text-emerald-400">
+                      <span>Discount</span>
+                      <span className="font-mono">-${(priceDetails.discount).toFixed(2)}</span>
+                   </div>
+               )}
+               <div className="flex justify-between">
+                  <span>Cleaning Fee</span>
+                  <span className="font-mono text-white">${(priceDetails.cleaningFee).toFixed(2)}</span>
+               </div>
+               <div className="flex justify-between">
+                  <span>Occupancy Taxes</span>
+                  <span className="font-mono text-white">${(priceDetails.taxes).toFixed(2)}</span>
+               </div>
+               <div className="flex justify-between items-end border-t border-slate-800 pt-6 mt-6">
+                  <span>Total Due</span>
+                  <span className="font-mono text-3xl font-bold text-white">${(priceDetails.grandTotal).toFixed(2)}</span>
+               </div>
+            </div>
+
+            <div className="mt-8 flex justify-center gap-3 opacity-60">
+                <div className="w-10 h-6 bg-slate-700 rounded-sm flex items-center justify-center text-[8px] font-bold">VISA</div>
+                <div className="w-10 h-6 bg-slate-700 rounded-sm flex items-center justify-center text-[8px] font-bold">STRIPE</div>
+            </div>
           </div>
-        </div>
-        
-        <div>
-           {clientSecret ? (
-              <Elements stripe={stripePromise} options={{ clientSecret }}>
-                <CheckoutForm clientSecret={clientSecret} bookingDetails={{ propertyId, checkIn, checkOut, priceDetails }} />
-              </Elements>
-           ) : (
-              <div className="animate-pulse flex flex-col space-y-4">
-                 <div className="h-10 bg-gray-200 rounded"></div>
-                 <div className="h-24 bg-gray-200 rounded"></div>
-              </div>
-           )}
+          
+          <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200 h-fit">
+             <h3 className="font-bold text-lg mb-6 text-slate-800">Payment Details</h3>
+             {clientSecret ? (
+                <Elements stripe={stripePromise} options={{ clientSecret }}>
+                  <CheckoutForm clientSecret={clientSecret} bookingDetails={{ propertyId, checkIn, checkOut, priceDetails }} />
+                </Elements>
+             ) : (
+                <div className="animate-pulse flex flex-col space-y-4">
+                   <div className="h-10 bg-slate-100 border border-slate-200 rounded-xl"></div>
+                   <div className="h-48 bg-slate-100 border border-slate-200 rounded-xl"></div>
+                </div>
+             )}
+          </div>
         </div>
       </div>
     </div>

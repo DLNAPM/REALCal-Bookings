@@ -132,24 +132,25 @@ export const Calendar: React.FC<{ propertyId: string }> = ({ propertyId }) => {
         if (checkIn && checkOut && cloneDay > checkIn && cloneDay < checkOut) isBetween = true;
         if (checkIn && !checkOut && hoverDate && cloneDay > checkIn && cloneDay < hoverDate && !isDisabled) isBetween = true;
 
+        let cellBg = "bg-white text-slate-800 border border-slate-100 font-semibold";
+        if (isDisabled) cellBg = "bg-slate-50 text-slate-400 border border-transparent line-through";
+        if (isSelected) cellBg = "bg-indigo-600 text-white font-bold ring-4 ring-indigo-100 z-10";
+        else if (isBetween) cellBg = "bg-indigo-50 text-indigo-900 border-indigo-100";
+
         days.push(
           <div
             key={cloneDay.toISOString()}
-            className={cn("p-2 border relative h-24 transition-colors", 
-              isDisabled ? "bg-gray-100 text-gray-400 cursor-not-allowed" : "cursor-pointer hover:bg-gray-50",
-              isSelected ? "bg-black text-white hover:bg-gray-800" : "",
-              isBetween ? "bg-gray-200" : ""
-            )}
+            className={cn("h-16 relative rounded-2xl cursor-pointer transition-colors flex flex-col items-center justify-center group overflow-hidden", cellBg)}
             onClick={() => handleDateClick(cloneDay)}
             onMouseEnter={() => !isDisabled && setHoverDate(cloneDay)}
           >
-            <span className="absolute top-2 left-2 font-semibold">{formattedDate}</span>
-            {!isDisabled && <span className={cn("absolute bottom-2 right-2 text-sm", isSelected ? 'text-gray-200' : 'text-gray-500')}>$\{(getNightlyRate(cloneDay))}</span>}
+            <span className="font-semibold text-lg">{formattedDate}</span>
+            {!isDisabled && <span className={cn("text-xs opacity-70", isSelected ? 'text-indigo-100' : 'text-slate-500')}>$\{(getNightlyRate(cloneDay))}</span>}
           </div>
         );
 
         if ((i + 1) % 7 === 0) {
-            rows.push(<div className="grid grid-cols-7" key={i}>{days}</div>);
+            rows.push(<div className="grid grid-cols-7 gap-2 mb-2" key={i}>{days}</div>);
             days = [];
         }
         day = addDays(day, 1);
@@ -169,72 +170,90 @@ export const Calendar: React.FC<{ propertyId: string }> = ({ propertyId }) => {
   };
 
   return (
-    <div className="max-w-5xl mx-auto p-4 flex flex-col md:flex-row gap-8">
-      <div className="flex-1 bg-white p-6 rounded-xl shadow-lg border">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 container mx-auto">
+      {/* Main Calendar Section - col-8 */}
+      <div className="lg:col-span-8 bg-white rounded-3xl border border-slate-200 shadow-sm p-6 flex flex-col">
         <div className="flex justify-between items-center mb-6">
-          <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-2 rounded-full hover:bg-gray-100"><ChevronLeft/></button>
-          <h2 className="text-xl font-bold text-gray-900">{format(currentMonth, 'MMMM yyyy')}</h2>
-          <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="p-2 rounded-full hover:bg-gray-100"><ChevronRight/></button>
+          <h2 className="text-xl font-bold flex gap-4 items-center">
+             <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-2 rounded-full hover:bg-slate-100 flex items-center justify-center bg-slate-50"><ChevronLeft/></button>
+             {format(currentMonth, 'MMMM yyyy')}
+             <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="p-2 rounded-full hover:bg-slate-100 flex items-center justify-center bg-slate-50"><ChevronRight/></button>
+          </h2>
+          <div className="flex gap-2 text-sm font-medium text-slate-500">
+            <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-white rounded-sm border border-slate-200"></span> Available</span>
+            <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-indigo-600 rounded-sm"></span> Selected</span>
+            <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-slate-200 rounded-sm"></span> Booked</span>
+          </div>
         </div>
-        <div className="grid grid-cols-7 font-bold text-gray-500 text-center mb-2">
-            {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(d => <div key={d}>{d}</div>)}
+        
+        <div className="grid grid-cols-7 gap-2 flex-grow mb-2">
+           {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
+              <div key={d} className="text-center text-xs font-bold text-slate-400 py-2 uppercase tracking-widest">{d}</div>
+           ))}
         </div>
-        <div className="border-t border-l">
+        <div className="">
           {renderMonth()}
         </div>
       </div>
       
-      <div className="w-full md:w-80 bg-white p-6 rounded-xl shadow-lg border self-start sticky top-4">
-         <h3 className="text-2xl font-bold mb-4">Book Your Stay</h3>
-         <div className="flex gap-4 mb-4 border rounded p-2">
-            <div className="flex-1 border-r">
-                <p className="text-xs font-bold uppercase text-gray-500">Check-in</p>
-                <p className="font-semibold">{checkIn ? format(checkIn, 'MM/dd/yyyy') : 'Add date'}</p>
+      {/* Checkout Section - col-4 */}
+      <div className="lg:col-span-4 bg-slate-900 rounded-3xl p-6 text-white flex flex-col shadow-xl sticky top-24 self-start">
+         <h2 className="text-xl font-semibold mb-6">Price Breakdown</h2>
+         
+         <div className="space-y-4 flex-grow mb-6">
+            <div className="flex justify-between items-center text-slate-400">
+              <span>Check-in</span>
+              <span className="text-white font-medium">{checkIn ? format(checkIn, 'MMM d, yyyy') : '--'}</span>
             </div>
-            <div className="flex-1">
-                <p className="text-xs font-bold uppercase text-gray-500">Checkout</p>
-                <p className="font-semibold">{checkOut ? format(checkOut, 'MM/dd/yyyy') : 'Add date'}</p>
+            <div className="flex justify-between items-center text-slate-400">
+              <span>Check-out</span>
+              <span className="text-white font-medium">{checkOut ? format(checkOut, 'MMM d, yyyy') : '--'}</span>
             </div>
+            
+            {priceDetails && (
+              <div className="border-t border-slate-800 my-4 pt-4">
+                <div className="flex justify-between items-center mb-2">
+                  <span>${(priceDetails.baseTotal / priceDetails.nights).toFixed(0)} × {priceDetails.nights} nights</span>
+                  <span className="font-mono">${(priceDetails.baseTotal + priceDetails.discount).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center mb-2">
+                  <span>Cleaning fee</span>
+                  <span className="font-mono">${(priceDetails.cleaningFee).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center mb-2">
+                  <span>Occupancy taxes</span>
+                  <span className="font-mono">${(priceDetails.taxes).toFixed(2)}</span>
+                </div>
+                {priceDetails.discount > 0 && (
+                  <div className="flex justify-between items-center text-emerald-400">
+                    <span>Discount</span>
+                    <span className="font-mono">-${(priceDetails.discount).toFixed(2)}</span>
+                  </div>
+                )}
+              </div>
+            )}
          </div>
          
-         {priceDetails ? (
-           <div className="space-y-3 mb-6">
-             <div className="flex justify-between text-gray-600">
-               <span>$\{(priceDetails.baseTotal / priceDetails.nights).toFixed(0)} x {priceDetails.nights} nights</span>
-               <span>$\{(priceDetails.baseTotal + priceDetails.discount).toFixed(2)}</span>
-             </div>
-             {priceDetails.discount > 0 && (
-                <div className="flex justify-between text-green-600">
-                  <span>Weekly/Monthly Discount</span>
-                  <span>-$\{(priceDetails.discount).toFixed(2)}</span>
-                </div>
-             )}
-             <div className="flex justify-between text-gray-600">
-               <span>Cleaning fee</span>
-               <span>$\{(priceDetails.cleaningFee).toFixed(2)}</span>
-             </div>
-             <div className="flex justify-between text-gray-600">
-               <span>Taxes</span>
-               <span>$\{(priceDetails.taxes).toFixed(2)}</span>
-             </div>
-             <div className="pt-3 border-t flex justify-between font-bold text-lg">
-               <span>Total (USD)</span>
-               <span>$\{(priceDetails.grandTotal).toFixed(2)}</span>
-             </div>
-           </div>
-         ) : (
-           <div className="mb-6 h-32 flex items-center justify-center text-gray-400 text-center text-sm">
-             Select multiple dates to see pricing...
-           </div>
-         )}
-         
-         <button 
-           onClick={handleBook}
-           disabled={!checkIn || !checkOut}
-           className="w-full py-3 bg-black hover:bg-gray-800 text-white rounded-lg font-bold text-lg disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-         >
-           Book Now
-         </button>
+         <div className="mt-auto">
+            {priceDetails ? (
+              <div className="flex justify-between items-end mb-6 border-t border-slate-800 pt-6">
+                <span className="text-slate-400">Total Price</span>
+                <span className="text-3xl font-bold font-mono">${(priceDetails.grandTotal).toFixed(2)}</span>
+              </div>
+            ) : (
+              <div className="mb-6 h-12 flex items-center justify-center text-slate-400 text-sm">
+                 Select dates to compute total
+              </div>
+            )}
+            
+            <button 
+              onClick={handleBook}
+              disabled={!checkIn || !checkOut}
+              className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-2xl transition-colors mb-4 flex items-center justify-center gap-2 disabled:bg-slate-700 disabled:text-slate-500"
+            >
+              Proceed to Checkout
+            </button>
+         </div>
       </div>
     </div>
   );

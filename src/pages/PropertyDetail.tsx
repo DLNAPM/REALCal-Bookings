@@ -32,35 +32,35 @@ export const PropertyDetail: React.FC = () => {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
-             <header className="bg-white border-b sticky top-0 z-50">
-                <div className="max-w-7xl mx-auto px-4 h-16 flex items-center">
-                    <Link to="/" className="flex items-center gap-2 text-gray-600 hover:text-black font-medium">
-                        <ChevronLeft size={20} /> Back to listing
+        <div className="min-h-screen bg-slate-50 flex flex-col font-sans overflow-hidden text-slate-900 border-none">
+             <header className="pt-6 px-6 max-w-7xl mx-auto w-full mb-6">
+                <div className="flex justify-between items-center bg-white rounded-2xl shadow-sm border border-slate-200 py-3 px-4">
+                    <Link to="/" className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 font-bold transition-colors">
+                        <div className="bg-slate-100 p-1.5 rounded-lg"><ChevronLeft size={18} /></div> Back to properties
                     </Link>
                 </div>
             </header>
 
-            <main className="flex-1 py-12">
-               <div className="max-w-7xl mx-auto px-4 mb-12">
-                   <h2 className="text-4xl font-bold tracking-tight mb-4">{property.name}</h2>
-                   <p className="text-xl text-gray-500 mb-8 max-w-2xl">{property.description}</p>
+            <main className="flex-1 pb-12 w-full">
+               <div className="max-w-7xl mx-auto px-6 mb-8 pt-6">
+                   <h2 className="text-4xl font-bold tracking-tight mb-4 text-slate-800">{property.name}</h2>
+                   <p className="text-xl text-slate-500 mb-8 max-w-3xl">{property.description}</p>
                    
-                   <div className="h-[400px] w-full rounded-2xl overflow-hidden mb-12 flex gap-4">
-                       <img src={topImage} alt="Main Image" className="\${property.images.length === 1 ? 'w-full' : 'w-2/3'} h-full object-cover rounded-2xl" referrerPolicy="no-referrer" />
+                   <div className="h-[460px] w-full rounded-3xl overflow-hidden mb-12 flex gap-4 p-2 bg-white border border-slate-200 shadow-sm">
+                       <img src={topImage} alt="Main Image" className={`${property.images.length === 1 ? 'w-full' : 'w-2/3'} h-full object-cover rounded-2xl shadow-sm`} referrerPolicy="no-referrer" />
                        {property.images.length > 1 && (
                          <div className="w-1/3 flex flex-col gap-4">
-                            <img src={subImages[0]} alt="Sub Image 1" className="w-full h-[calc(50%-0.5rem)] object-cover rounded-2xl" referrerPolicy="no-referrer" />
-                            {property.images.length > 2 && <img src={subImages[1]} alt="Sub Image 2" className="w-full h-[calc(50%-0.5rem)] object-cover rounded-2xl" referrerPolicy="no-referrer" />}
+                            <img src={subImages[0]} alt="Sub Image 1" className="w-full h-[calc(50%-0.5rem)] object-cover rounded-2xl shadow-sm" referrerPolicy="no-referrer" />
+                            {property.images.length > 2 && <img src={subImages[1]} alt="Sub Image 2" className="w-full h-[calc(50%-0.5rem)] object-cover rounded-2xl shadow-sm" referrerPolicy="no-referrer" />}
                          </div>
                        )}
                    </div>
 
                    {/* Gallery preview if more than 3 images */}
                    {property.images.length > 3 && (
-                       <div className="flex gap-4 overflow-x-auto pb-4 mb-8 snap-x">
+                       <div className="flex gap-4 overflow-x-auto pb-4 mb-8 snap-x px-2">
                            {property.images.slice(3).map((img, idx) => (
-                               <img key={idx} src={img} className="h-32 rounded-xl object-cover snap-start border" />
+                               <img key={idx} src={img} className="h-32 w-48 rounded-2xl object-cover snap-start border border-slate-200 shadow-sm" referrerPolicy="no-referrer" />
                            ))}
                        </div>
                    )}
