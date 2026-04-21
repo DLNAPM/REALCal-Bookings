@@ -19,6 +19,20 @@ export const Home: React.FC = () => {
         return unsub;
     }, []);
     
+    const handleSignIn = async () => {
+        try {
+            await signIn();
+        } catch (error: any) {
+            console.error("Sign in error:", error);
+            if (error.code === 'auth/unauthorized-domain') {
+                const domain = window.location.hostname;
+                alert(`Authentication Error: Firebase does not trust this domain (${domain}).\n\nPlease go to Firebase Console -> Authentication -> Settings -> Authorized Domains and add:\n\n${domain}`);
+            } else {
+                alert(`Sign in failed: ${error.message}`);
+            }
+        }
+    };
+
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900 pb-12 overflow-hidden">
             <header className="pt-6 px-6 max-w-7xl mx-auto w-full">
@@ -49,7 +63,7 @@ export const Home: React.FC = () => {
                                 </button>
                             </div>
                         ) : (
-                            <button onClick={signIn} className="px-6 py-2.5 bg-indigo-600 text-white font-bold rounded-xl shadow-lg shadow-indigo-200 hover:bg-indigo-500 transition-colors text-sm">
+                            <button onClick={handleSignIn} className="px-6 py-2.5 bg-indigo-600 text-white font-bold rounded-xl shadow-lg shadow-indigo-200 hover:bg-indigo-500 transition-colors text-sm">
                                 Login to Book
                             </button>
                         )}
