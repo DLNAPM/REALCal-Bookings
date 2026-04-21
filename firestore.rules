@@ -56,7 +56,7 @@ service cloud.firestore {
     // Bookings Collection
     function isValidBooking(data) {
       return data.keys().hasAll(['userId', 'propertyId', 'checkIn', 'checkOut', 'status', 'totalPrice', 'guests', 'createdAt', 'updatedAt']) && data.keys().size() >= 9 && data.keys().size() <= 10 &&
-        data.userId is string && data.userId.size() <= 128 && data.userId == request.auth.uid &&
+        data.userId is string && data.userId.size() <= 128 && (data.userId == request.auth.uid || isAdmin()) &&
         data.propertyId is string && data.propertyId.size() <= 128 &&
         data.checkIn is string && data.checkIn.size() <= 32 &&
         data.checkOut is string && data.checkOut.size() <= 32 &&
@@ -135,8 +135,8 @@ service cloud.firestore {
         isValidBooking(incoming()) && 
         incoming().createdAt == request.time && 
         incoming().updatedAt == request.time &&
-        incoming().status == 'pending' &&
-        exists(/databases/$(database)/documents/users/$(incoming().userId));
+        (incoming().status == 'pending' || isAdmin()) &&
+        (exists(/databases/$(database)/documents/users/$(incoming().userId)) || isAdmin());
         
       allow update: if isVerified() && isValidId(bookingId) &&
         isValidBooking(incoming()) &&
