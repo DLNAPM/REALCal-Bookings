@@ -163,16 +163,31 @@ export const AdminDashboard: React.FC = () => {
       
       const days = eachDayOfInterval({ start, end });
       const batch = writeBatch(db);
-      days.forEach(day => {
+      
+      const newDates = days.map(d => format(d, 'yyyy-MM-dd'));
+      const existingBlackouts = blackouts.filter(b => b.propertyId === activePropertyId);
+      const existingDates = new Set(existingBlackouts.map(b => b.date));
+      
+      const datesToAdd = newDates.filter(d => !existingDates.has(d));
+      
+      if (datesToAdd.length === 0) {
+        return alert("All selected dates are already blacked out.");
+      }
+
+      datesToAdd.forEach(dateStr => {
           const docRef = doc(collection(db, 'blackout_dates'));
           batch.set(docRef, {
              propertyId: activePropertyId,
-             date: format(day, 'yyyy-MM-dd'),
+             date: dateStr,
              reason,
              createdAt: serverTimestamp()
           });
       });
       await batch.commit();
+      
+      if (datesToAdd.length < newDates.length) {
+          alert(`Added ${datesToAdd.length} dates. Skipped ${newDates.length - datesToAdd.length} dates that were already blacked out.`);
+      }
       
       (e.target as HTMLFormElement).reset();
     } catch (e: any) { alert(e.message); }
@@ -339,7 +354,9 @@ export const AdminDashboard: React.FC = () => {
   }
 
   const activeRules = pricingRules.filter(r => r.propertyId === activePropertyId);
-  const activeBlackouts = blackouts.filter(b => b.propertyId === activePropertyId);
+  const activeBlackouts = blackouts
+    .filter(b => b.propertyId === activePropertyId)
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
   return (
     <div className="bg-slate-50 min-h-screen p-6 font-sans text-slate-900 overflow-hidden">
