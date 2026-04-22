@@ -16,10 +16,14 @@ export const Home: React.FC = () => {
     useEffect(() => {
         if (!db) return;
         const unsub = onSnapshot(query(collection(db, 'properties')), (snap) => {
-            setProperties(snap.docs.map(d => ({id: d.id, ...d.data() } as Property)));
+            const allProperties = snap.docs.map(d => ({id: d.id, ...d.data() } as Property));
+            const allowedTestEmails = ['reach_dlaniger@hotmail.com', 'candshproperties@gmail.com', 'dlaniger.napm.consulting@gmail.com'];
+            const canViewTestProps = user && user.email && allowedTestEmails.includes(user.email);
+            
+            setProperties(allProperties.filter(p => !p.isTestProperty || canViewTestProps));
         });
         return unsub;
-    }, []);
+    }, [user]);
     
     const handleSignIn = async () => {
         try {
@@ -164,6 +168,11 @@ export const Home: React.FC = () => {
                                     <img src={p.images[0]} className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700 ease-out" />
                                  ) : (
                                     <div className="w-full h-full flex items-center justify-center text-slate-400">No images</div>
+                                 )}
+                                 {p.isTestProperty && (
+                                     <div className="absolute top-4 right-4 bg-amber-500 text-white text-[10px] uppercase tracking-widest font-bold px-3 py-1 rounded-full shadow-md z-10">
+                                         Test Property
+                                     </div>
                                  )}
                                  <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                              </div>

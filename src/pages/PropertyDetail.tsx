@@ -9,6 +9,7 @@ import { Property } from '../types';
 
 export const PropertyDetail: React.FC = () => {
     const { id } = useParams<{id: string}>();
+    const { user } = useAuth();
     const [property, setProperty] = useState<Property | null>(null);
     const [loading, setLoading] = useState(true);
 
@@ -16,14 +17,24 @@ export const PropertyDetail: React.FC = () => {
         if (!id || !db) return;
         getDoc(doc(db, 'properties', id)).then(snap => {
             if (snap.exists()) {
-                setProperty({ id: snap.id, ...snap.data() } as Property);
+                const propData = { id: snap.id, ...snap.data() } as Property;
+                const allowedTestEmails = ['reach_dlaniger@hotmail.com', 'candshproperties@gmail.com', 'dlaniger.napm.consulting@gmail.com'];
+                const canViewTestProps = user && user.email && allowedTestEmails.includes(user.email);
+                
+                if (propData.isTestProperty && !canViewTestProps) {
+                    setProperty(null); // Access denied
+                } else {
+                    setProperty(propData);
+                }
+            } else {
+                setProperty(null);
             }
             setLoading(false);
         }).catch(err => {
             console.error("Failed to load property:", err);
             setLoading(false);
         });
-    }, [id]);
+    }, [id, user]);
 
     if (loading) return <div>Loading...</div>;
     if (!property) return <div>Property not found</div>;
@@ -46,6 +57,11 @@ export const PropertyDetail: React.FC = () => {
 
             <main className="flex-1 pb-12 w-full">
                <div className="max-w-7xl mx-auto px-6 mb-8 pt-6">
+                   {property.isTestProperty && (
+                       <div className="mb-4 bg-amber-100 border border-amber-300 text-amber-800 px-4 py-2 rounded-xl text-sm font-bold uppercase tracking-wider flex items-center gap-2 w-fit">
+                           TEST ENVIRONMENT METADATA
+                       </div>
+                   )}
                    <h2 className="text-4xl font-bold tracking-tight mb-4 text-slate-800">{property.name}</h2>
                    <p className="text-xl text-slate-500 mb-8 max-w-3xl">{property.description}</p>
                    

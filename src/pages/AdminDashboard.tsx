@@ -288,6 +288,7 @@ export const AdminDashboard: React.FC = () => {
            name: "Oceanview Paradise Villa",
            description: "A stunning oceanfront villa with panoramic views, private pool, and luxury detailing.",
            images: ["https://images.unsplash.com/photo-1499793983690-e29da59ef1c2?auto=format&fit=crop&q=80&w=2000"],
+           isTestProperty: true,
            createdAt: serverTimestamp()
        });
 
@@ -296,6 +297,7 @@ export const AdminDashboard: React.FC = () => {
            name: "Mountain Retreat Cabin",
            description: "Quiet and cozy cabin nested in the woods, perfect for a relaxing getaway.",
            images: ["https://images.unsplash.com/photo-1542314831-c6a4d14effca?auto=format&fit=crop&q=80&w=2000"],
+           isTestProperty: true,
            createdAt: serverTimestamp()
        });
 

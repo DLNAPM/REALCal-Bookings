@@ -45,11 +45,13 @@ service cloud.firestore {
 
     // Properties Collection
     function isValidProperty(data) {
-      return data.keys().hasAll(['name', 'description', 'images', 'createdAt']) && data.keys().size() == 4 &&
+      return data.keys().hasAll(['name', 'description', 'images', 'createdAt']) && 
+        data.keys().size() >= 4 && data.keys().size() <= 5 &&
         data.name is string && data.name.size() <= 128 &&
         data.description is string && data.description.size() <= 2048 &&
         data.images is list && data.images.size() <= 15 &&
         (data.images.size() == 0 || data.images[0] is string) &&
+        (data.keys().hasAll(['isTestProperty']) ? data.isTestProperty is bool : true) &&
         data.createdAt is timestamp;
     }
 

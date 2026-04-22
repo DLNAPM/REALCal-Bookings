@@ -5,6 +5,7 @@ export interface Property {
   name: string;
   description: string;
   images: string[];
+  isTestProperty?: boolean;
   createdAt: any;
 }
 
