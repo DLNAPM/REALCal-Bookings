@@ -4,14 +4,16 @@ import { db } from '../lib/firebase';
 import { collection, query, where, getDocs, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { Booking, Property } from '../types';
 import { useNavigate, Link } from 'react-router-dom';
-import { ChevronLeft, Calendar as CalendarIcon, XCircle, Home, MapPin } from 'lucide-react';
+import { ChevronLeft, Calendar as CalendarIcon, XCircle, Home, MapPin, Edit3, X } from 'lucide-react';
 import { parseISO, differenceInHours } from 'date-fns';
+import { Calendar } from '../components/Calendar';
 
 export const MyBookings: React.FC = () => {
     const { user, loading } = useAuth();
     const navigate = useNavigate();
     const [bookings, setBookings] = useState<(Booking & { propertyName?: string; propertyImage?: string })[]>([]);
     const [fetching, setFetching] = useState(true);
+    const [editingBooking, setEditingBooking] = useState<(Booking & { propertyName?: string; propertyImage?: string }) | null>(null);
 
     useEffect(() => {
         if (!user) {
@@ -84,6 +86,32 @@ export const MyBookings: React.FC = () => {
             } catch (err: any) {
                 alert(`Failed to cancel: ${err.message}`);
             }
+        }
+    };
+
+    const handleSaveEdit = async (checkIn: string, checkOut: string, priceDetails: any) => {
+        if (!editingBooking) return;
+        try {
+            const newTotal = Math.round(priceDetails.grandTotal * 100);
+            await updateDoc(doc(db, 'bookings', editingBooking.id), {
+                checkIn: checkIn,
+                checkOut: checkOut,
+                totalPrice: newTotal,
+                updatedAt: new Date()
+            });
+            
+            // Refresh list locally
+            setBookings(prev => prev.map(b => b.id === editingBooking.id ? { 
+                ...b, 
+                checkIn, 
+                checkOut,
+                totalPrice: newTotal 
+            } : b));
+            
+            alert("Booking dates successfully updated!");
+            setEditingBooking(null);
+        } catch (err: any) {
+            alert(`Failed to update booking: ${err.message}`);
         }
     };
 
@@ -180,21 +208,21 @@ export const MyBookings: React.FC = () => {
                                             {canCancel ? (
                                                 <>
                                                     <button 
+                                                        onClick={() => setEditingBooking(booking)}
+                                                        className="flex-1 bg-white border-2 border-indigo-100 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-200 font-bold py-3 rounded-xl transition-colors flex justify-center items-center gap-2"
+                                                    >
+                                                        <Edit3 size={18} /> Edit Dates
+                                                    </button>
+                                                    <button 
                                                         onClick={() => handleCancel(booking.id, booking.checkIn)}
                                                         className="flex-1 bg-white border-2 border-rose-100 text-rose-600 hover:bg-rose-50 hover:border-rose-200 font-bold py-3 rounded-xl transition-colors flex justify-center items-center gap-2"
                                                     >
-                                                        <XCircle size={18} /> Cancel Booking
+                                                        <XCircle size={18} /> Cancel
                                                     </button>
-                                                    <Link 
-                                                        to={`/property/${booking.propertyId}`}
-                                                        className="flex-1 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 font-bold py-3 rounded-xl transition-colors text-center"
-                                                    >
-                                                        Book Again
-                                                    </Link>
                                                 </>
                                             ) : booking.status !== 'cancelled' ? (
                                                 <div className="text-sm font-bold text-amber-600 bg-amber-50 px-4 py-3 rounded-xl border border-amber-100 flex-1 text-center">
-                                                    Past Cancellation Window (48h)
+                                                    Past Change/Cancellation Window (48h)
                                                 </div>
                                             ) : (
                                                 <div className="text-sm font-bold text-slate-500 bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 flex-1 text-center">
@@ -209,6 +237,29 @@ export const MyBookings: React.FC = () => {
                     </div>
                 )}
             </main>
+
+            {editingBooking && (
+                <div className="fixed inset-0 bg-slate-900/50 z-50 overflow-y-auto flex items-start justify-center pt-20 pb-20 px-4">
+                    <div className="bg-white rounded-3xl overflow-hidden w-full max-w-6xl shadow-2xl">
+                        <div className="flex justify-between items-center p-6 border-b border-slate-100">
+                            <h2 className="text-2xl font-bold text-slate-800">Edit Booking Dates</h2>
+                            <button onClick={() => setEditingBooking(null)} className="p-2 bg-slate-100 text-slate-500 hover:bg-rose-100 hover:text-rose-600 rounded-full transition-colors">
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div className="p-6 bg-slate-50">
+                            <Calendar 
+                                propertyId={editingBooking.propertyId} 
+                                isEditMode={true}
+                                initialCheckIn={editingBooking.checkIn}
+                                initialCheckOut={editingBooking.checkOut}
+                                onSaveEdit={handleSaveEdit}
+                                onCancelEdit={() => setEditingBooking(null)}
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

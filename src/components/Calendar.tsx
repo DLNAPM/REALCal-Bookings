@@ -7,10 +7,17 @@ import { cn } from '../lib/utils';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-export const Calendar: React.FC<{ propertyId: string }> = ({ propertyId }) => {
-  const [currentMonth, setCurrentMonth] = useState(startOfDay(new Date()));
-  const [checkIn, setCheckIn] = useState<Date | null>(null);
-  const [checkOut, setCheckOut] = useState<Date | null>(null);
+export const Calendar: React.FC<{ 
+    propertyId: string, 
+    isEditMode?: boolean,
+    initialCheckIn?: string,
+    initialCheckOut?: string,
+    onSaveEdit?: (checkIn: string, checkOut: string, priceDetails: any) => void,
+    onCancelEdit?: () => void
+}> = ({ propertyId, isEditMode, initialCheckIn, initialCheckOut, onSaveEdit, onCancelEdit }) => {
+  const [currentMonth, setCurrentMonth] = useState(initialCheckIn ? startOfDay(new Date(initialCheckIn)) : startOfDay(new Date()));
+  const [checkIn, setCheckIn] = useState<Date | null>(initialCheckIn ? new Date(initialCheckIn) : null);
+  const [checkOut, setCheckOut] = useState<Date | null>(initialCheckOut ? new Date(initialCheckOut) : null);
   const [hoverDate, setHoverDate] = useState<Date | null>(null);
   
   const [pricingRules, setPricingRules] = useState<PricingRule[]>([]);
@@ -247,12 +254,26 @@ export const Calendar: React.FC<{ propertyId: string }> = ({ propertyId }) => {
             )}
             
             <button 
-              onClick={handleBook}
+              onClick={() => {
+                  if (isEditMode && onSaveEdit && checkIn && checkOut && priceDetails) {
+                      onSaveEdit(checkIn.toISOString(), checkOut.toISOString(), priceDetails);
+                  } else {
+                      handleBook();
+                  }
+              }}
               disabled={!checkIn || !checkOut}
-              className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-2xl transition-colors mb-4 flex items-center justify-center gap-2 disabled:bg-slate-700 disabled:text-slate-500"
+              className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-2xl transition-colors flex items-center justify-center gap-2 disabled:bg-slate-700 disabled:text-slate-500"
             >
-              Proceed to Checkout
+              {isEditMode ? 'Save Changes' : 'Proceed to Checkout'}
             </button>
+            {isEditMode && onCancelEdit && (
+              <button 
+                onClick={onCancelEdit}
+                className="w-full mt-3 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-2xl transition-colors flex items-center justify-center gap-2"
+              >
+                Cancel
+              </button>
+            )}
          </div>
       </div>
     </div>
