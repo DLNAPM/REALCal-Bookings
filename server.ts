@@ -20,7 +20,7 @@ async function startServer() {
       if (!seamApiKey || !deviceId || seamApiKey === "seam_test_...") {
          // Fallback if Seam not configured for preview demo
          const randomPin = Math.floor(1000 + Math.random() * 9000).toString();
-         console.warn("Seam API not configured. Returning fallback Yale code.");
+         console.warn("Seam API not configured. Returning fallback York code.");
          return res.json({ accessCode: randomPin });
       }
 
@@ -69,10 +69,11 @@ async function startServer() {
   app.post("/api/notify-managers", async (req, res) => {
     try {
       const { managers, bookingDetails } = req.body;
-      const { checkIn, checkOut, propertyName, totalAmount, guestName, guestEmail, guestPhone } = bookingDetails;
+      const { checkIn, checkOut, propertyName, totalAmount, guestName, guestEmail, guestPhone, isUpdate, accessCode, isTestProperty } = bookingDetails;
       
-      const subject = `New Booking Alert: ${propertyName}`;
-      const textMsg = `New booking received for ${propertyName}!\nGuest: ${guestName || 'Guest'}\nDates: ${new Date(checkIn).toLocaleDateString()} to ${new Date(checkOut).toLocaleDateString()}\nTotal: $${(totalAmount/100).toFixed(2)}`;
+      const eventType = isUpdate ? 'Booking Update' : 'New Booking';
+      const subject = `${eventType} Alert: ${propertyName}`;
+      const textMsg = `${eventType} received for ${propertyName}!\nGuest: ${guestName || 'Guest'}\nDates: ${new Date(checkIn).toLocaleDateString()} to ${new Date(checkOut).toLocaleDateString()}\nTotal: $${(totalAmount/100).toFixed(2)}`;
       
       const results = [];
       
@@ -134,8 +135,18 @@ async function startServer() {
         }
       }
 
-      const guestSubject = `Booking Confirmation: ${propertyName}`;
-      const guestText = `Hi ${guestName || 'Guest'},\n\nYour booking for ${propertyName} from ${new Date(checkIn).toLocaleDateString()} to ${new Date(checkOut).toLocaleDateString()} has been confirmed!\nTotal: $${(totalAmount/100).toFixed(2)}\n\nThank you for choosing us!`;
+      const guestSubject = isUpdate ? `Booking Update Confirmation: ${propertyName}` : `Booking Confirmation: ${propertyName}`;
+      let guestText = `Hi ${guestName || 'Guest'},\n\nYour booking for ${propertyName} from ${new Date(checkIn).toLocaleDateString()} to ${new Date(checkOut).toLocaleDateString()} has been ${isUpdate ? 'updated' : 'confirmed'}!\nTotal: $${(totalAmount/100).toFixed(2)}\n\n`;
+      
+      if (accessCode) {
+          if (isTestProperty) {
+             guestText += `Since this is a test property, here is your simulated York Code for entry: ${accessCode}\n\n`;
+          } else {
+             guestText += `Your York Code for entry is: ${accessCode}\n\n`;
+          }
+      }
+      
+      guestText += `Thank you for choosing us!`;
 
       // Guest Verification Email
       if (guestEmail) {

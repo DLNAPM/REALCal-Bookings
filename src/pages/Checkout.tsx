@@ -73,12 +73,16 @@ const processBooking = async (
     try {
        let managers: any[] = [];
        let propertyName = "Villa";
+       let isTestProperty = false;
        if (db) {
          const managersSnap = await getDocs(query(collection(db, 'property_managers')));
          managers = managersSnap.docs.map(d => d.data()).filter(m => m.enabled);
          try {
             const propSnap = await getDoc(doc(db, 'properties', bookingDetails.propertyId));
-            if(propSnap.exists()) propertyName = propSnap.data().name;
+            if(propSnap.exists()) {
+               propertyName = propSnap.data().name;
+               isTestProperty = !!propSnap.data().isTestProperty;
+            }
          } catch(e) {}
        }
 
@@ -95,7 +99,9 @@ const processBooking = async (
                   propertyName: propertyName,
                   guestName: user.displayName,
                   guestEmail: guestEmail,
-                  guestPhone: guestPhone
+                  guestPhone: guestPhone,
+                  accessCode: accessCode,
+                  isTestProperty: isTestProperty
                }
             })
           });

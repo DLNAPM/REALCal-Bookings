@@ -48,7 +48,7 @@ export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen, 
                     <section>
                         <h3 className="text-lg font-bold text-slate-900 mb-2">3. Third-Party Sharing</h3>
                         <p className="leading-relaxed text-sm">
-                            We do not sell your personal data. We only share necessary data securely with our highly vetted service providers to execute your booking. This includes Stripe (for secure payment processing), Resend/Twilio (for email and SMS notifications), and Seam/Yale (to securely provision your physical access code).
+                            We do not sell your personal data. We only share necessary data securely with our highly vetted service providers to execute your booking. This includes Stripe (for secure payment processing), Resend/Twilio (for email and SMS notifications), and Seam/York (to securely provision your physical access code).
                         </p>
                     </section>
                     

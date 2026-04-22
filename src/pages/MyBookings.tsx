@@ -116,7 +116,7 @@ export const MyBookings: React.FC = () => {
     };
 
     const handleSaveEdit = async (checkIn: string, checkOut: string, priceDetails: any) => {
-        if (!editingBooking) return;
+        if (!editingBooking || !user) return;
         try {
             const newTotal = Math.round(priceDetails.grandTotal * 100);
             await updateDoc(doc(db, 'bookings', editingBooking.id), {
@@ -126,6 +126,40 @@ export const MyBookings: React.FC = () => {
                 updatedAt: serverTimestamp()
             });
             
+            // Notify Managers and User
+            try {
+                let managers: any[] = [];
+                let isTestProperty = false;
+                const managersSnap = await getDocs(query(collection(db, 'property_managers')));
+                managers = managersSnap.docs.map(d => d.data()).filter(m => m.enabled);
+                
+                const propSnap = await getDoc(doc(db, 'properties', editingBooking.propertyId));
+                if (propSnap.exists() && propSnap.data().isTestProperty) {
+                    isTestProperty = true;
+                }
+
+                await fetch('/api/notify-managers', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                       managers,
+                       bookingDetails: {
+                          isUpdate: true,
+                          checkIn: checkIn,
+                          checkOut: checkOut,
+                          totalAmount: newTotal,
+                          propertyName: editingBooking.propertyName || 'Property',
+                          guestName: user.displayName,
+                          guestEmail: user.email,
+                          accessCode: editingBooking.accessCode,
+                          isTestProperty: isTestProperty
+                       }
+                    })
+                });
+            } catch (notifyErr) {
+                console.error("Failed to send update notification:", notifyErr);
+            }
+            
             // Refresh list locally
             setBookings(prev => prev.map(b => b.id === editingBooking.id ? { 
                 ...b, 
@@ -134,7 +168,7 @@ export const MyBookings: React.FC = () => {
                 totalPrice: newTotal 
             } : b));
             
-            alert("Booking dates successfully updated!");
+            alert("Booking dates successfully updated! Notifications have been sent.");
             setEditingBooking(null);
         } catch (err: any) {
             alert(`Failed to update booking: ${err.message}`);
@@ -249,7 +283,7 @@ export const MyBookings: React.FC = () => {
                                                     <MapPin size={20} />
                                                 </div>
                                                 <div>
-                                                    <span className="block text-xs font-bold uppercase text-indigo-400 tracking-wider mb-0.5">Yale Access PIN</span>
+                                                    <span className="block text-xs font-bold uppercase text-indigo-400 tracking-wider mb-0.5">York Access PIN</span>
                                                     <span className="font-mono text-xl font-bold text-indigo-700 tracking-widest">{booking.accessCode}</span>
                                                 </div>
                                             </div>

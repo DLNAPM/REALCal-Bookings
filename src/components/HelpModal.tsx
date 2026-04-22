@@ -45,14 +45,14 @@ export const HelpModal: React.FC = () => {
                                     <li>Select a property to view live calendar availability and smart-pricing for your dates.</li>
                                     <li>Highlight your check-in and check-out dates on the calendar.</li>
                                     <li>Proceed to Checkout to confirm your reservation and pay securely via Stripe.</li>
-                                    <li>Instantly receive your physical Yale smart-lock access code and email itinerary.</li>
+                                    <li>Instantly receive your physical York smart-lock access code and email itinerary.</li>
                                 </ol>
                             </section>
 
                             <section>
                                 <h3 className="text-lg font-bold text-slate-900 mb-2">Intended Audience</h3>
                                 <p className="leading-relaxed">
-                                    This app is built for Property Managers, Hosts, and boutique Rental Businesses who want to automate their direct-booking workflows without relying on massive third-party OTAs (Online Travel Agencies) taking large commissions. It is designed for businesses using modern IoT infrastructure (like Yale smart locks) and integrated payment systems.
+                                    This app is built for Property Managers, Hosts, and boutique Rental Businesses who want to automate their direct-booking workflows without relying on massive third-party OTAs (Online Travel Agencies) taking large commissions. It is designed for businesses using modern IoT infrastructure (like York smart locks) and integrated payment systems.
                                 </p>
                             </section>
 

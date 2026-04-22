@@ -133,7 +133,7 @@ export const Home: React.FC = () => {
                             </div>
                             <h3 className="text-xl font-bold text-slate-900 mb-3">Smart Lock Access</h3>
                             <p className="text-slate-500 flex-1 leading-relaxed">
-                                Upon confirmed payment, your personal access code is physically provisioned to the property's Yale smart locks, valid exactly for the duration of your stay.
+                                Upon confirmed payment, your personal access code is physically provisioned to the property's York smart locks, valid exactly for the duration of your stay.
                             </p>
                         </div>
                       
