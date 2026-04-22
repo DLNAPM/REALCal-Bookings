@@ -438,8 +438,15 @@ export const AdminDashboard: React.FC = () => {
         
         let accessCode = '';
         if (lockRes.ok) {
-           const data = await lockRes.json();
-           accessCode = data.accessCode || '';
+           try {
+              const text = await lockRes.text();
+              if (text) {
+                 const data = JSON.parse(text);
+                 accessCode = data.accessCode || '';
+              }
+           } catch(err) {
+              console.warn("Failed to parse provision-lock response", err);
+           }
         }
 
         const payload: any = {

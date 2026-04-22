@@ -202,16 +202,26 @@ export const Checkout: React.FC = () => {
       })
     })
     .then(async res => {
-      const data = await res.json();
-      if (!res.ok) {
-         console.error("Stripe Error:", data.error);
-         setClientSecret('MOCK_TEST_MODE');
-         return;
+      try {
+        const text = await res.text();
+        if (!text) {
+           setClientSecret('MOCK_TEST_MODE');
+           return;
+        }
+        const data = JSON.parse(text);
+        if (!res.ok) {
+           console.error("Stripe Error:", data?.error);
+           setClientSecret('MOCK_TEST_MODE');
+           return;
+        }
+        setClientSecret(data.clientSecret || 'MOCK_TEST_MODE');
+      } catch (err) {
+        console.error("Payment intent JSON parse error:", err);
+        setClientSecret('MOCK_TEST_MODE');
       }
-      setClientSecret(data.clientSecret);
     })
     .catch((err) => {
-       console.error(err);
+       console.error("Payment intent fetch error:", err);
        setClientSecret('MOCK_TEST_MODE');
     });
   }, [priceDetails]);
