@@ -67,6 +67,7 @@ async function startServer() {
   });
 
   app.post("/api/notify-managers", async (req, res) => {
+    console.log("Received request to /api/notify-managers");
     try {
       const { managers, bookingDetails } = req.body;
       const { checkIn, checkOut, propertyName, totalAmount, guestName, guestEmail, guestPhone, isUpdate, accessCode, isTestProperty } = bookingDetails;
