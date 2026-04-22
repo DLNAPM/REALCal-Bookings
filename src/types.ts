@@ -47,6 +47,7 @@ export interface Booking {
   totalPrice: number;
   guests: number;
   accessCode?: string;
+  bookingRef?: string;
   createdAt: any;
   updatedAt: any;
 }

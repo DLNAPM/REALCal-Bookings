@@ -45,6 +45,8 @@ const processBooking = async (
        }
     }
 
+    const bookingRef = Math.random().toString(36).substring(2, 8).toUpperCase();
+
     const payload: any = {
       userId: user.uid,
       propertyId: bookingDetails.propertyId,
@@ -53,6 +55,7 @@ const processBooking = async (
       status: 'pending',
       totalPrice: bookingDetails.priceDetails.grandTotal,
       guests: 1, // simplified for demo
+      bookingRef,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     };
@@ -112,7 +115,7 @@ const processBooking = async (
        console.error("Manager notification failed, but booking succeeded", notifyErr);
     }
 
-    navigate('/confirmation', { state: { bookingId, accessCode, notificationResults }});
+    navigate('/confirmation', { state: { bookingId, accessCode, notificationResults, bookingRef }});
   } catch (e: any) {
      console.error("Booking error:", e);
      setError(`Booking failed: ${e.message}`);

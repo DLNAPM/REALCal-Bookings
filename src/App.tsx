@@ -11,6 +11,7 @@ import { PropertyDetail } from './pages/PropertyDetail';
 import { Checkout } from './pages/Checkout';
 import { Confirmation } from './pages/Confirmation';
 import { AdminDashboard } from './pages/AdminDashboard';
+import { MyBookings } from './pages/MyBookings';
 import { HelpModal } from './components/HelpModal';
 
 export default function App() {
@@ -18,11 +19,12 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/property/:id" element={<PropertyDetail />} />
-          <Route path="/checkout" element={<Checkout />} />
-          <Route path="/confirmation" element={<Confirmation />} />
-          <Route path="/admin" element={<AdminDashboard />} />
+           <Route path="/" element={<Home />} />
+           <Route path="/property/:id" element={<PropertyDetail />} />
+           <Route path="/checkout" element={<Checkout />} />
+           <Route path="/confirmation" element={<Confirmation />} />
+           <Route path="/admin" element={<AdminDashboard />} />
+           <Route path="/my-bookings" element={<MyBookings />} />
         </Routes>
         <HelpModal />
       </BrowserRouter>

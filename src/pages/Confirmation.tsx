@@ -4,7 +4,7 @@ import { CheckCircle, Key } from 'lucide-react';
 
 export const Confirmation: React.FC = () => {
     const location = useLocation();
-    const { bookingId, accessCode, notificationResults } = location.state || {};
+    const { bookingId, accessCode, notificationResults, bookingRef } = location.state || {};
 
     if (!bookingId) return <Navigate to="/" />;
 
@@ -16,8 +16,9 @@ export const Confirmation: React.FC = () => {
                 </div>
                 <h1 className="text-3xl font-bold mb-2 text-slate-800">Booking Confirmed!</h1>
                 <p className="text-slate-500 mb-8">Your reservation has been successfully booked.</p>
-                <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl mb-4 text-xs font-mono text-slate-500 break-all select-all">
-                   Ref: {bookingId}
+                <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl mb-4 text-xs font-mono text-slate-500 break-all select-all flex justify-between items-center px-6">
+                   <span className="uppercase tracking-widest font-bold text-slate-400">Booking Ref:</span>
+                   <span className="text-sm font-bold text-indigo-600">{bookingRef || bookingId}</span>
                 </div>
                 
                 {accessCode && (

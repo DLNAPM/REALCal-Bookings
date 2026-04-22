@@ -54,9 +54,12 @@ export const Home: React.FC = () => {
                             <div className="flex items-center gap-4">
                                 {user.role === 'admin' && (
                                    <Link to="/admin" className="text-slate-600 hover:text-indigo-600 font-bold flex items-center gap-2 text-sm transition-colors rounded-lg px-3 py-2 hover:bg-slate-50">
-                                       <Key size={16}/> Admin Dashboard
+                                       <Key size={16}/> Admin
                                    </Link>
                                 )}
+                                <Link to="/my-bookings" className="text-slate-600 hover:text-indigo-600 font-bold flex items-center gap-2 text-sm transition-colors rounded-lg px-3 py-2 hover:bg-slate-50">
+                                    <CalendarIcon size={16}/> My Bookings
+                                </Link>
                                 <div className="flex items-center gap-4 bg-white py-1.5 pl-1.5 pr-4 rounded-full border border-slate-200 shadow-sm">
                                   {user.photoURL && <img src={user.photoURL} alt="Avatar" className="w-8 h-8 rounded-full" referrerPolicy="no-referrer" />}
                                   <div className="text-sm">
