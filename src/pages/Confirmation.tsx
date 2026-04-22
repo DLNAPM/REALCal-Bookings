@@ -4,13 +4,13 @@ import { CheckCircle, Key } from 'lucide-react';
 
 export const Confirmation: React.FC = () => {
     const location = useLocation();
-    const { bookingId, accessCode } = location.state || {};
+    const { bookingId, accessCode, notificationResults } = location.state || {};
 
     if (!bookingId) return <Navigate to="/" />;
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4 font-sans text-slate-900">
-            <div className="max-w-md w-full bg-white p-8 rounded-3xl shadow-xl border border-slate-200 text-center">
+        <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4 font-sans text-slate-900 overflow-y-auto">
+            <div className="max-w-md w-full bg-white p-8 rounded-3xl shadow-xl border border-slate-200 text-center my-8">
                 <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm">
                    <CheckCircle className="w-10 h-10 text-emerald-500" />
                 </div>
@@ -31,7 +31,19 @@ export const Confirmation: React.FC = () => {
                   </div>
                 )}
 
-                <p className="text-sm text-slate-500 mb-8">We've sent a receipt and full instructions to your email.</p>
+                <p className="text-sm text-slate-500 mb-6">We've sent a receipt and full instructions to your email.</p>
+
+                {notificationResults && notificationResults.length > 0 && (
+                    <div className="text-left bg-blue-50 border border-blue-100 p-4 rounded-2xl mb-8">
+                        <p className="text-xs font-bold text-blue-800 mb-2 uppercase tracking-wide">Test Integration Logs</p>
+                        <ul className="text-xs text-blue-700 space-y-1.5 list-disc list-inside">
+                            {notificationResults.map((res: string, i: number) => (
+                                <li key={i}>{res}</li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
+
                 <Link to="/" className="w-full block py-4 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-500 transition-colors shadow-sm">
                     Return Home
                 </Link>

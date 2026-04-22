@@ -131,12 +131,11 @@ service cloud.firestore {
       allow get: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
       allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
       
-      allow create: if isVerified() && isValidId(bookingId) && 
+      allow create: if isSignedIn() && isValidId(bookingId) && 
         isValidBooking(incoming()) && 
         incoming().createdAt == request.time && 
         incoming().updatedAt == request.time &&
-        (incoming().status == 'pending' || isAdmin()) &&
-        (exists(/databases/$(database)/documents/users/$(incoming().userId)) || isAdmin());
+        (incoming().status in ['pending', 'confirmed', 'cancelled'] || isAdmin());
         
       allow update: if isVerified() && isValidId(bookingId) &&
         isValidBooking(incoming()) &&

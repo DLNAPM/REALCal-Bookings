@@ -41,7 +41,7 @@ const processBooking = async (
       propertyId: bookingDetails.propertyId,
       checkIn: bookingDetails.checkIn,
       checkOut: bookingDetails.checkOut,
-      status: 'confirmed',
+      status: 'pending',
       totalPrice: bookingDetails.priceDetails.grandTotal,
       guests: 1, // simplified for demo
       createdAt: serverTimestamp(),
@@ -56,6 +56,7 @@ const processBooking = async (
       await setDoc(doc(db, 'bookings', bookingId), payload);
     }
     
+    let notificationResults: string[] = [];
     // Notify Managers
     try {
        let managers: any[] = [];
@@ -70,7 +71,7 @@ const processBooking = async (
        }
 
        if (managers.length > 0 || user.email) {
-          await fetch('/api/notify-managers', {
+          const notifyRes = await fetch('/api/notify-managers', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -85,14 +86,19 @@ const processBooking = async (
                }
             })
           });
+          if (notifyRes.ok) {
+             const notifyData = await notifyRes.json();
+             notificationResults = notifyData.results || [];
+          }
        }
     } catch (notifyErr) {
        console.error("Manager notification failed, but booking succeeded", notifyErr);
     }
 
-    navigate('/confirmation', { state: { bookingId, accessCode }});
+    navigate('/confirmation', { state: { bookingId, accessCode, notificationResults }});
   } catch (e: any) {
-     setError("Booking failed to save. Please contact support.");
+     console.error("Booking error:", e);
+     setError(`Booking failed: ${e.message}`);
      setProcessing(false);
   }
 };
