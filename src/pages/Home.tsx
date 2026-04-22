@@ -5,10 +5,12 @@ import { collection, query, onSnapshot } from 'firebase/firestore';
 import { Link, useNavigate } from 'react-router-dom';
 import { Calendar as CalendarIcon, Key, LogOut, ChevronRight, Lock, BellRing, ShieldCheck } from 'lucide-react';
 import { Property } from '../types';
+import { PrivacyPolicyModal } from '../components/PrivacyPolicyModal';
 
 export const Home: React.FC = () => {
     const { user, loading } = useAuth();
     const [properties, setProperties] = useState<Property[]>([]);
+    const [isPrivacyOpen, setIsPrivacyOpen] = useState(false);
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -180,6 +182,14 @@ export const Home: React.FC = () => {
                  </div>
                )}
             </main>
+
+            <footer className="w-full max-w-7xl mx-auto px-6 pt-12 pb-6 border-t border-slate-100 text-center">
+                <p className="text-sm text-slate-500">
+                    By using &quot;REALCal Bookings&quot;, you agree to the terms outlined in this <button onClick={() => setIsPrivacyOpen(true)} className="text-indigo-600 hover:text-indigo-700 hover:underline font-medium focus:outline-none">Privacy Policy</button>.
+                </p>
+            </footer>
+
+            <PrivacyPolicyModal isOpen={isPrivacyOpen} onClose={() => setIsPrivacyOpen(false)} />
         </div>
     );
 }

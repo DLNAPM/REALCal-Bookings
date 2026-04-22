@@ -11,6 +11,7 @@ import { PropertyDetail } from './pages/PropertyDetail';
 import { Checkout } from './pages/Checkout';
 import { Confirmation } from './pages/Confirmation';
 import { AdminDashboard } from './pages/AdminDashboard';
+import { HelpModal } from './components/HelpModal';
 
 export default function App() {
   return (
@@ -23,6 +24,7 @@ export default function App() {
           <Route path="/confirmation" element={<Confirmation />} />
           <Route path="/admin" element={<AdminDashboard />} />
         </Routes>
+        <HelpModal />
       </BrowserRouter>
     </AuthProvider>
   );
