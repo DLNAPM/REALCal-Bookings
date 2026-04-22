@@ -1,11 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { db } from '../lib/firebase';
+import { db, signOut } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, serverTimestamp, getDocs, doc, deleteDoc, updateDoc, setDoc, getDoc, writeBatch } from 'firebase/firestore';
 import { Navigate } from 'react-router-dom';
 import { format, eachDayOfInterval, parseISO } from 'date-fns';
 import { BlackoutDate, PricingRule, Booking, Property, PropertyManager } from '../types';
-import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign } from 'lucide-react';
+import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 export const AdminDashboard: React.FC = () => {
@@ -232,6 +232,20 @@ export const AdminDashboard: React.FC = () => {
       } catch (err: any) { alert(err.message); }
   }
 
+  const handleMoveImage = async (p: Property, currentIndex: number, direction: 'left' | 'right') => {
+      if (!db || !activePropertyId) return;
+      if (direction === 'left' && currentIndex === 0) return;
+      if (direction === 'right' && currentIndex === p.images.length - 1) return;
+      
+      const newImages = [...p.images];
+      const targetIndex = direction === 'left' ? currentIndex - 1 : currentIndex + 1;
+      
+      // Swap
+      [newImages[currentIndex], newImages[targetIndex]] = [newImages[targetIndex], newImages[currentIndex]];
+      
+      await handleUpdatePropertyImages(newImages);
+  };
+
   const handleDeletePricingRule = async (id: string) => {
     if (!db) return alert("Firebase not configured");
     if(window.confirm('Delete this rule?')) {
@@ -339,11 +353,22 @@ export const AdminDashboard: React.FC = () => {
               <h1 className="text-2xl font-bold tracking-tight text-slate-800">REALCal <span className="text-indigo-600">Admin</span></h1>
             </div>
             
-            <div className="flex items-center gap-4 bg-white py-1.5 pl-3 pr-4 rounded-full border border-slate-200 shadow-sm">
-                <div className="text-sm text-right leading-tight">
-                  <p className="font-semibold text-slate-800">{user?.displayName || 'Administrator'}</p>
-                  <p className="text-xs text-indigo-600 font-medium">Dashboard Control</p>
-                </div>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4 bg-white py-1.5 pl-3 pr-4 rounded-full border border-slate-200 shadow-sm">
+                  <div className="text-sm text-right leading-tight">
+                    <p className="font-semibold text-slate-800">{user?.displayName || 'Administrator'}</p>
+                    <p className="text-xs text-indigo-600 font-medium">Dashboard Control</p>
+                  </div>
+              </div>
+              <button 
+                onClick={async () => {
+                  await signOut();
+                }} 
+                className="text-slate-400 hover:text-red-500 transition-colors p-2 bg-white rounded-full border border-slate-200 shadow-sm outline-none w-10 h-10 flex items-center justify-center cursor-pointer"
+                title="Logout"
+              >
+                 <LogOut size={16} />
+              </button>
             </div>
           </header>
 
@@ -534,6 +559,18 @@ export const AdminDashboard: React.FC = () => {
                                      <div key={i} className="relative w-20 h-20 group">
                                          <img src={src} className="w-full h-full object-cover rounded-lg border border-slate-200" />
                                          <button type="button" onClick={() => handleUpdatePropertyImages(p.images.filter((_, idx)=>idx!==i))} className="absolute hidden group-hover:flex top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 items-center justify-center text-xs shadow-sm">x</button>
+                                         <div className="absolute hidden group-hover:flex bottom-1 left-0 right-0 justify-center gap-1">
+                                             {i > 0 && (
+                                                <button type="button" onClick={() => handleMoveImage(p, i, 'left')} className="bg-slate-800/80 text-white p-1 rounded hover:bg-slate-800 transition-colors">
+                                                    <ArrowLeft size={12} />
+                                                </button>
+                                             )}
+                                             {i < p.images.length - 1 && (
+                                                <button type="button" onClick={() => handleMoveImage(p, i, 'right')} className="bg-slate-800/80 text-white p-1 rounded hover:bg-slate-800 transition-colors">
+                                                    <ArrowRight size={12} />
+                                                </button>
+                                             )}
+                                         </div>
                                      </div>
                                  ))}
                                  {uploadingProperty && <div className="w-20 h-20 flex items-center justify-center bg-white border border-slate-200 rounded-lg text-xs text-slate-500">Wait...</div>}
