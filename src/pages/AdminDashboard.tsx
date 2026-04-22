@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db, signOut } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, serverTimestamp, getDocs, doc, deleteDoc, updateDoc, setDoc, getDoc, writeBatch } from 'firebase/firestore';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { format, eachDayOfInterval, parseISO } from 'date-fns';
 import { BlackoutDate, PricingRule, Booking, Property, PropertyManager } from '../types';
 import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight } from 'lucide-react';
@@ -10,6 +10,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 export const AdminDashboard: React.FC = () => {
   const { user, loading } = useAuth();
+  const navigate = useNavigate();
   const [users, setUsers] = useState<any[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [blackouts, setBlackouts] = useState<BlackoutDate[]>([]);
@@ -261,6 +262,45 @@ export const AdminDashboard: React.FC = () => {
       await handleUpdatePropertyImages(newImages);
   };
 
+  const handleSeedTestData = async () => {
+    if (!db) return;
+    try {
+       // Create dummy properties
+       const batch = writeBatch(db);
+       
+       const propRef1 = doc(collection(db, 'properties'));
+       batch.set(propRef1, {
+           name: "Oceanview Paradise Villa",
+           description: "A stunning oceanfront villa with panoramic views, private pool, and luxury detailing.",
+           images: ["https://images.unsplash.com/photo-1499793983690-e29da59ef1c2?auto=format&fit=crop&q=80&w=2000"],
+           createdAt: serverTimestamp()
+       });
+
+       const propRef2 = doc(collection(db, 'properties'));
+       batch.set(propRef2, {
+           name: "Mountain Retreat Cabin",
+           description: "Quiet and cozy cabin nested in the woods, perfect for a relaxing getaway.",
+           images: ["https://images.unsplash.com/photo-1542314831-c6a4d14effca?auto=format&fit=crop&q=80&w=2000"],
+           createdAt: serverTimestamp()
+       });
+
+       // Create test manager
+       const managerRef = doc(collection(db, 'property_managers'));
+       batch.set(managerRef, {
+           name: "Test Manager",
+           email: "reach_dlaniger@hotmail.com",
+           phone: "+15555555555",
+           enabled: true,
+           createdAt: serverTimestamp()
+       });
+
+       await batch.commit();
+       alert("Test Database Seeded! reach_dlaniger@hotmail.com added as Manager and demo properties generated.");
+    } catch (e: any) {
+       alert("Seeding failed: " + e.message);
+    }
+  };
+
   const handleDeletePricingRule = async (id: string) => {
     if (!db) return alert("Firebase not configured");
     if(window.confirm('Delete this rule?')) {
@@ -380,6 +420,7 @@ export const AdminDashboard: React.FC = () => {
               <button 
                 onClick={async () => {
                   await signOut();
+                  navigate('/');
                 }} 
                 className="text-slate-400 hover:text-red-500 transition-colors p-2 bg-white rounded-full border border-slate-200 shadow-sm outline-none w-10 h-10 flex items-center justify-center cursor-pointer"
                 title="Logout"
@@ -394,9 +435,14 @@ export const AdminDashboard: React.FC = () => {
                 <div className="flex-1">
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="text-lg font-bold text-indigo-900">Admin Quick Stats</h3>
-                    <button onClick={exportCSV} className="text-xs bg-white text-indigo-600 border border-indigo-200 font-bold px-3 py-1.5 rounded-lg hover:bg-indigo-600 hover:text-white transition-colors flex items-center gap-1">
-                       <FileDown size={14}/> Export CSV
-                    </button>
+                    <div className="flex gap-2">
+                        <button onClick={handleSeedTestData} className="text-xs bg-indigo-100 text-indigo-700 font-bold px-3 py-1.5 rounded-lg hover:bg-indigo-200 transition-colors flex items-center gap-1">
+                           Seed Test Data
+                        </button>
+                        <button onClick={exportCSV} className="text-xs bg-white text-indigo-600 border border-indigo-200 font-bold px-3 py-1.5 rounded-lg hover:bg-indigo-600 hover:text-white transition-colors flex items-center gap-1">
+                           <FileDown size={14}/> Export CSV
+                        </button>
+                    </div>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div className="bg-white p-4 rounded-2xl shadow-sm border border-indigo-100">

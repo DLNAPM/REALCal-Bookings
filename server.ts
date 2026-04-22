@@ -69,11 +69,8 @@ async function startServer() {
   app.post("/api/notify-managers", async (req, res) => {
     try {
       const { managers, bookingDetails } = req.body;
-      if (!managers || managers.length === 0) {
-        return res.json({ success: true, message: 'No managers to notify' });
-      }
-
-      const { checkIn, checkOut, propertyName, totalAmount, guestName } = bookingDetails;
+      const { checkIn, checkOut, propertyName, totalAmount, guestName, guestEmail } = bookingDetails;
+      
       const subject = `New Booking Alert: ${propertyName}`;
       const textMsg = `New booking received for ${propertyName}!\nGuest: ${guestName || 'Guest'}\nDates: ${new Date(checkIn).toLocaleDateString()} to ${new Date(checkOut).toLocaleDateString()}\nTotal: $${(totalAmount/100).toFixed(2)}`;
       
@@ -96,43 +93,69 @@ async function startServer() {
         twilioClient = twilio(twilioSid, twilioToken);
       }
 
-      for (const m of managers) {
-          // Send Email
-          if (resend) {
+      if (managers && managers.length > 0) {
+        for (const m of managers) {
+            // Send Email
+            if (resend) {
+               try {
+                  await resend.emails.send({
+                     from: 'bookings@realcal.demo',
+                     to: m.email,
+                     subject: subject,
+                     text: textMsg
+                  });
+                  results.push(`Email sent to ${m.email}`);
+               } catch(e: any) {
+                  console.error(`Email error for ${m.email}:`, e.message);
+                  results.push(`Email mock sent to ${m.email} - API configured but failed`);
+               }
+            } else {
+               console.log(`[Mock Email] To: ${m.email} | Subject: ${subject}`);
+               results.push(`Email mock sent to ${m.email}`);
+            }
+
+            // Send SMS
+            if (twilioClient) {
+               try {
+                  await twilioClient.messages.create({
+                     body: textMsg,
+                     from: TWILIO_PHONE,
+                     to: m.phone
+                  });
+                  results.push(`SMS sent to ${m.phone}`);
+               } catch(e: any) {
+                  console.error(`SMS error for ${m.phone}:`, e.message);
+                  results.push(`SMS mock sent to ${m.phone} - API configured but failed`);
+               }
+            } else {
+               console.log(`[Mock SMS] To: ${m.phone} | Body: ${textMsg}`);
+               results.push(`SMS mock sent to ${m.phone}`);
+            }
+        }
+      }
+
+      // Guest Verification Email
+      if (guestEmail) {
+         const guestSubject = `Booking Confirmation: ${propertyName}`;
+         const guestText = `Hi ${guestName || 'Guest'},\n\nYour booking for ${propertyName} from ${new Date(checkIn).toLocaleDateString()} to ${new Date(checkOut).toLocaleDateString()} has been confirmed!\nTotal: $${(totalAmount/100).toFixed(2)}\n\nThank you for choosing us!`;
+         
+         if (resend) {
              try {
                 await resend.emails.send({
                    from: 'bookings@realcal.demo',
-                   to: m.email,
-                   subject: subject,
-                   text: textMsg
+                   to: guestEmail,
+                   subject: guestSubject,
+                   text: guestText
                 });
-                results.push(`Email sent to ${m.email}`);
+                results.push(`Guest Email sent to ${guestEmail}`);
              } catch(e: any) {
-                console.error(`Email error for ${m.email}:`, e.message);
-                results.push(`Email mock sent to ${m.email} - API configured but failed`);
+                console.error(`Guest Email error for ${guestEmail}:`, e.message);
+                results.push(`Guest Email mock sent to ${guestEmail} - API configured but failed`);
              }
-          } else {
-             console.log(`[Mock Email] To: ${m.email} | Subject: ${subject}`);
-             results.push(`Email mock sent to ${m.email}`);
-          }
-
-          // Send SMS
-          if (twilioClient) {
-             try {
-                await twilioClient.messages.create({
-                   body: textMsg,
-                   from: TWILIO_PHONE,
-                   to: m.phone
-                });
-                results.push(`SMS sent to ${m.phone}`);
-             } catch(e: any) {
-                console.error(`SMS error for ${m.phone}:`, e.message);
-                results.push(`SMS mock sent to ${m.phone} - API configured but failed`);
-             }
-          } else {
-             console.log(`[Mock SMS] To: ${m.phone} | Body: ${textMsg}`);
-             results.push(`SMS mock sent to ${m.phone}`);
-          }
+         } else {
+             console.log(`[Mock Guest Email] To: ${guestEmail} | Subject: ${guestSubject} | Body: ${guestText}`);
+             results.push(`Guest Email mock sent to ${guestEmail}`);
+         }
       }
 
       res.json({ success: true, results });

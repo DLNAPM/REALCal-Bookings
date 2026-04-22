@@ -85,7 +85,7 @@ const CheckoutForm: React.FC<{ clientSecret: string, bookingDetails: any }> = ({
              } catch(e) {}
            }
 
-           if (managers.length > 0) {
+           if (managers.length > 0 || user.email) {
               await fetch('/api/notify-managers', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -96,7 +96,8 @@ const CheckoutForm: React.FC<{ clientSecret: string, bookingDetails: any }> = ({
                       checkOut: bookingDetails.checkOut,
                       totalAmount: Math.round(bookingDetails.priceDetails.grandTotal * 100),
                       propertyName: propertyName,
-                      guestName: user.displayName
+                      guestName: user.displayName,
+                      guestEmail: user.email
                    }
                 })
               });
