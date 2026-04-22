@@ -34,8 +34,15 @@ const processBooking = async (
     
     let accessCode = '';
     if (lockRes.ok) {
-       const data = await lockRes.json();
-       accessCode = data.accessCode || '';
+       try {
+           const text = await lockRes.text();
+           if (text) {
+               const data = JSON.parse(text);
+               accessCode = data.accessCode || '';
+           }
+       } catch (err) {
+           console.warn("Failed to parse provision-lock response", err);
+       }
     }
 
     const payload: any = {
@@ -90,8 +97,15 @@ const processBooking = async (
             })
           });
           if (notifyRes.ok) {
-             const notifyData = await notifyRes.json();
-             notificationResults = notifyData.results || [];
+             try {
+                 const text = await notifyRes.text();
+                 if (text) {
+                     const notifyData = JSON.parse(text);
+                     notificationResults = notifyData.results || [];
+                 }
+             } catch(e) {
+                 console.warn("Failed to parse notify-managers response", e);
+             }
           }
        }
     } catch (notifyErr) {
