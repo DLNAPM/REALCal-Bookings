@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { format, addDays, getDay, isBefore, isSameDay, startOfDay, addMonths, subMonths, eachDayOfInterval } from 'date-fns';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, doc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { BlackoutDate, PricingRule } from '../types';
 import { cn } from '../lib/utils';
