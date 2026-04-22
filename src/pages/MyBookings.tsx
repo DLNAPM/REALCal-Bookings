@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
-import { collection, query, where, getDocs, doc, updateDoc, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { Booking, Property } from '../types';
 import { useNavigate, Link } from 'react-router-dom';
 import { ChevronLeft, Calendar as CalendarIcon, XCircle, Home, MapPin, Edit3, X } from 'lucide-react';
@@ -104,7 +104,7 @@ export const MyBookings: React.FC = () => {
             await updateDoc(doc(db, 'bookings', booking.id), {
                 status: 'cancelled',
                 cancellationFee: cancellationFee,
-                updatedAt: new Date()
+                updatedAt: serverTimestamp()
             });
             
             // Refresh list locally
@@ -123,7 +123,7 @@ export const MyBookings: React.FC = () => {
                 checkIn: checkIn,
                 checkOut: checkOut,
                 totalPrice: newTotal,
-                updatedAt: new Date()
+                updatedAt: serverTimestamp()
             });
             
             // Refresh list locally
