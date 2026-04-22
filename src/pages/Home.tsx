@@ -183,7 +183,10 @@ export const Home: React.FC = () => {
                )}
             </main>
 
-            <footer className="w-full max-w-7xl mx-auto px-6 pt-12 pb-6 border-t border-slate-100 text-center">
+            <footer className="w-full max-w-7xl mx-auto px-6 pt-12 pb-6 border-t border-slate-100 text-center flex flex-col items-center gap-2">
+                <p className="text-sm font-bold tracking-widest uppercase text-slate-700">
+                    A C.&.S.H. Group Properties A.I. APP
+                </p>
                 <p className="text-sm text-slate-500">
                     By using &quot;REALCal Bookings&quot;, you agree to the terms outlined in this <button onClick={() => setIsPrivacyOpen(true)} className="text-indigo-600 hover:text-indigo-700 hover:underline font-medium focus:outline-none">Privacy Policy</button>.
                 </p>
