@@ -18,6 +18,7 @@ export const AdminDashboard: React.FC = () => {
   const [properties, setProperties] = useState<Property[]>([]);
   const [activePropertyId, setActivePropertyId] = useState<string | null>(null);
   const [propertyManagers, setPropertyManagers] = useState<PropertyManager[]>([]);
+  const [editingManagerId, setEditingManagerId] = useState<string | null>(null);
   
   // Image uploader state
   const [uploadingProperty, setUploadingProperty] = useState(false);
@@ -214,6 +215,20 @@ export const AdminDashboard: React.FC = () => {
     if (!db) return alert("Firebase not configured");
     try {
       await updateDoc(doc(db, 'property_managers', id), { enabled: !enabled });
+    } catch (err: any) { alert(err.message); }
+  }
+
+  const handleUpdateManager = async (e: React.FormEvent, id: string) => {
+    e.preventDefault();
+    if (!db) return alert("Firebase not configured");
+    const fd = new FormData(e.target as HTMLFormElement);
+    try {
+      await updateDoc(doc(db, 'property_managers', id), {
+         name: fd.get('name') as string,
+         email: fd.get('email') as string,
+         phone: fd.get('phone') as string,
+      });
+      setEditingManagerId(null);
     } catch (err: any) { alert(err.message); }
   }
 
@@ -517,21 +532,40 @@ export const AdminDashboard: React.FC = () => {
                  <div className="col-span-1 md:col-span-2 space-y-3">
                     {propertyManagers.length === 0 && <div className="p-8 border border-dashed rounded-2xl text-center text-slate-500 text-sm">No management contacts configured.</div>}
                     {propertyManagers.map(m => (
-                       <div key={m.id} className="border border-slate-200 p-4 rounded-2xl flex flex-col sm:flex-row justify-between sm:items-center gap-4 bg-white shadow-sm">
-                          <div>
-                             <h4 className="font-bold text-slate-800">{m.name}</h4>
-                             <div className="flex gap-4 text-sm text-slate-500 mt-1">
-                                <span className="flex items-center gap-1"><Mail size={14}/> {m.email}</span>
-                                <span className="flex items-center gap-1"><Phone size={14}/> {m.phone}</span>
-                             </div>
-                          </div>
-                          <div className="flex items-center gap-4">
-                             <label className="flex items-center gap-2 cursor-pointer">
-                               <input type="checkbox" checked={m.enabled} onChange={() => toggleManager(m.id, m.enabled)} className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500" />
-                               <span className="text-sm font-medium text-slate-700">{m.enabled ? 'Enabled' : 'Disabled'}</span>
-                             </label>
-                             <button type="button" onClick={() => handleDeleteManager(m.id)} className="text-red-500 hover:bg-red-50 p-2 rounded-xl transition-colors"><Trash2 size={18}/></button>
-                          </div>
+                       <div key={m.id} className="border border-slate-200 p-4 rounded-2xl flex flex-col sm:flex-row justify-between sm:items-center gap-4 bg-white shadow-sm transition-all h-auto">
+                          {editingManagerId === m.id ? (
+                              <form onSubmit={(e) => handleUpdateManager(e, m.id)} className="flex-1 flex flex-col gap-3 w-full">
+                                  <div className="flex gap-2">
+                                     <input name="name" defaultValue={m.name} required placeholder="Name" className="flex-1 border border-slate-200 rounded-lg p-2 text-sm bg-white shadow-sm" />
+                                     <input name="phone" defaultValue={m.phone} required placeholder="Phone" className="flex-1 border border-slate-200 rounded-lg p-2 text-sm bg-white shadow-sm" />
+                                  </div>
+                                  <input name="email" type="email" defaultValue={m.email} required placeholder="Email Address" className="w-full border border-slate-200 rounded-lg p-2 text-sm bg-white shadow-sm" />
+                                  <div className="flex gap-2 justify-end mt-1">
+                                      <button type="button" onClick={() => setEditingManagerId(null)} className="text-xs bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg font-bold hover:bg-slate-200 transition-colors">Cancel</button>
+                                      <button type="submit" className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-500 transition-colors">Save</button>
+                                  </div>
+                              </form>
+                          ) : (
+                              <>
+                                  <div className="flex-1 cursor-pointer group" onClick={() => setEditingManagerId(m.id)}>
+                                     <h4 className="font-bold text-slate-800 flex items-center gap-2 group-hover:text-indigo-600 transition-colors">
+                                        {m.name}
+                                        <span className="text-[10px] bg-slate-100 text-slate-400 px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity">Edit</span>
+                                     </h4>
+                                     <div className="flex gap-4 text-sm text-slate-500 mt-1">
+                                        <span className="flex items-center gap-1"><Mail size={14}/> {m.email}</span>
+                                        <span className="flex items-center gap-1"><Phone size={14}/> {m.phone}</span>
+                                     </div>
+                                  </div>
+                                  <div className="flex items-center gap-4">
+                                     <label className="flex items-center gap-2 cursor-pointer">
+                                       <input type="checkbox" checked={m.enabled} onChange={() => toggleManager(m.id, m.enabled)} className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500" />
+                                       <span className="text-sm font-medium text-slate-700">{m.enabled ? 'Enabled' : 'Disabled'}</span>
+                                     </label>
+                                     <button type="button" onClick={() => handleDeleteManager(m.id)} className="text-red-500 hover:bg-red-50 p-2 rounded-xl transition-colors"><Trash2 size={18}/></button>
+                                  </div>
+                              </>
+                          )}
                        </div>
                     ))}
                  </div>

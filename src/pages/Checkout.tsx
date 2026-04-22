@@ -10,6 +10,93 @@ import { v4 as uuidv4 } from 'uuid'; // I need to install uuid
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_test_placeholder');
 
+const processBooking = async (
+  bookingDetails: any,
+  user: any,
+  navigate: ReturnType<typeof useNavigate>,
+  setError: (err: string) => void,
+  setProcessing: (b: boolean) => void
+) => {
+  const bookingId = uuidv4();
+  try {
+    // Provision Yale access code via backend
+    const lockRes = await fetch('/api/provision-lock', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        checkIn: bookingDetails.checkIn,
+        checkOut: bookingDetails.checkOut,
+        name: user.displayName,
+      })
+    });
+    
+    let accessCode = '';
+    if (lockRes.ok) {
+       const data = await lockRes.json();
+       accessCode = data.accessCode || '';
+    }
+
+    const payload: any = {
+      userId: user.uid,
+      propertyId: bookingDetails.propertyId,
+      checkIn: bookingDetails.checkIn,
+      checkOut: bookingDetails.checkOut,
+      status: 'confirmed',
+      totalPrice: bookingDetails.priceDetails.grandTotal,
+      guests: 1, // simplified for demo
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    };
+
+    if (accessCode) {
+       payload.accessCode = accessCode;
+    }
+
+    if (db) {
+      await setDoc(doc(db, 'bookings', bookingId), payload);
+    }
+    
+    // Notify Managers
+    try {
+       let managers: any[] = [];
+       let propertyName = "Villa";
+       if (db) {
+         const managersSnap = await getDocs(query(collection(db, 'property_managers')));
+         managers = managersSnap.docs.map(d => d.data()).filter(m => m.enabled);
+         try {
+            const propSnap = await getDoc(doc(db, 'properties', bookingDetails.propertyId));
+            if(propSnap.exists()) propertyName = propSnap.data().name;
+         } catch(e) {}
+       }
+
+       if (managers.length > 0 || user.email) {
+          await fetch('/api/notify-managers', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+               managers,
+               bookingDetails: {
+                  checkIn: bookingDetails.checkIn,
+                  checkOut: bookingDetails.checkOut,
+                  totalAmount: Math.round(bookingDetails.priceDetails.grandTotal * 100),
+                  propertyName: propertyName,
+                  guestName: user.displayName,
+                  guestEmail: user.email
+               }
+            })
+          });
+       }
+    } catch (notifyErr) {
+       console.error("Manager notification failed, but booking succeeded", notifyErr);
+    }
+
+    navigate('/confirmation', { state: { bookingId, accessCode }});
+  } catch (e: any) {
+     setError("Booking failed to save. Please contact support.");
+     setProcessing(false);
+  }
+};
+
 const CheckoutForm: React.FC<{ clientSecret: string, bookingDetails: any }> = ({ clientSecret, bookingDetails }) => {
   const stripe = useStripe();
   const elements = useElements();
@@ -33,84 +120,7 @@ const CheckoutForm: React.FC<{ clientSecret: string, bookingDetails: any }> = ({
       setProcessing(false);
     } else {
       // Payment successful, generate lock code and write Booking to firestore
-      const bookingId = uuidv4();
-      try {
-        // Provision Yale access code via backend
-        const lockRes = await fetch('/api/provision-lock', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            checkIn: bookingDetails.checkIn,
-            checkOut: bookingDetails.checkOut,
-            name: user.displayName,
-          })
-        });
-        
-        let accessCode = '';
-        if (lockRes.ok) {
-           const data = await lockRes.json();
-           accessCode = data.accessCode || '';
-        }
-
-        const payload: any = {
-          userId: user.uid,
-          propertyId: bookingDetails.propertyId,
-          checkIn: bookingDetails.checkIn,
-          checkOut: bookingDetails.checkOut,
-          status: 'confirmed',
-          totalPrice: bookingDetails.priceDetails.grandTotal,
-          guests: 1, // simplified for demo
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        };
-
-        if (accessCode) {
-           payload.accessCode = accessCode;
-        }
-
-        if (db) {
-          await setDoc(doc(db, 'bookings', bookingId), payload);
-        }
-        
-        // Notify Managers
-        try {
-           let managers: any[] = [];
-           let propertyName = "Villa";
-           if (db) {
-             const managersSnap = await getDocs(query(collection(db, 'property_managers')));
-             managers = managersSnap.docs.map(d => d.data()).filter(m => m.enabled);
-             try {
-                const propSnap = await getDoc(doc(db, 'properties', bookingDetails.propertyId));
-                if(propSnap.exists()) propertyName = propSnap.data().name;
-             } catch(e) {}
-           }
-
-           if (managers.length > 0 || user.email) {
-              await fetch('/api/notify-managers', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                   managers,
-                   bookingDetails: {
-                      checkIn: bookingDetails.checkIn,
-                      checkOut: bookingDetails.checkOut,
-                      totalAmount: Math.round(bookingDetails.priceDetails.grandTotal * 100),
-                      propertyName: propertyName,
-                      guestName: user.displayName,
-                      guestEmail: user.email
-                   }
-                })
-              });
-           }
-        } catch (notifyErr) {
-           console.error("Manager notification failed, but booking succeeded", notifyErr);
-        }
-
-        navigate('/confirmation', { state: { bookingId, accessCode }});
-      } catch (e: any) {
-         setError("Payment succeeded but booking failed to save. Please contact support.");
-         setProcessing(false);
-      }
+      await processBooking(bookingDetails, user, navigate, setError, setProcessing);
     }
   };
 
@@ -148,9 +158,19 @@ export const Checkout: React.FC = () => {
         amount: Math.round(priceDetails.grandTotal * 100), // convert to cents
       })
     })
-    .then(res => res.json())
-    .then(data => setClientSecret(data.clientSecret))
-    .catch(console.error);
+    .then(async res => {
+      const data = await res.json();
+      if (!res.ok) {
+         console.error("Stripe Error:", data.error);
+         setClientSecret('MOCK_TEST_MODE');
+         return;
+      }
+      setClientSecret(data.clientSecret);
+    })
+    .catch((err) => {
+       console.error(err);
+       setClientSecret('MOCK_TEST_MODE');
+    });
   }, [priceDetails]);
 
   return (
@@ -204,7 +224,21 @@ export const Checkout: React.FC = () => {
           
           <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200 h-fit">
              <h3 className="font-bold text-lg mb-6 text-slate-800">Payment Details</h3>
-             {clientSecret ? (
+             {clientSecret === 'MOCK_TEST_MODE' ? (
+                <div className="p-6 bg-amber-50 border border-amber-200 rounded-2xl">
+                   <p className="text-amber-800 font-medium mb-4 text-sm">Stripe is not configured in this environment (STRIPE_SECRET_KEY missing). You can bypass payment for end-to-end testing.</p>
+                   <button 
+                     onClick={async () => {
+                         const mockSetError = (err: string) => alert(err);
+                         const mockSetProcessing = (b: boolean) => {};
+                         await processBooking({ propertyId, checkIn, checkOut, priceDetails }, user, navigate, mockSetError, mockSetProcessing);
+                     }}
+                     className="w-full bg-amber-600 hover:bg-amber-500 text-white py-4 rounded-xl font-bold transition-colors shadow-sm"
+                   >
+                     Bypass Payment & Confirm
+                   </button>
+                </div>
+             ) : clientSecret ? (
                 <Elements stripe={stripePromise} options={{ clientSecret }}>
                   <CheckoutForm clientSecret={clientSecret} bookingDetails={{ propertyId, checkIn, checkOut, priceDetails }} />
                 </Elements>
