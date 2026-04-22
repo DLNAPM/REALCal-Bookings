@@ -13,6 +13,8 @@ const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 
 const processBooking = async (
   bookingDetails: any,
   user: any,
+  guestEmail: string,
+  guestPhone: string,
   navigate: ReturnType<typeof useNavigate>,
   setError: (err: string) => void,
   setProcessing: (b: boolean) => void
@@ -70,7 +72,7 @@ const processBooking = async (
          } catch(e) {}
        }
 
-       if (managers.length > 0 || user.email) {
+       if (managers.length > 0 || guestEmail || guestPhone) {
           const notifyRes = await fetch('/api/notify-managers', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -82,7 +84,8 @@ const processBooking = async (
                   totalAmount: Math.round(bookingDetails.priceDetails.grandTotal * 100),
                   propertyName: propertyName,
                   guestName: user.displayName,
-                  guestEmail: user.email
+                  guestEmail: guestEmail,
+                  guestPhone: guestPhone
                }
             })
           });
@@ -103,7 +106,7 @@ const processBooking = async (
   }
 };
 
-const CheckoutForm: React.FC<{ clientSecret: string, bookingDetails: any }> = ({ clientSecret, bookingDetails }) => {
+const CheckoutForm: React.FC<{ clientSecret: string, bookingDetails: any, guestEmail: string, guestPhone: string }> = ({ clientSecret, bookingDetails, guestEmail, guestPhone }) => {
   const stripe = useStripe();
   const elements = useElements();
   const [error, setError] = useState<string | null>(null);
@@ -126,7 +129,7 @@ const CheckoutForm: React.FC<{ clientSecret: string, bookingDetails: any }> = ({
       setProcessing(false);
     } else {
       // Payment successful, generate lock code and write Booking to firestore
-      await processBooking(bookingDetails, user, navigate, setError, setProcessing);
+      await processBooking(bookingDetails, user, guestEmail, guestPhone, navigate, setError, setProcessing);
     }
   };
 
@@ -151,8 +154,16 @@ export const Checkout: React.FC = () => {
   const [clientSecret, setClientSecret] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [guestEmail, setGuestEmail] = useState('');
+  const [guestPhone, setGuestPhone] = useState('');
   const navigate = useNavigate();
   
+  useEffect(() => {
+    if (user?.email && !guestEmail) {
+       setGuestEmail(user.email);
+    }
+  }, [user]);
+
   if (loading) return <div>Loading...</div>;
   if (!user) return <Navigate to="/" />;
   
@@ -233,15 +244,40 @@ export const Checkout: React.FC = () => {
           
           <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200 h-fit">
              <h3 className="font-bold text-lg mb-6 text-slate-800">Payment Details</h3>
+             
+             {/* Guest Details Capture */}
+             <div className="mb-6 space-y-4">
+                 <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">Confirmation Email</label>
+                    <input 
+                       type="email" 
+                       value={guestEmail}
+                       onChange={e => setGuestEmail(e.target.value)}
+                       placeholder="guest@example.com"
+                       className="w-full border border-slate-200 rounded-xl px-4 py-3 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent transition-shadow"
+                    />
+                 </div>
+                 <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">Mobile Number (For Access Code SMS)</label>
+                    <input 
+                       type="tel" 
+                       value={guestPhone}
+                       onChange={e => setGuestPhone(e.target.value)}
+                       placeholder="+1 (123) 456-7890"
+                       className="w-full border border-slate-200 rounded-xl px-4 py-3 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent transition-shadow"
+                    />
+                 </div>
+             </div>
+
              {clientSecret === 'MOCK_TEST_MODE' ? (
-                <div className="p-6 bg-amber-50 border border-amber-200 rounded-2xl">
+                <div className="p-6 bg-amber-50 border border-amber-200 rounded-2xl md:mt-8">
                    <p className="text-amber-800 font-medium mb-4 text-sm">Stripe is not configured in this environment (STRIPE_SECRET_KEY missing). You can bypass payment for end-to-end testing.</p>
                    <div className="flex flex-col gap-3">
                      <button 
                        disabled={processing}
                        onClick={async () => {
                            setProcessing(true);
-                           await processBooking({ propertyId, checkIn, checkOut, priceDetails }, user, navigate, setError, setProcessing);
+                           await processBooking({ propertyId, checkIn, checkOut, priceDetails }, user, guestEmail, guestPhone, navigate, setError, setProcessing);
                        }}
                        className="w-full bg-amber-600 hover:bg-amber-500 text-white py-4 rounded-xl font-bold transition-colors shadow-sm disabled:opacity-50"
                      >
@@ -252,7 +288,7 @@ export const Checkout: React.FC = () => {
                 </div>
              ) : clientSecret ? (
                 <Elements stripe={stripePromise} options={{ clientSecret }}>
-                  <CheckoutForm clientSecret={clientSecret} bookingDetails={{ propertyId, checkIn, checkOut, priceDetails }} />
+                  <CheckoutForm clientSecret={clientSecret} bookingDetails={{ propertyId, checkIn, checkOut, priceDetails }} guestEmail={guestEmail} guestPhone={guestPhone} />
                 </Elements>
              ) : (
                 <div className="animate-pulse flex flex-col space-y-4">
