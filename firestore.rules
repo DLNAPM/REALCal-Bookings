@@ -8,6 +8,10 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    match /test/connection {
+      allow get: if true;
+    }
+
     // ---------- PRIMITIVES ----------
     function isSignedIn() { return request.auth != null; }
     function isVerified() { return isSignedIn() && request.auth.token.email_verified == true; }

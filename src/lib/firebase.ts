@@ -49,11 +49,17 @@ export async function testConnection() {
   }
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
+    console.log("Firebase connection established successfully.");
   } catch (error) {
     if (error instanceof Error) {
-      console.error("Firebase connection error:", error);
       if (error.message.includes('the client is offline')) {
+        console.error("Firebase connection error:", error);
         console.error("Please check your Firebase configuration. Ensure that Firestore Database has been created in the Firebase Console.");
+      } else if (error.message.includes('Missing or insufficient permissions')) {
+        // Hitting rule bounds proves connection acts perfectly!
+        console.log("Firebase connection established successfully.");
+      } else {
+        console.error("Firebase connection error:", error);
       }
     }
   }
