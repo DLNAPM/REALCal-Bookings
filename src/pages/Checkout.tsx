@@ -143,6 +143,9 @@ export const Checkout: React.FC = () => {
   const location = useLocation();
   const { user, loading } = useAuth();
   const [clientSecret, setClientSecret] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [processing, setProcessing] = useState(false);
+  const navigate = useNavigate();
   
   if (loading) return <div>Loading...</div>;
   if (!user) return <Navigate to="/" />;
@@ -227,16 +230,19 @@ export const Checkout: React.FC = () => {
              {clientSecret === 'MOCK_TEST_MODE' ? (
                 <div className="p-6 bg-amber-50 border border-amber-200 rounded-2xl">
                    <p className="text-amber-800 font-medium mb-4 text-sm">Stripe is not configured in this environment (STRIPE_SECRET_KEY missing). You can bypass payment for end-to-end testing.</p>
-                   <button 
-                     onClick={async () => {
-                         const mockSetError = (err: string) => alert(err);
-                         const mockSetProcessing = (b: boolean) => {};
-                         await processBooking({ propertyId, checkIn, checkOut, priceDetails }, user, navigate, mockSetError, mockSetProcessing);
-                     }}
-                     className="w-full bg-amber-600 hover:bg-amber-500 text-white py-4 rounded-xl font-bold transition-colors shadow-sm"
-                   >
-                     Bypass Payment & Confirm
-                   </button>
+                   <div className="flex flex-col gap-3">
+                     <button 
+                       disabled={processing}
+                       onClick={async () => {
+                           setProcessing(true);
+                           await processBooking({ propertyId, checkIn, checkOut, priceDetails }, user, navigate, setError, setProcessing);
+                       }}
+                       className="w-full bg-amber-600 hover:bg-amber-500 text-white py-4 rounded-xl font-bold transition-colors shadow-sm disabled:opacity-50"
+                     >
+                       {processing ? 'Processing...' : 'Bypass Payment & Confirm'}
+                     </button>
+                     {error && <div className="text-red-500 text-sm mt-2">{error}</div>}
+                   </div>
                 </div>
              ) : clientSecret ? (
                 <Elements stripe={stripePromise} options={{ clientSecret }}>
@@ -248,6 +254,22 @@ export const Checkout: React.FC = () => {
                    <div className="h-48 bg-slate-100 border border-slate-200 rounded-xl"></div>
                 </div>
              )}
+
+             {/* Booking Controls */}
+             <div className="mt-8 pt-6 border-t border-slate-200 flex flex-col sm:flex-row gap-4 justify-between items-center">
+                 <button 
+                    onClick={() => navigate(`/property/${propertyId}`)}
+                    className="text-indigo-600 hover:text-indigo-800 font-medium text-sm transition-colors"
+                 >
+                    Edit Booking Dates
+                 </button>
+                 <button 
+                    onClick={() => navigate('/')}
+                    className="text-red-500 hover:text-red-700 font-medium text-sm transition-colors"
+                 >
+                    Cancel Booking
+                 </button>
+             </div>
           </div>
         </div>
       </div>
