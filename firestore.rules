@@ -59,9 +59,18 @@ service cloud.firestore {
         data.createdAt is timestamp;
     }
 
+    // Global Settings
+    function isValidGlobalSettings(data) {
+      return data.keys().hasAll(['minDaysDefault', 'minDaysWeekend', 'cancellationRules', 'updatedAt']) &&
+        data.minDaysDefault is number &&
+        data.minDaysWeekend is number &&
+        data.cancellationRules is list &&
+        data.updatedAt is timestamp;
+    }
+
     // Bookings Collection
     function isValidBooking(data) {
-      return data.keys().hasAll(['userId', 'propertyId', 'checkIn', 'checkOut', 'status', 'totalPrice', 'guests', 'createdAt', 'updatedAt']) && data.keys().size() >= 9 && data.keys().size() <= 11 &&
+      return data.keys().hasAll(['userId', 'propertyId', 'checkIn', 'checkOut', 'status', 'totalPrice', 'guests', 'createdAt', 'updatedAt']) && data.keys().size() >= 9 && data.keys().size() <= 12 &&
         data.userId is string && data.userId.size() <= 128 && (data.userId == request.auth.uid || isAdmin()) &&
         data.propertyId is string && data.propertyId.size() <= 128 &&
         data.checkIn is string && data.checkIn.size() <= 32 &&
@@ -71,6 +80,7 @@ service cloud.firestore {
         data.guests is number &&
         (data.keys().hasAll(['accessCode']) ? data.accessCode is string && data.accessCode.size() <= 64 : true) &&
         (data.keys().hasAll(['bookingRef']) ? data.bookingRef is string && data.bookingRef.size() <= 32 : true) &&
+        (data.keys().hasAll(['cancellationFee']) ? data.cancellationFee is number : true) &&
         data.createdAt is timestamp &&
         data.updatedAt is timestamp;
     }
@@ -154,10 +164,18 @@ service cloud.firestore {
           (
             existing().userId == request.auth.uid && 
             existing().status != 'cancelled' &&
-            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt', 'checkIn', 'checkOut', 'guests', 'totalPrice'])
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt', 'checkIn', 'checkOut', 'guests', 'totalPrice', 'cancellationFee'])
           )
         );
         
+      allow delete: if isAdmin();
+    }
+
+    match /global_settings/{document=**} {
+      allow get: if true;
+      allow list: if true;
+      allow create: if isAdmin() && isValidGlobalSettings(incoming()) && incoming().updatedAt == request.time;
+      allow update: if isAdmin() && isValidGlobalSettings(incoming()) && incoming().updatedAt == request.time;
       allow delete: if isAdmin();
     }
 

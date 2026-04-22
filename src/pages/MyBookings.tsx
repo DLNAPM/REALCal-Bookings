@@ -15,11 +15,17 @@ export const MyBookings: React.FC = () => {
     const [fetching, setFetching] = useState(true);
     const [editingBooking, setEditingBooking] = useState<(Booking & { propertyName?: string; propertyImage?: string }) | null>(null);
 
+    const [globalSettings, setGlobalSettings] = useState<any>(null);
+
     useEffect(() => {
         if (!user) {
             if (!loading) navigate('/');
             return;
         }
+        
+        getDoc(doc(db, 'global_settings', 'settings')).then(snap => {
+            if (snap.exists()) setGlobalSettings(snap.data());
+        });
 
         const fetchBookings = async () => {
             setFetching(true);
@@ -62,30 +68,50 @@ export const MyBookings: React.FC = () => {
         fetchBookings();
     }, [user, loading, navigate]);
 
-    const handleCancel = async (bookingId: string, checkInDate: string) => {
-        // Enforce 48-hour cancellation policy
+    const handleCancel = async (booking: Booking & { propertyName?: string; propertyImage?: string }) => {
         const now = new Date();
-        const checkIn = parseISO(checkInDate);
+        const checkIn = parseISO(booking.checkIn);
+        const checkOut = parseISO(booking.checkOut);
         const hoursUntilCheckIn = differenceInHours(checkIn, now);
+        
+        let freeCancelHoursBefore = 48; // Global Default fallback
+        let lateCancelFeePercent = 100; // Global Default fallback (no refund if cancelled < 48h)
+        const tripDays = Math.max(1, Math.round((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24)));
 
-        if (hoursUntilCheckIn < 48) {
-            alert("Sorry, cancellations are only permitted at least 48 hours before check-in.");
-            return;
+        if (globalSettings?.cancellationRules && globalSettings.cancellationRules.length > 0) {
+            // Find the correct rule matching the length of stay, preferring rules for longer stays first
+            const sortedRules = [...globalSettings.cancellationRules].sort((a,b) => b.minBookingDays - a.minBookingDays);
+            const appliedRule = sortedRules.find((r: any) => tripDays >= r.minBookingDays);
+            if (appliedRule) {
+                freeCancelHoursBefore = appliedRule.freeCancelHoursBefore;
+                lateCancelFeePercent = appliedRule.lateCancelFeePercent;
+            }
         }
 
-        if (window.confirm("Are you sure you want to cancel this booking?")) {
-            try {
-                await updateDoc(doc(db, 'bookings', bookingId), {
-                    status: 'cancelled',
-                    updatedAt: new Date() // Firestore automatically intercepts this or it's handled server side, let's use actual firestore timestamp
-                });
-                
-                // Refresh list locally
-                setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: 'cancelled' } : b));
-                alert("Booking cancelled successfully.");
-            } catch (err: any) {
-                alert(`Failed to cancel: ${err.message}`);
-            }
+        let isLateCancellation = hoursUntilCheckIn < freeCancelHoursBefore;
+        let cancellationFee = 0;
+        
+        if (isLateCancellation) {
+            cancellationFee = Math.round(booking.totalPrice * (lateCancelFeePercent / 100));
+            const proceed = window.confirm(`You are cancelling within the ${freeCancelHoursBefore}-hour window for a ${tripDays}-day stay.\nA late cancellation fee of $${(cancellationFee / 100).toFixed(2)} applies.\n\nDo you want to proceed and accept the fee?`);
+            if (!proceed) return;
+        } else {
+            const proceed = window.confirm(`You are within the free cancellation window.\nNo fee will be charged to continuously cancel this booking.\n\nAre you sure you want to cancel?`);
+            if (!proceed) return;
+        }
+
+        try {
+            await updateDoc(doc(db, 'bookings', booking.id), {
+                status: 'cancelled',
+                cancellationFee: cancellationFee,
+                updatedAt: new Date()
+            });
+            
+            // Refresh list locally
+            setBookings(prev => prev.map(b => b.id === booking.id ? { ...b, status: 'cancelled', cancellationFee } : b));
+            alert("Booking cancelled successfully.");
+        } catch (err: any) {
+            alert(`Failed to cancel: ${err.message}`);
         }
     };
 
@@ -145,8 +171,21 @@ export const MyBookings: React.FC = () => {
                     <div className="space-y-6">
                         {bookings.map(booking => {
                             const checkInDate = parseISO(booking.checkIn);
+                            const checkOutDate = parseISO(booking.checkOut);
                             const hoursUntilCheckIn = differenceInHours(checkInDate, new Date());
-                            const canCancel = hoursUntilCheckIn >= 48 && booking.status !== 'cancelled';
+                            const tripDays = Math.max(1, Math.round((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24)));
+                            
+                            let freeCancelHoursBefore = 48;
+                            if (globalSettings?.cancellationRules && globalSettings.cancellationRules.length > 0) {
+                                const sortedRules = [...globalSettings.cancellationRules].sort((a,b) => b.minBookingDays - a.minBookingDays);
+                                const appliedRule = sortedRules.find((r: any) => tripDays >= r.minBookingDays);
+                                if (appliedRule) {
+                                    freeCancelHoursBefore = appliedRule.freeCancelHoursBefore;
+                                }
+                            }
+                            // Users can cancel/edit even if late just for a fee now as long as it's not the day of
+                            const canCancel = hoursUntilCheckIn >= 0 && booking.status !== 'cancelled';
+                            const isLate = hoursUntilCheckIn < freeCancelHoursBefore;
 
                             return (
                                 <div key={booking.id} className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm flex flex-col md:flex-row">
@@ -192,6 +231,18 @@ export const MyBookings: React.FC = () => {
                                             </div>
                                         </div>
 
+                                        {isLate && canCancel && (
+                                           <div className="mb-4 bg-amber-50 border border-amber-200 text-amber-700 p-3 rounded-xl text-xs font-medium">
+                                              You are within the {freeCancelHoursBefore}-hour window of check-in. Cancellation fees will apply if you cancel or reschedule this booking.
+                                           </div>
+                                        )}
+
+                                        {booking.cancellationFee !== undefined && booking.cancellationFee > 0 && booking.status === 'cancelled' && (
+                                           <div className="mb-4 bg-rose-50 border border-rose-200 text-rose-700 p-3 rounded-xl text-xs font-bold">
+                                              Late Cancellation Fee Assessed: ${(booking.cancellationFee / 100).toFixed(2)}
+                                           </div>
+                                        )}
+
                                         {booking.accessCode && booking.status !== 'cancelled' && (
                                             <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 mb-6 flex items-center gap-4">
                                                 <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-lg flex items-center justify-center shrink-0">
@@ -214,7 +265,7 @@ export const MyBookings: React.FC = () => {
                                                         <Edit3 size={18} /> Edit Dates
                                                     </button>
                                                     <button 
-                                                        onClick={() => handleCancel(booking.id, booking.checkIn)}
+                                                        onClick={() => handleCancel(booking)}
                                                         className="flex-1 bg-white border-2 border-rose-100 text-rose-600 hover:bg-rose-50 hover:border-rose-200 font-bold py-3 rounded-xl transition-colors flex justify-center items-center gap-2"
                                                     >
                                                         <XCircle size={18} /> Cancel
@@ -222,7 +273,7 @@ export const MyBookings: React.FC = () => {
                                                 </>
                                             ) : booking.status !== 'cancelled' ? (
                                                 <div className="text-sm font-bold text-amber-600 bg-amber-50 px-4 py-3 rounded-xl border border-amber-100 flex-1 text-center">
-                                                    Past Change/Cancellation Window (48h)
+                                                    Check-in complete or underway
                                                 </div>
                                             ) : (
                                                 <div className="text-sm font-bold text-slate-500 bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 flex-1 text-center">

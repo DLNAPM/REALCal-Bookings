@@ -22,6 +22,7 @@ export const Calendar: React.FC<{
   
   const [pricingRules, setPricingRules] = useState<PricingRule[]>([]);
   const [blackoutDates, setBlackoutDates] = useState<BlackoutDate[]>([]);
+  const [globalSettings, setGlobalSettings] = useState<any>(null);
   
   const navigate = useNavigate();
 
@@ -33,7 +34,10 @@ export const Calendar: React.FC<{
     const unsubBlackouts = onSnapshot(query(collection(db, 'blackout_dates'), where('propertyId', '==', propertyId)), (snap) => {
       setBlackoutDates(snap.docs.map(d => ({ id: d.id, ...d.data() } as BlackoutDate)));
     });
-    return () => { unsubRules(); unsubBlackouts(); };
+    const unsubSettings = onSnapshot(doc(db, 'global_settings', 'settings'), (snap) => {
+        if(snap.exists()) setGlobalSettings(snap.data());
+    });
+    return () => { unsubRules(); unsubBlackouts(); unsubSettings(); };
   }, [propertyId]);
 
   const isBlackout = (date: Date) => {
@@ -77,6 +81,21 @@ export const Calendar: React.FC<{
           setCheckIn(day);
           setCheckOut(null);
         } else {
+          // Check Minimum Booking Days constraint
+          const nights = interval.length - 1; // interval includes check out day too
+          if (nights < 1) return; // Cannot check out same day
+          
+          let minRequired = globalSettings?.minDaysDefault || 1;
+          const hasWeekend = interval.some(d => getDay(d) === 5 || getDay(d) === 6);
+          if (hasWeekend) {
+              minRequired = globalSettings?.minDaysWeekend || 1;
+          }
+          
+          if (nights < minRequired) {
+              alert(`Your dates include a requirement of at least ${minRequired} nights. Please extend your checkout date.`);
+              return;
+          }
+           
           setCheckOut(day);
         }
       }

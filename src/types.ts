@@ -48,6 +48,19 @@ export interface Booking {
   guests: number;
   accessCode?: string;
   bookingRef?: string;
+  cancellationFee?: number;
   createdAt: any;
   updatedAt: any;
+}
+
+export interface GlobalSettings {
+  minDaysDefault: number;
+  minDaysWeekend: number;
+  cancellationRules: {
+    id: string;
+    minBookingDays: number;
+    freeCancelHoursBefore: number;
+    lateCancelFeePercent: number;
+  }[];
+  updatedAt?: any;
 }

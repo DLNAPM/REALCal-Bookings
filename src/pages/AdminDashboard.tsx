@@ -20,6 +20,8 @@ export const AdminDashboard: React.FC = () => {
   const [propertyManagers, setPropertyManagers] = useState<PropertyManager[]>([]);
   const [editingManagerId, setEditingManagerId] = useState<string | null>(null);
   
+  const [globalSettings, setGlobalSettings] = useState<any>(null);
+  
   // Image uploader state
   const [uploadingProperty, setUploadingProperty] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -35,6 +37,20 @@ export const AdminDashboard: React.FC = () => {
     onSnapshot(query(collection(db, 'blackout_dates')), (snap) => setBlackouts(snap.docs.map(d => ({id: d.id, ...d.data() } as BlackoutDate))));
     onSnapshot(query(collection(db, 'pricing_rules')), (snap) => setPricingRules(snap.docs.map(d => ({id: d.id, ...d.data() } as PricingRule))));
     onSnapshot(query(collection(db, 'property_managers')), (snap) => setPropertyManagers(snap.docs.map(d => ({id: d.id, ...d.data() } as PropertyManager))));
+    onSnapshot(doc(db, 'global_settings', 'settings'), (snap) => {
+        if (snap.exists()) {
+            setGlobalSettings(snap.data());
+        } else {
+            setGlobalSettings({
+                minDaysDefault: 1,
+                minDaysWeekend: 2,
+                cancellationRules: [
+                    { id: '1', minBookingDays: 1, freeCancelHoursBefore: 48, lateCancelFeePercent: 100 }
+                ]
+            });
+        }
+    });
+
     onSnapshot(query(collection(db, 'properties')), (snap) => {
         const props = snap.docs.map(d => ({id: d.id, ...d.data() } as Property));
         setProperties(props);
@@ -263,6 +279,72 @@ export const AdminDashboard: React.FC = () => {
       } catch (err: any) { alert(err.message); }
   }
 
+  const handleSaveGlobalSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!db) return alert("Firebase not configured");
+    const fd = new FormData(e.target as HTMLFormElement);
+    try {
+        const minDaysDefault = parseInt(fd.get('minDaysDefault') as string) || 1;
+        const minDaysWeekend = parseInt(fd.get('minDaysWeekend') as string) || 1;
+        
+        // We will preserve the current cancellation rules or extract them from state
+        // For simplicity, we are binding the rules state directly to `globalSettings`
+        await setDoc(doc(db, 'global_settings', 'settings'), {
+            ...globalSettings,
+            minDaysDefault,
+            minDaysWeekend,
+            updatedAt: serverTimestamp()
+        });
+        alert("Global Settings Saved!");
+    } catch (e: any) {
+        alert(e.message);
+    }
+  }
+
+  const handleUpdateCancellationRule = async (index: number, field: string, value: number) => {
+      if (!db) return;
+      try {
+          const newRules = [...(globalSettings?.cancellationRules || [])];
+          newRules[index] = { ...newRules[index], [field]: value };
+          
+          await setDoc(doc(db, 'global_settings', 'settings'), {
+              ...globalSettings,
+              cancellationRules: newRules,
+              updatedAt: serverTimestamp()
+          });
+      } catch (e: any) {
+          alert(e.message);
+      }
+  }
+
+  const handleAddCancellationRule = async () => {
+      if (!db) return;
+      try {
+          const newRules = [...(globalSettings?.cancellationRules || []), { id: uuidv4(), minBookingDays: 1, freeCancelHoursBefore: 48, lateCancelFeePercent: 100 }];
+          await setDoc(doc(db, 'global_settings', 'settings'), {
+              ...globalSettings,
+              cancellationRules: newRules,
+              updatedAt: serverTimestamp()
+          });
+      } catch (e: any) {
+          alert(e.message);
+      }
+  }
+  
+  const handleDeleteCancellationRule = async (id: string) => {
+      if (!db) return;
+      try {
+          const newRules = (globalSettings?.cancellationRules || []).filter((r: any) => r.id !== id);
+          await setDoc(doc(db, 'global_settings', 'settings'), {
+              ...globalSettings,
+              cancellationRules: newRules,
+              updatedAt: serverTimestamp()
+          });
+      } catch (e: any) {
+          alert(e.message);
+      }
+  }
+
   const handleMoveImage = async (p: Property, currentIndex: number, direction: 'left' | 'right') => {
       if (!db || !activePropertyId) return;
       if (direction === 'left' && currentIndex === 0) return;
@@ -483,7 +565,79 @@ export const AdminDashboard: React.FC = () => {
              </div>
           </div>
 
-          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm mt-8">
+              <h2 className="text-xl font-bold mb-6 flex items-center gap-2"><Settings className="text-indigo-600" size={20}/> Global Booking Settings</h2>
+              
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                 {/* Minimum Days Config */}
+                 <div className="border border-slate-200 p-6 rounded-2xl bg-slate-50">
+                    <h3 className="font-bold mb-1 text-slate-800 text-lg">Minimum Required Booking Days</h3>
+                    <p className="text-sm text-slate-500 mb-6">Set the default minimum length of stay.</p>
+                    
+                    <form onSubmit={handleSaveGlobalSettings} className="space-y-4">
+                       <div className="flex items-center gap-4">
+                           <div className="flex-1">
+                               <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Standard (Default) Days</label>
+                               <input name="minDaysDefault" type="number" min="1" defaultValue={globalSettings?.minDaysDefault || 1} required className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm" />
+                           </div>
+                           <div className="flex-1">
+                               <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Weekend Minimum Days</label>
+                               <input name="minDaysWeekend" type="number" min="1" defaultValue={globalSettings?.minDaysWeekend || 1} required className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm" />
+                           </div>
+                       </div>
+                       
+                       <button type="submit" className="w-full bg-slate-900 text-white px-4 py-3 rounded-xl font-bold hover:bg-slate-800 transition-colors">Save Global Settings</button>
+                    </form>
+                 </div>
+
+                 {/* Cancellation Policies */}
+                 <div className="border border-slate-200 p-6 rounded-2xl bg-white shadow-sm">
+                    <div className="flex justify-between items-start mb-1">
+                        <h3 className="font-bold text-slate-800 text-lg">Cancellation Policies</h3>
+                        <button onClick={handleAddCancellationRule} className="text-indigo-600 hover:bg-indigo-50 p-1.5 rounded-lg transition-colors flex items-center gap-1 text-sm font-bold">
+                            <Plus size={16}/> Add Rule
+                        </button>
+                    </div>
+                    <p className="text-sm text-slate-500 mb-6">Configure late fees based on total length of stay.</p>
+                    
+                    <div className="space-y-3">
+                        {globalSettings?.cancellationRules?.map((rule: any, i: number) => (
+                            <div key={rule.id} className="relative bg-slate-50 border border-slate-200 p-4 rounded-xl">
+                               <button onClick={() => handleDeleteCancellationRule(rule.id)} className="absolute top-3 right-3 text-red-400 hover:text-red-500 font-bold p-1">X</button>
+                               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                   <div>
+                                       <label className="text-[10px] uppercase font-bold text-slate-500 block">Applies to Stays &ge;</label>
+                                       <div className="flex items-center gap-1">
+                                           <input type="number" min="1" value={rule.minBookingDays} onChange={(e) => handleUpdateCancellationRule(i, 'minBookingDays', parseInt(e.target.value))} className="w-16 border border-slate-200 rounded md p-1 text-sm bg-white" />
+                                           <span className="text-xs text-slate-600">days</span>
+                                       </div>
+                                   </div>
+                                   <div>
+                                       <label className="text-[10px] uppercase font-bold text-slate-500 block">Free Cancel Untl</label>
+                                       <div className="flex items-center gap-1">
+                                           <input type="number" min="0" value={rule.freeCancelHoursBefore} onChange={(e) => handleUpdateCancellationRule(i, 'freeCancelHoursBefore', parseInt(e.target.value))} className="w-16 border border-slate-200 rounded md p-1 text-sm bg-white" />
+                                           <span className="text-xs text-slate-600">hrs prior</span>
+                                       </div>
+                                   </div>
+                                   <div className="col-span-2 md:col-span-1 border-t border-slate-200 pt-3 md:border-none md:pt-0 mt-2 md:mt-0">
+                                       <label className="text-[10px] uppercase font-bold text-slate-500 block">Late Cancel Fee</label>
+                                       <div className="flex items-center gap-1 font-bold text-amber-600">
+                                           <input type="number" min="0" max="100" value={rule.lateCancelFeePercent} onChange={(e) => handleUpdateCancellationRule(i, 'lateCancelFeePercent', parseInt(e.target.value))} className="w-16 border border-amber-200 rounded md p-1 text-sm bg-amber-50 text-amber-700" />
+                                           <span>%</span>
+                                       </div>
+                                   </div>
+                               </div>
+                            </div>
+                        ))}
+                        {(!globalSettings?.cancellationRules || globalSettings.cancellationRules.length === 0) && (
+                            <div className="text-sm text-slate-400 italic text-center py-4 bg-slate-50 rounded-xl border border-slate-100">No cancellation rules configured. All cancellations are free at any time.</div>
+                        )}
+                    </div>
+                 </div>
+              </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm mt-8">
              <h2 className="text-xl font-bold mb-6 flex items-center gap-2"><CalendarIcon size={20}/> Create Manual Booking</h2>
              <form onSubmit={handleAdminCreateBooking} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end bg-slate-50 p-6 rounded-2xl border border-slate-300 border-dashed">
                 <div className="lg:col-span-1">
