@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
-import { collection, query, onSnapshot, addDoc, serverTimestamp, getDocs, doc, deleteDoc, updateDoc, setDoc, getDoc } from 'firebase/firestore';
+import { collection, query, onSnapshot, addDoc, serverTimestamp, getDocs, doc, deleteDoc, updateDoc, setDoc, getDoc, writeBatch } from 'firebase/firestore';
 import { Navigate } from 'react-router-dom';
+import { format, eachDayOfInterval, parseISO } from 'date-fns';
 import { BlackoutDate, PricingRule, Booking, Property, PropertyManager } from '../types';
 import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
@@ -149,12 +150,30 @@ export const AdminDashboard: React.FC = () => {
     if(!activePropertyId) return alert("Select a property first");
     const fd = new FormData(e.target as HTMLFormElement);
     try {
-      await addDoc(collection(db, 'blackout_dates'), {
-         propertyId: activePropertyId,
-         date: fd.get('date') as string,
-         reason: fd.get('reason') as string || '',
-         createdAt: serverTimestamp()
+      const startDateStr = fd.get('startDate') as string;
+      const endDateStr = fd.get('endDate') as string;
+      const reason = fd.get('reason') as string || '';
+      
+      const start = parseISO(startDateStr);
+      const end = endDateStr ? parseISO(endDateStr) : start;
+      
+      if (end < start) {
+         return alert("End date cannot be before start date.");
+      }
+      
+      const days = eachDayOfInterval({ start, end });
+      const batch = writeBatch(db);
+      days.forEach(day => {
+          const docRef = doc(collection(db, 'blackout_dates'));
+          batch.set(docRef, {
+             propertyId: activePropertyId,
+             date: format(day, 'yyyy-MM-dd'),
+             reason,
+             createdAt: serverTimestamp()
+          });
       });
+      await batch.commit();
+      
       (e.target as HTMLFormElement).reset();
     } catch (e: any) { alert(e.message); }
   }
@@ -186,6 +205,44 @@ export const AdminDashboard: React.FC = () => {
     if (!db) return alert("Firebase not configured");
     if(window.confirm('Delete this contact?')) {
       await deleteDoc(doc(db, 'property_managers', id));
+    }
+  }
+
+  const handleUpdateProperty = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!db) return alert("Firebase not configured");
+      if (!activePropertyId) return alert("Select a property first");
+      const fd = new FormData(e.target as HTMLFormElement);
+      try {
+          await updateDoc(doc(db, 'properties', activePropertyId), {
+              name: fd.get('name') as string,
+              description: fd.get('description') as string,
+              // Note: images updating requires a separate flow or overriding
+          });
+          alert("Property updated!");
+      } catch (err: any) { alert(err.message); }
+  }
+
+  const handleUpdatePropertyImages = async (newImages: string[]) => {
+      if (!db || !activePropertyId) return;
+      try {
+          await updateDoc(doc(db, 'properties', activePropertyId), {
+              images: newImages
+          });
+      } catch (err: any) { alert(err.message); }
+  }
+
+  const handleDeletePricingRule = async (id: string) => {
+    if (!db) return alert("Firebase not configured");
+    if(window.confirm('Delete this rule?')) {
+      await deleteDoc(doc(db, 'pricing_rules', id));
+    }
+  }
+
+  const handleDeleteBlackout = async (id: string) => {
+    if (!db) return alert("Firebase not configured");
+    if(window.confirm('Delete this blackout date?')) {
+      await deleteDoc(doc(db, 'blackout_dates', id));
     }
   }
 
@@ -441,7 +498,53 @@ export const AdminDashboard: React.FC = () => {
           </div>
           
           {activePropertyId && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+            <div className="flex flex-col gap-6 mt-8">
+              {/* Edit Property Block */}
+              {(() => {
+                 const p = properties.find(prop => prop.id === activePropertyId);
+                 if (!p) return null;
+                 return (
+                   <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+                      <h2 className="text-xl font-bold mb-6 flex items-center gap-2 text-slate-800">Edit Property Details <span className="text-sm font-normal text-slate-500 ml-2 bg-slate-100 px-2 py-1 rounded-md">{p.name}</span></h2>
+                      <form onSubmit={handleUpdateProperty} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                         <div className="space-y-4">
+                             <input name="name" defaultValue={p.name} required placeholder="Property Name" className="w-full border border-slate-200 rounded-xl p-3 bg-white shadow-sm" />
+                             <textarea name="description" defaultValue={p.description} required placeholder="Description..." rows={5} className="w-full border border-slate-200 rounded-xl p-3 bg-white shadow-sm" />
+                             <button type="submit" className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-indigo-500 transition-colors">Update Info</button>
+                         </div>
+                         <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm">
+                             <div className="flex justify-between items-center mb-4">
+                                 <span className="font-medium text-slate-700">Images ({p.images.length}/15)</span>
+                                 <label className="bg-white border border-slate-200 hover:bg-slate-100 text-slate-800 px-3 py-1.5 rounded-lg cursor-pointer text-sm font-bold flex gap-2 items-center transition-colors">
+                                     <ImageIcon size={14} /> Add Photos
+                                     <input type="file" multiple accept="image/*" className="hidden" disabled={uploadingProperty || p.images.length >= 15} onChange={async (e) => {
+                                         if (!e.target.files) return;
+                                         setUploadingProperty(true);
+                                         try {
+                                             const files = Array.from(e.target.files).slice(0, 15 - p.images.length);
+                                             const compressed = await Promise.all(files.map(f => compressImage(f as File)));
+                                             await handleUpdatePropertyImages([...p.images, ...compressed]);
+                                         } catch (err) { console.error(err); }
+                                         setUploadingProperty(false);
+                                     }} />
+                                 </label>
+                             </div>
+                             <div className="flex flex-wrap gap-2 max-h-[160px] overflow-y-auto pr-2">
+                                 {p.images.map((src, i) => (
+                                     <div key={i} className="relative w-20 h-20 group">
+                                         <img src={src} className="w-full h-full object-cover rounded-lg border border-slate-200" />
+                                         <button type="button" onClick={() => handleUpdatePropertyImages(p.images.filter((_, idx)=>idx!==i))} className="absolute hidden group-hover:flex top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 items-center justify-center text-xs shadow-sm">x</button>
+                                     </div>
+                                 ))}
+                                 {uploadingProperty && <div className="w-20 h-20 flex items-center justify-center bg-white border border-slate-200 rounded-lg text-xs text-slate-500">Wait...</div>}
+                             </div>
+                         </div>
+                      </form>
+                   </div>
+                 );
+              })()}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                  <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
                    <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-slate-800">Pricing Rules <span className="text-sm font-normal text-slate-500 ml-2 bg-slate-100 px-2 py-1 rounded-md">{properties.find(p => p.id === activePropertyId)?.name}</span></h2>
                    <form onSubmit={handleCreatePricingRule} className="space-y-4 mb-6 p-4 bg-slate-50 rounded-2xl border border-slate-200">
@@ -476,12 +579,15 @@ export const AdminDashboard: React.FC = () => {
                    <div className="space-y-2">
                        {activeRules.length === 0 && <p className="text-sm text-slate-500 text-center">No rules configured for this property.</p>}
                       {activeRules.map(r => (
-                         <div key={r.id} className="border border-slate-200 p-3 rounded-xl flex justify-between items-center text-sm shadow-sm bg-white">
+                         <div key={r.id} className="border border-slate-200 p-3 rounded-xl flex justify-between items-center text-sm shadow-sm bg-white group">
                             <div>
                                <span className="font-bold capitalize text-slate-800">{r.type}</span>
                                {r.startDate && <span className="text-slate-500 ml-2">({r.startDate} to {r.endDate})</span>}
                             </div>
-                            <span className="font-bold text-indigo-600">${(r.rate)}/nt</span>
+                            <div className="flex items-center gap-3">
+                               <span className="font-bold text-indigo-600">${(r.rate)}/nt</span>
+                               <button type="button" onClick={() => handleDeletePricingRule(r.id)} className="text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"><Trash2 size={16}/></button>
+                            </div>
                          </div>
                       ))}
                    </div>
@@ -489,8 +595,11 @@ export const AdminDashboard: React.FC = () => {
 
                 <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
                    <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-slate-800">Blackout Dates <span className="text-sm font-normal text-slate-500 ml-2 bg-slate-100 px-2 py-1 rounded-md">{properties.find(p => p.id === activePropertyId)?.name}</span></h2>
-                   <form onSubmit={handleCreateBlackout} className="flex flex-col sm:flex-row gap-4 mb-6 p-4 bg-slate-50 rounded-2xl border border-slate-200">
-                      <input name="date" type="date" required className="flex-1 border border-slate-200 rounded-xl p-2.5 bg-white shadow-sm" />
+                   <form onSubmit={handleCreateBlackout} className="flex flex-col sm:flex-row gap-2 mb-6 p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                      <div className="flex-1 flex gap-2">
+                          <input name="startDate" type="date" required className="w-1/2 border border-slate-200 rounded-xl p-2.5 bg-white shadow-sm" />
+                          <input name="endDate" type="date" className="w-1/2 border border-slate-200 rounded-xl p-2.5 bg-white shadow-sm" title="Optional end date for multi-day blackouts" />
+                      </div>
                       <input name="reason" type="text" placeholder="Reason (e.g. Maintenance)" className="flex-1 md:flex-2 border border-slate-200 rounded-xl p-2.5 bg-white shadow-sm" />
                       <button type="submit" className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-500 transition-colors">Add</button>
                    </form>
@@ -498,13 +607,17 @@ export const AdminDashboard: React.FC = () => {
                    <div className="space-y-2 max-h-[340px] overflow-y-auto pr-2">
                        {activeBlackouts.length === 0 && <p className="text-sm text-slate-500 text-center">No blackouts configured for this property.</p>}
                       {activeBlackouts.map(b => (
-                         <div key={b.id} className="border border-slate-200 p-3 rounded-xl flex justify-between items-center text-sm shadow-sm bg-white">
-                            <span className="font-bold text-slate-800">{b.date}</span>
-                            <span className="text-slate-500">{b.reason || 'No reason'}</span>
+                         <div key={b.id} className="border border-slate-200 p-3 rounded-xl flex justify-between items-center text-sm shadow-sm bg-white group">
+                            <div>
+                               <span className="font-bold text-slate-800">{b.date}</span>
+                               <span className="text-slate-500 ml-3">{b.reason || 'No reason'}</span>
+                            </div>
+                            <button type="button" onClick={() => handleDeleteBlackout(b.id)} className="text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"><Trash2 size={16}/></button>
                          </div>
                       ))}
                    </div>
                 </div>
+              </div>
             </div>
           )}
        </div>
