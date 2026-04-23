@@ -11,7 +11,7 @@ export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen, 
     if (!isOpen) return null;
 
     const APP_URL = import.meta.env.VITE_APP_URL || window.location.origin;
-    const CONSENT_Doc_URL = `${APP_URL}/consent_document.pdf`;
+    const CONSENT_Doc_URL = `${APP_URL}/consent_document.html`;
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
@@ -78,11 +78,12 @@ export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen, 
                                 <p className="mb-4">Scan the QR code to review our full Terms of Consent and verify your opt-in.</p>
                                 <a 
                                     href={CONSENT_Doc_URL}
-                                    download="Consent_Document.pdf"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
                                     className="inline-flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg font-bold text-xs hover:bg-slate-800 transition-colors"
                                 >
                                     <Download size={14} />
-                                    Download Consent Document
+                                    View Consent Document
                                 </a>
                             </div>
                         </div>
