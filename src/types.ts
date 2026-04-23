@@ -20,6 +20,8 @@ export interface PricingRule {
   startDate?: string;
   endDate?: string;
   name?: string;
+  targetType?: 'property' | 'room';
+  roomNumber?: string;
   createdAt: any;
 }
 

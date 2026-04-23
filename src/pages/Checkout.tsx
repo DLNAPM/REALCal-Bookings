@@ -369,7 +369,7 @@ export const Checkout: React.FC = () => {
                 </div>
              ) : clientSecret ? (
                 <Elements stripe={stripePromise} options={{ clientSecret }}>
-                  <CheckoutForm clientSecret={clientSecret} bookingDetails={{ propertyId, checkIn, checkOut, priceDetails }} guestEmail={guestEmail} guestPhone={guestPhone} isTestProperty={isTestProperty} />
+                  <CheckoutForm clientSecret={clientSecret} bookingDetails={{ propertyId, checkIn, checkOut, priceDetails }} guestEmail={guestEmail} guestPhone={guestPhone} isTestProperty={isTestProperty} selectedBedroom={selectedBedroom} />
                 </Elements>
              ) : (
                 <div className="animate-pulse flex flex-col space-y-4">

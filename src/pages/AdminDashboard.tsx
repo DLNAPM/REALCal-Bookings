@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db, signOut } from '../lib/firebase';
-import { collection, query, onSnapshot, addDoc, serverTimestamp, getDocs, doc, deleteDoc, updateDoc, setDoc, getDoc, writeBatch } from 'firebase/firestore';
+import { collection, query, onSnapshot, addDoc, serverTimestamp, getDocs, doc, deleteDoc, updateDoc, setDoc, getDoc, writeBatch, orderBy } from 'firebase/firestore';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { format, eachDayOfInterval, parseISO } from 'date-fns';
+import { cn } from '../lib/utils';
 import { BlackoutDate, PricingRule, Booking, Property, PropertyManager } from '../types';
 import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
@@ -17,6 +18,8 @@ export const AdminDashboard: React.FC = () => {
   const [pricingRules, setPricingRules] = useState<PricingRule[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
   const [activePropertyId, setActivePropertyId] = useState<string | null>(null);
+  const [pricingTarget, setPricingTarget] = useState<'property' | 'room'>('property');
+  const [selectedRoomForPricing, setSelectedRoomForPricing] = useState<string | null>(null);
   const [propertyManagers, setPropertyManagers] = useState<PropertyManager[]>([]);
   const [editingManagerId, setEditingManagerId] = useState<string | null>(null);
   const [editingBedrooms, setEditingBedrooms] = useState<{ roomNumber: string; roomLockNumber: string; type: 'Master Bed' | 'Guest Bedroom' }[]>([]);
@@ -52,7 +55,7 @@ export const AdminDashboard: React.FC = () => {
         }
     });
 
-    onSnapshot(query(collection(db, 'properties')), (snap) => {
+    onSnapshot(query(collection(db, 'properties'), orderBy('createdAt', 'desc')), (snap) => {
         const props = snap.docs.map(d => ({id: d.id, ...d.data() } as Property));
         setProperties(props);
         if (props.length > 0 && !activePropertyId) setActivePropertyId(props[0].id);
@@ -138,14 +141,20 @@ export const AdminDashboard: React.FC = () => {
       if (!db) return alert("Firebase not configured");
       const fd = new FormData(e.target as HTMLFormElement);
       try {
-          await addDoc(collection(db, 'properties'), {
+          const docRef = await addDoc(collection(db, 'properties'), {
               name: fd.get('name') as string,
+              location: fd.get('location') as string,
               description: fd.get('description') as string,
               images: previewImages,
+              hasSmartLock: fd.get('hasSmartLock') === 'on',
+              allowIndividualRoomRental: fd.get('allowIndividualRoomRental') === 'on',
+              bedrooms: [],
               createdAt: serverTimestamp()
           });
           (e.target as HTMLFormElement).reset();
           setPreviewImages([]);
+          setActivePropertyId(docRef.id);
+          alert("Property created and selected for editing!");
       } catch (err: any) { alert(err.message); }
   }
 
@@ -165,6 +174,8 @@ export const AdminDashboard: React.FC = () => {
     try {
       await addDoc(collection(db, 'pricing_rules'), {
          propertyId: activePropertyId,
+         targetType: pricingTarget,
+         roomNumber: pricingTarget === 'room' ? selectedRoomForPricing : null,
          type: fd.get('type') as string,
          rate: Number(fd.get('rate')),
          name: fd.get('name') as string || '',
@@ -277,6 +288,7 @@ export const AdminDashboard: React.FC = () => {
       try {
           await updateDoc(doc(db, 'properties', activePropertyId), {
               name: fd.get('name') as string,
+              location: fd.get('location') as string,
               description: fd.get('description') as string,
               hasSmartLock: fd.get('hasSmartLock') === 'on',
               allowIndividualRoomRental: fd.get('allowIndividualRoomRental') === 'on',
@@ -808,14 +820,22 @@ export const AdminDashboard: React.FC = () => {
                  return (
                    <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
                       <h2 className="text-xl font-bold mb-6 flex items-center gap-2 text-slate-800">Edit Property Details <span className="text-sm font-normal text-slate-500 ml-2 bg-slate-100 px-2 py-1 rounded-md">{p.name}</span></h2>
-                      <form onSubmit={handleUpdateProperty} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <form key={activePropertyId} onSubmit={handleUpdateProperty} className="grid grid-cols-1 md:grid-cols-2 gap-6">
                          <div className="space-y-4">
                              <input name="name" defaultValue={p.name} required placeholder="Property Name" className="w-full border border-slate-200 rounded-xl p-3 bg-white shadow-sm" />
                              <textarea name="description" defaultValue={p.description} required placeholder="Description..." rows={5} className="w-full border border-slate-200 rounded-xl p-3 bg-white shadow-sm" />
-                             <label className="flex items-center gap-2 font-medium">
-                                <input type="checkbox" name="hasSmartLock" defaultChecked={p.hasSmartLock} className="w-4 h-4 text-indigo-600" />
-                                Has SmartLock
-                             </label>
+                             
+                             <div className="flex flex-wrap gap-6 items-center">
+                                 <label className="flex items-center gap-2 font-medium cursor-pointer text-slate-600">
+                                    <input type="checkbox" name="hasSmartLock" defaultChecked={p.hasSmartLock} className="w-4 h-4 text-indigo-600 rounded" />
+                                    <span className="text-sm font-semibold">Has SmartLock</span>
+                                 </label>
+                                 <label className="flex items-center gap-2 font-medium cursor-pointer text-slate-600">
+                                    <input type="checkbox" name="allowIndividualRoomRental" defaultChecked={p.allowIndividualRoomRental} className="w-4 h-4 text-indigo-600 rounded" />
+                                    <span className="text-sm font-semibold">Allow Individual Room rentals</span>
+                                 </label>
+                             </div>
+
                              <button type="submit" className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-indigo-500 transition-colors">Update Info</button>
                          </div>
                          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
@@ -826,7 +846,7 @@ export const AdminDashboard: React.FC = () => {
                                      <button type="button" onClick={() => setEditingBedrooms(prev => prev.filter((_, idx) => idx !== i))} className="text-red-500 ml-auto">X</button>
                                  </div>
                              ))}
-                             <input type="text" id="newRoomNumber" placeholder="Room #" className="w-full p-2 border rounded" />
+                             <input type="text" id="newRoomNumber" placeholder="Room Number" className="w-full p-2 border rounded" />
                              <input type="text" id="newRoomLock" placeholder="Lock #" className="w-full p-2 border rounded" />
                              <input type="number" id="newRoomSqFt" placeholder="Sq ft." className="w-full p-2 border rounded" />
                              <input type="number" id="newRoomFee" placeholder="Fee ($)" className="w-full p-2 border rounded" />
@@ -891,8 +911,43 @@ export const AdminDashboard: React.FC = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                  <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
-                   <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-slate-800">Pricing Rules <span className="text-sm font-normal text-slate-500 ml-2 bg-slate-100 px-2 py-1 rounded-md">{properties.find(p => p.id === activePropertyId)?.name}</span></h2>
+                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                        <h2 className="text-xl font-bold flex items-center gap-2 text-slate-800">Pricing Rules <span className="text-sm font-normal text-slate-500 ml-2 bg-slate-100 px-2 py-1 rounded-md">{properties.find(p => p.id === activePropertyId)?.name}</span></h2>
+                        
+                        {properties.find(p => p.id === activePropertyId)?.allowIndividualRoomRental && (
+                            <div className="flex gap-1 p-1 bg-slate-100 rounded-xl">
+                               <button 
+                                 onClick={() => { setPricingTarget('property'); setSelectedRoomForPricing(null); }}
+                                 className={cn("px-4 py-1.5 rounded-lg text-xs font-bold transition-all", pricingTarget === 'property' ? "bg-white shadow-sm text-indigo-600" : "text-slate-500 hover:text-slate-700")}
+                               >
+                                 Rent Property
+                               </button>
+                               <button 
+                                 onClick={() => setPricingTarget('room')}
+                                 className={cn("px-4 py-1.5 rounded-lg text-xs font-bold transition-all", pricingTarget === 'room' ? "bg-white shadow-sm text-indigo-600" : "text-slate-500 hover:text-slate-700")}
+                               >
+                                 Rent Rooms
+                               </button>
+                            </div>
+                        )}
+                    </div>
                    <form onSubmit={handleCreatePricingRule} className="space-y-4 mb-6 p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                       {pricingTarget === 'room' && (
+                          <div>
+                             <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Select Room</label>
+                             <select 
+                                value={selectedRoomForPricing || ''} 
+                                onChange={(e) => setSelectedRoomForPricing(e.target.value)}
+                                required 
+                                className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm"
+                             >
+                                <option value="">Choose a room...</option>
+                                {properties.find(p => p.id === activePropertyId)?.bedrooms?.map(room => (
+                                   <option key={room.roomNumber} value={room.roomNumber}>{room.type} {room.roomNumber}</option>
+                                ))}
+                             </select>
+                          </div>
+                       )}
                       <div className="grid grid-cols-2 gap-4">
                          <div>
                             <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Type</label>
@@ -921,20 +976,61 @@ export const AdminDashboard: React.FC = () => {
                       <button type="submit" className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl hover:bg-indigo-500 transition-colors">Add Rule</button>
                    </form>
 
-                   <div className="space-y-2">
-                       {activeRules.length === 0 && <p className="text-sm text-slate-500 text-center">No rules configured for this property.</p>}
-                      {activeRules.map(r => (
-                         <div key={r.id} className="border border-slate-200 p-3 rounded-xl flex justify-between items-center text-sm shadow-sm bg-white group">
-                            <div>
-                               <span className="font-bold capitalize text-slate-800">{r.type}</span>
-                               {r.startDate && <span className="text-slate-500 ml-2">({r.startDate} to {r.endDate})</span>}
-                            </div>
-                            <div className="flex items-center gap-3">
-                               <span className="font-bold text-indigo-600">${(r.rate)}/nt</span>
-                               <button type="button" onClick={() => handleDeletePricingRule(r.id)} className="text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"><Trash2 size={16}/></button>
-                            </div>
-                         </div>
-                      ))}
+                   <div className="space-y-4">
+                        {pricingTarget === 'room' && (
+                             <div className="flex gap-2 overflow-x-auto pb-2 mb-2">
+                                 <button 
+                                    type="button"
+                                    onClick={() => setSelectedRoomForPricing(null)}
+                                    className={cn("px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap border transition-all", !selectedRoomForPricing ? "bg-indigo-600 border-indigo-600 text-white" : "bg-white border-slate-200 text-slate-600 hover:border-slate-300")}
+                                 >
+                                     All Rooms
+                                 </button>
+                                 {properties.find(p => p.id === activePropertyId)?.bedrooms?.map(room => (
+                                     <button 
+                                        type="button"
+                                        key={room.roomNumber}
+                                        onClick={() => setSelectedRoomForPricing(room.roomNumber)}
+                                        className={cn("px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap border transition-all", selectedRoomForPricing === room.roomNumber ? "bg-indigo-600 border-indigo-600 text-white" : "bg-white border-slate-200 text-slate-600 hover:border-slate-300")}
+                                     >
+                                         Room {room.roomNumber}
+                                     </button>
+                                 ))}
+                             </div>
+                        )}
+                       {activeRules.filter(r => {
+                           if (pricingTarget === 'property') return !r.targetType || r.targetType === 'property';
+                           if (pricingTarget === 'room') {
+                               if (!selectedRoomForPricing) return r.targetType === 'room';
+                               return r.targetType === 'room' && r.roomNumber === selectedRoomForPricing;
+                           }
+                           return true;
+                       }).length === 0 && <p className="text-sm text-slate-500 text-center py-4">No rules configured for this selection.</p>}
+                       
+                       {activeRules.filter(r => {
+                           if (pricingTarget === 'property') return !r.targetType || r.targetType === 'property';
+                           if (pricingTarget === 'room') {
+                               if (!selectedRoomForPricing) return r.targetType === 'room';
+                               return r.targetType === 'room' && r.roomNumber === selectedRoomForPricing;
+                           }
+                           return true;
+                       }).map(r => (
+                          <div key={r.id} className="border border-slate-200 p-3 rounded-xl flex justify-between items-center text-sm shadow-sm bg-white group">
+                             <div>
+                                <div className="flex items-center gap-2">
+                                    <span className="font-bold capitalize text-slate-800">{r.type}</span>
+                                    {r.targetType === 'room' && (
+                                        <span className="text-[10px] bg-slate-100 text-indigo-600 px-1.5 py-0.5 rounded font-bold">Room {r.roomNumber}</span>
+                                    )}
+                                </div>
+                                {r.startDate && <span className="text-xs text-slate-500">({r.startDate} to {r.endDate})</span>}
+                             </div>
+                             <div className="flex items-center gap-3">
+                                <span className="font-bold text-indigo-600">${(r.rate)}/nt</span>
+                                <button type="button" onClick={() => handleDeletePricingRule(r.id)} className="text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"><Trash2 size={16}/></button>
+                             </div>
+                          </div>
+                       ))}
                    </div>
                 </div>
 

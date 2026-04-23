@@ -49,22 +49,34 @@ export const Calendar: React.FC<{
   };
 
   const getNightlyRate = (date: Date): number => {
-    if (rentalMode === 'room' && selectedRoom) return selectedRoom.fee;
+    // Collect rules that match our current target
+    const applicableRules = pricingRules.filter(r => {
+        if (rentalMode === 'room') {
+            return r.targetType === 'room' && r.roomNumber === selectedRoom?.roomNumber;
+        } else {
+            return !r.targetType || r.targetType === 'property';
+        }
+    });
+
+    // Initial base rate
+    let rate = 150; 
+    if (rentalMode === 'room' && selectedRoom) {
+        rate = selectedRoom.fee;
+    }
 
     // Priority: custom -> holiday -> weekend -> default
     const dateStr = format(date, 'yyyy-MM-dd');
-    let rate = 150; // hardcoded fallback
 
-    const defaultRule = pricingRules.find(r => r.type === 'default');
+    const defaultRule = applicableRules.find(r => r.type === 'default');
     if (defaultRule) rate = defaultRule.rate;
 
-    const weekendRule = pricingRules.find(r => r.type === 'weekend');
+    const weekendRule = applicableRules.find(r => r.type === 'weekend');
     if (weekendRule && (getDay(date) === 5 || getDay(date) === 6)) rate = weekendRule.rate;
 
-    const holidayRule = pricingRules.find(r => r.type === 'holiday' && r.startDate && r.endDate && date >= new Date(r.startDate) && date <= new Date(r.endDate));
+    const holidayRule = applicableRules.find(r => r.type === 'holiday' && r.startDate && r.endDate && date >= new Date(r.startDate) && date <= new Date(r.endDate));
     if (holidayRule) rate = holidayRule.rate;
 
-    const customRule = pricingRules.find(r => r.type === 'custom' && r.startDate && date === new Date(r.startDate)); // simplify mapping
+    const customRule = applicableRules.find(r => r.type === 'custom' && r.startDate && dateStr === r.startDate);
     if (customRule) rate = customRule.rate;
 
     return rate;
