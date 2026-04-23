@@ -178,7 +178,12 @@ export const Checkout: React.FC = () => {
   const location = useLocation();
   const { user, loading } = useAuth();
   
-  const { propertyId, checkIn, checkOut, priceDetails } = location.state || {};
+  const propertyId = location.state?.propertyId;
+  const checkIn = location.state?.checkIn;
+  const checkOut = location.state?.checkOut;
+  const priceDetails = location.state?.priceDetails;
+  
+  const isTestProperty = !!property?.isTestProperty;
 
   const [clientSecret, setClientSecret] = useState('');
   const [error, setError] = useState<string | null>(null);
