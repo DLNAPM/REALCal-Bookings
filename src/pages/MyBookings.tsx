@@ -121,7 +121,8 @@ export const MyBookings: React.FC = () => {
         if (!window.confirm("Are you sure you want to permanently delete this cancelled booking record?")) return;
         try {
             await updateDoc(doc(db, 'bookings', bookingId), {
-                deletedByGuest: true
+                deletedByGuest: true,
+                updatedAt: serverTimestamp()
             });
             setBookings(prev => prev.filter(b => b.id !== bookingId));
         } catch (err: any) {
