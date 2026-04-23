@@ -175,6 +175,9 @@ const CheckoutForm: React.FC<{ clientSecret: string, bookingDetails: any, guestE
 export const Checkout: React.FC = () => {
   const location = useLocation();
   const { user, loading } = useAuth();
+  
+  const { propertyId, checkIn, checkOut, priceDetails } = location.state || {};
+
   const [clientSecret, setClientSecret] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
@@ -199,8 +202,7 @@ export const Checkout: React.FC = () => {
 
   if (loading) return <div>Loading...</div>;
   if (!user) return <Navigate to="/" />;
-  
-  const { propertyId, checkIn, checkOut, priceDetails } = location.state || {};
+
   if (!propertyId || !checkIn || !checkOut || !priceDetails) return <Navigate to="/" />;
 
   useEffect(() => {
