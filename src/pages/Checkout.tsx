@@ -183,14 +183,13 @@ export const Checkout: React.FC = () => {
   const checkOut = location.state?.checkOut;
   const priceDetails = location.state?.priceDetails;
   
-  const isTestProperty = !!property?.isTestProperty;
-
   const [clientSecret, setClientSecret] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
   const [guestEmail, setGuestEmail] = useState('');
   const [guestPhone, setGuestPhone] = useState('');
   const [property, setProperty] = useState<Property | null>(null);
+  const isTestProperty = !!property?.isTestProperty;
   const [selectedBedroom, setSelectedBedroom] = useState<any>(null);
   const navigate = useNavigate();
   
