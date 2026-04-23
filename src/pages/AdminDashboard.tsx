@@ -278,6 +278,9 @@ export const AdminDashboard: React.FC = () => {
           await updateDoc(doc(db, 'properties', activePropertyId), {
               name: fd.get('name') as string,
               description: fd.get('description') as string,
+              hasSmartLock: fd.get('hasSmartLock') === 'on',
+              allowIndividualRoomRental: fd.get('allowIndividualRoomRental') === 'on',
+              bedrooms: editingBedrooms,
               // Note: images updating requires a separate flow or overriding
           });
           alert("Property updated!");

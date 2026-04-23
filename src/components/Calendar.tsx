@@ -3,12 +3,14 @@ import { format, addDays, getDay, isBefore, isSameDay, startOfDay, addMonths, su
 import { collection, onSnapshot, query, where, doc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { BlackoutDate, PricingRule } from '../types';
+import { Property } from '../types';
 import { cn } from '../lib/utils';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export const Calendar: React.FC<{ 
     propertyId: string, 
+    property?: Property,
     isEditMode?: boolean,
     initialCheckIn?: string,
     initialCheckOut?: string,
@@ -19,6 +21,8 @@ export const Calendar: React.FC<{
   const [checkIn, setCheckIn] = useState<Date | null>(initialCheckIn ? new Date(initialCheckIn) : null);
   const [checkOut, setCheckOut] = useState<Date | null>(initialCheckOut ? new Date(initialCheckOut) : null);
   const [hoverDate, setHoverDate] = useState<Date | null>(null);
+  const [rentalMode, setRentalMode] = useState<'entire' | 'room'>('entire');
+  const [selectedRoom, setSelectedRoom] = useState<any>(null);
   
   const [pricingRules, setPricingRules] = useState<PricingRule[]>([]);
   const [blackoutDates, setBlackoutDates] = useState<BlackoutDate[]>([]);
@@ -45,6 +49,8 @@ export const Calendar: React.FC<{
   };
 
   const getNightlyRate = (date: Date): number => {
+    if (rentalMode === 'room' && selectedRoom) return selectedRoom.fee;
+
     // Priority: custom -> holiday -> weekend -> default
     const dateStr = format(date, 'yyyy-MM-dd');
     let rate = 150; // hardcoded fallback
@@ -199,6 +205,21 @@ export const Calendar: React.FC<{
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 container mx-auto">
       {/* Main Calendar Section - col-8 */}
       <div className="lg:col-span-8 bg-white rounded-3xl border border-slate-200 shadow-sm p-6 flex flex-col">
+        {property?.allowIndividualRoomRental && (
+            <div className="flex gap-4 p-1 bg-slate-100 rounded-2xl mb-6">
+               <button onClick={() => {setRentalMode('entire'); setSelectedRoom(null);}} className={cn("flex-1 px-4 py-2 rounded-xl font-bold text-sm", rentalMode === 'entire' ? "bg-white shadow-sm text-indigo-600" : "text-slate-500")}>Entire Property</button>
+               <button onClick={() => setRentalMode('room')} className={cn("flex-1 px-4 py-2 rounded-xl font-bold text-sm", rentalMode === 'room' ? "bg-white shadow-sm text-indigo-600" : "text-slate-500")}>Specific Room</button>
+            </div>
+        )}
+        {rentalMode === 'room' && (
+            <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+               {property?.bedrooms?.map(room => (
+                   <button key={room.roomNumber} onClick={() => setSelectedRoom(room)} className={cn("px-4 py-2 rounded-xl text-sm font-bold border", selectedRoom?.roomNumber === room.roomNumber ? "bg-indigo-600 text-white border-indigo-600" : "bg-white border-slate-200 text-slate-700")}>
+                       {room.type} {room.roomNumber} (${room.fee})
+                   </button>
+               ))}
+            </div>
+        )}
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-bold flex gap-4 items-center">
              <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-2 rounded-full hover:bg-slate-100 flex items-center justify-center bg-slate-50"><ChevronLeft/></button>

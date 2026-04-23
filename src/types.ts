@@ -7,6 +7,7 @@ export interface Property {
   images: string[];
   isTestProperty?: boolean;
   hasSmartLock?: boolean;
+  allowIndividualRoomRental?: boolean;
   bedrooms?: { roomNumber: string; roomLockNumber: string; type: 'Master Bed' | 'Guest Bedroom'; sqFt: number; fee: number }[];
   createdAt: any;
 }
