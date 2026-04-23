@@ -270,38 +270,86 @@ export const Calendar: React.FC<{
               <span className="text-white font-medium">{checkOut ? format(checkOut, 'MMM d, yyyy') : '--'}</span>
             </div>
             
-            {priceDetails && (
-              <div className="border-t border-slate-800 my-4 pt-4">
-                <div className="flex justify-between items-center mb-2">
-                  <span>{rentalMode === 'room' && selectedRoom ? `Room ${selectedRoom.roomNumber} (${selectedRoom.type})` : `Entire Property`} × {priceDetails.nights} nights</span>
-                  <span className="font-mono">${(priceDetails.baseTotal + priceDetails.discount).toFixed(2)}</span>
+            {priceDetails && checkIn && checkOut && (
+              <div className="border-t border-slate-800 my-4 pt-4 space-y-3">
+                <div className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Nightly Breakdown</div>
+                <div className="max-h-32 overflow-y-auto space-y-2 pr-2 scrollbar-hide">
+                   {eachDayOfInterval({ start: checkIn, end: addDays(checkOut, -1) }).map(day => (
+                      <div key={day.toISOString()} className="flex justify-between items-center text-sm">
+                         <span className="text-slate-400">{format(day, 'MMM d, yyyy')}</span>
+                         <span className="font-mono">${getNightlyRate(day).toFixed(2)}</span>
+                      </div>
+                   ))}
                 </div>
-                <div className="flex justify-between items-center mb-2">
-                  <span>Cleaning fee</span>
-                  <span className="font-mono">${(priceDetails.cleaningFee).toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between items-center mb-2">
-                  <span>Occupancy taxes</span>
-                  <span className="font-mono">${(priceDetails.taxes).toFixed(2)}</span>
-                </div>
-                {priceDetails.discount > 0 && (
-                  <div className="flex justify-between items-center text-emerald-400">
-                    <span>Discount</span>
-                    <span className="font-mono">-${(priceDetails.discount).toFixed(2)}</span>
+                
+                <div className="border-t border-slate-800 mt-2 pt-2 space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">{rentalMode === 'room' && selectedRoom ? `Room ${selectedRoom.roomNumber} (${selectedRoom.type})` : `Entire Property`} Subtotal</span>
+                    <span className="font-mono">${(priceDetails.baseTotal + priceDetails.discount).toFixed(2)}</span>
                   </div>
-                )}
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Cleaning fee</span>
+                    <span className="font-mono">${(priceDetails.cleaningFee).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Occupancy taxes</span>
+                    <span className="font-mono">${(priceDetails.taxes).toFixed(2)}</span>
+                  </div>
+                  {priceDetails.discount > 0 && (
+                    <div className="flex justify-between items-center text-emerald-400">
+                      <span>10% Weekly Discount</span>
+                      <span className="font-mono">-${(priceDetails.discount).toFixed(2)}</span>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
             
             {property?.allowIndividualRoomRental && (
-               <div className="mt-4 pt-4 border-t border-slate-800 space-y-2">
-                  <div className="text-xs font-bold text-slate-500 uppercase tracking-widest">Available Rooms & Rates</div>
-                  {property.bedrooms?.map(room => (
-                     <div key={room.roomNumber} className={cn("flex justify-between text-sm p-2 rounded-lg transition-colors", selectedRoom?.roomNumber === room.roomNumber ? "bg-slate-800 text-white" : "text-slate-400 hover:bg-slate-800/50")}>
-                        <span>{room.type} {room.roomNumber}</span>
-                        <span className="font-mono">${room.fee}/night</span>
-                     </div>
-                  ))}
+               <div className="mt-4 pt-4 border-t border-slate-800 space-y-3">
+                  <div className="text-xs font-bold text-slate-500 uppercase tracking-widest">Rental Selection</div>
+                  <div className="grid grid-cols-1 gap-2">
+                      <button 
+                         onClick={() => { setRentalMode('entire'); setSelectedRoom(null); }}
+                         className={cn(
+                             "flex justify-between items-center text-sm p-3 rounded-xl border transition-all text-left",
+                             rentalMode === 'entire' 
+                                 ? "bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-900/20" 
+                                 : "bg-slate-800/50 border-slate-700 text-slate-400 hover:bg-slate-800 hover:border-slate-600"
+                         )}
+                      >
+                         <div>
+                             <div className="font-bold">Entire Property</div>
+                             <div className="text-[10px] opacity-70 uppercase tracking-tighter">Full access</div>
+                         </div>
+                         <div className="text-right">
+                             <div className="font-mono font-bold">${getNightlyRate(new Date()).toFixed(0)}/nt</div>
+                             <div className="text-[10px] opacity-50">Property Rate</div>
+                         </div>
+                      </button>
+
+                      {property.bedrooms?.map(room => (
+                         <button 
+                            key={room.roomNumber} 
+                            onClick={() => { setRentalMode('room'); setSelectedRoom(room); }}
+                            className={cn(
+                                "flex justify-between items-center text-sm p-3 rounded-xl border transition-all text-left",
+                                (rentalMode === 'room' && selectedRoom?.roomNumber === room.roomNumber) 
+                                    ? "bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-900/20" 
+                                    : "bg-slate-800/50 border-slate-700 text-slate-400 hover:bg-slate-800 hover:border-slate-600"
+                            )}
+                         >
+                            <div>
+                                <div className="font-bold">{room.type} {room.roomNumber}</div>
+                                <div className="text-[10px] opacity-70 uppercase tracking-tighter italic">Individual Room</div>
+                            </div>
+                            <div className="text-right">
+                                <span className="font-mono font-bold">${room.fee}/nt</span>
+                                <div className="text-[10px] opacity-50">Room Rate</div>
+                            </div>
+                         </button>
+                      ))}
+                  </div>
                </div>
             )}
          </div>
