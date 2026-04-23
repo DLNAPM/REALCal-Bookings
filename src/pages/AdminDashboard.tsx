@@ -819,13 +819,14 @@ export const AdminDashboard: React.FC = () => {
                              <h4 className="font-bold">Bedrooms</h4>
                              {editingBedrooms.map((b, i) => (
                                  <div key={i} className="flex gap-2 text-sm bg-white p-2 rounded border border-slate-200">
-                                     <span>{b.type}: {b.roomNumber} (Lock: {b.roomLockNumber}, {b.sqFt} sq ft)</span>
+                                     <span>{b.type}: {b.roomNumber} (Lock: {b.roomLockNumber}, {b.sqFt} sq ft, Fee: ${b.fee})</span>
                                      <button type="button" onClick={() => setEditingBedrooms(prev => prev.filter((_, idx) => idx !== i))} className="text-red-500 ml-auto">X</button>
                                  </div>
                              ))}
                              <input type="text" id="newRoomNumber" placeholder="Room #" className="w-full p-2 border rounded" />
                              <input type="text" id="newRoomLock" placeholder="Lock #" className="w-full p-2 border rounded" />
                              <input type="number" id="newRoomSqFt" placeholder="Sq ft." className="w-full p-2 border rounded" />
+                             <input type="number" id="newRoomFee" placeholder="Fee ($)" className="w-full p-2 border rounded" />
                              <select id="newRoomType" className="w-full p-2 border rounded">
                                  <option value="Master Bed">Master Bed</option>
                                  <option value="Guest Bedroom">Guest Bedroom</option>
@@ -834,9 +835,10 @@ export const AdminDashboard: React.FC = () => {
                                  const roomNumber = (document.getElementById('newRoomNumber') as HTMLInputElement).value;
                                  const roomLockNumber = (document.getElementById('newRoomLock') as HTMLInputElement).value;
                                  const sqFt = parseInt((document.getElementById('newRoomSqFt') as HTMLInputElement).value || '0');
+                                 const fee = parseInt((document.getElementById('newRoomFee') as HTMLInputElement).value || '0');
                                  const type = (document.getElementById('newRoomType') as HTMLSelectElement).value as 'Master Bed' | 'Guest Bedroom';
                                  if(roomNumber && roomLockNumber) {
-                                     setEditingBedrooms(prev => [...prev, { roomNumber, roomLockNumber, type, sqFt }]);
+                                     setEditingBedrooms(prev => [...prev, { roomNumber, roomLockNumber, type, sqFt, fee }]);
                                  }
                              }} className="w-full bg-slate-800 text-white p-2 rounded font-bold">Add Room</button>
                          </div>
