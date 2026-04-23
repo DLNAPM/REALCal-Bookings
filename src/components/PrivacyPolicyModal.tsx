@@ -1,5 +1,6 @@
 import React from 'react';
-import { Shield, X } from 'lucide-react';
+import { Shield, X, Download } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 
 interface PrivacyPolicyModalProps {
     isOpen: boolean;
@@ -8,6 +9,9 @@ interface PrivacyPolicyModalProps {
 
 export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen, onClose }) => {
     if (!isOpen) return null;
+
+    const APP_URL = import.meta.env.VITE_APP_URL || window.location.origin;
+    const CONSENT_Doc_URL = `${APP_URL}/consent_document.pdf`;
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
@@ -57,6 +61,31 @@ export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen, 
                         <p className="leading-relaxed text-sm">
                             We implement strict, industry-standard security measures to protect your personal information from unauthorized access or disclosure. This includes end-to-end encryption for payment operations and secure, limited-scope database rules.
                         </p>
+                    </section>
+                    
+                    <section>
+                        <h3 className="text-lg font-bold text-slate-900 mb-2">5. Consent to Communications</h3>
+                        <p className="leading-relaxed text-sm mb-4">
+                            By agreeing to this policy, you explicitly consent to receiving transactional SMS and email notifications regarding your bookings (including access codes and security updates) from this application. We respect your preferences, and you can opt out of these communications at any time by contacting our support team.
+                        </p>
+                        
+                        <div className="flex flex-col md:flex-row items-center gap-6 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                            <div>
+                                <QRCodeSVG value={CONSENT_Doc_URL} size={128} />
+                            </div>
+                            <div className="text-sm">
+                                <p className="font-bold text-slate-900 mb-1">Scan to View/Agree</p>
+                                <p className="mb-4">Scan the QR code to review our full Terms of Consent and verify your opt-in.</p>
+                                <a 
+                                    href={CONSENT_Doc_URL}
+                                    download="Consent_Document.pdf"
+                                    className="inline-flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg font-bold text-xs hover:bg-slate-800 transition-colors"
+                                >
+                                    <Download size={14} />
+                                    Download Consent Document
+                                </a>
+                            </div>
+                        </div>
                     </section>
 
                     <div className="pt-6 border-t border-slate-100 flex justify-end">
