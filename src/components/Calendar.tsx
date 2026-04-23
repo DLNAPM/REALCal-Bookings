@@ -16,7 +16,7 @@ export const Calendar: React.FC<{
     initialCheckOut?: string,
     onSaveEdit?: (checkIn: string, checkOut: string, priceDetails: any) => void,
     onCancelEdit?: () => void
-}> = ({ propertyId, isEditMode, initialCheckIn, initialCheckOut, onSaveEdit, onCancelEdit }) => {
+}> = ({ propertyId, property, isEditMode, initialCheckIn, initialCheckOut, onSaveEdit, onCancelEdit }) => {
   const [currentMonth, setCurrentMonth] = useState(initialCheckIn ? startOfDay(new Date(initialCheckIn)) : startOfDay(new Date()));
   const [checkIn, setCheckIn] = useState<Date | null>(initialCheckIn ? new Date(initialCheckIn) : null);
   const [checkOut, setCheckOut] = useState<Date | null>(initialCheckOut ? new Date(initialCheckOut) : null);
@@ -196,7 +196,8 @@ export const Calendar: React.FC<{
          propertyId,
          checkIn: checkIn.toISOString(), 
          checkOut: checkOut.toISOString(), 
-         priceDetails 
+         priceDetails,
+         selectedBedroom: selectedRoom
        }});
     }
   };
@@ -260,7 +261,7 @@ export const Calendar: React.FC<{
             {priceDetails && (
               <div className="border-t border-slate-800 my-4 pt-4">
                 <div className="flex justify-between items-center mb-2">
-                  <span>${(priceDetails.baseTotal / priceDetails.nights).toFixed(0)} × {priceDetails.nights} nights</span>
+                  <span>{rentalMode === 'room' && selectedRoom ? `Room ${selectedRoom.roomNumber} (${selectedRoom.type})` : `Entire Property`} × {priceDetails.nights} nights</span>
                   <span className="font-mono">${(priceDetails.baseTotal + priceDetails.discount).toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between items-center mb-2">
@@ -278,6 +279,18 @@ export const Calendar: React.FC<{
                   </div>
                 )}
               </div>
+            )}
+            
+            {property?.allowIndividualRoomRental && (
+               <div className="mt-4 pt-4 border-t border-slate-800 space-y-2">
+                  <div className="text-xs font-bold text-slate-500 uppercase tracking-widest">Available Rooms & Rates</div>
+                  {property.bedrooms?.map(room => (
+                     <div key={room.roomNumber} className={cn("flex justify-between text-sm p-2 rounded-lg transition-colors", selectedRoom?.roomNumber === room.roomNumber ? "bg-slate-800 text-white" : "text-slate-400 hover:bg-slate-800/50")}>
+                        <span>{room.type} {room.roomNumber}</span>
+                        <span className="font-mono">${room.fee}/night</span>
+                     </div>
+                  ))}
+               </div>
             )}
          </div>
          

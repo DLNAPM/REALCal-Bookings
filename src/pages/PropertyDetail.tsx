@@ -90,7 +90,7 @@ export const PropertyDetail: React.FC = () => {
                    )}
                </div>
                
-               <Calendar propertyId={property.id} />
+               <Calendar propertyId={property.id} property={property} />
             </main>
         </div>
     )

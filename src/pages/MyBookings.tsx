@@ -11,10 +11,10 @@ import { Calendar } from '../components/Calendar';
 export const MyBookings: React.FC = () => {
     const { user, loading } = useAuth();
     const navigate = useNavigate();
-    const [bookings, setBookings] = useState<(Booking & { propertyName?: string; propertyImage?: string })[]>([]);
+    const [bookings, setBookings] = useState<(Booking & { propertyName?: string; propertyImage?: string; property?: Property | null })[]>([]);
     const [filter, setFilter] = useState<'active' | 'cancelled'>('active');
     const [fetching, setFetching] = useState(true);
-    const [editingBooking, setEditingBooking] = useState<(Booking & { propertyName?: string; propertyImage?: string }) | null>(null);
+    const [editingBooking, setEditingBooking] = useState<(Booking & { propertyName?: string; propertyImage?: string; property?: Property | null }) | null>(null);
 
     const [globalSettings, setGlobalSettings] = useState<any>(null);
 
@@ -40,17 +40,19 @@ export const MyBookings: React.FC = () => {
                 const enhanced = await Promise.all(fetchedBookings.map(async (b) => {
                     let propertyName = "Unknown Property";
                     let propertyImage = "";
+                    let property: Property | null = null;
                     try {
                        const pSnap = await getDoc(doc(db, 'properties', b.propertyId));
                        if (pSnap.exists()) {
                            const pData = pSnap.data() as Property;
+                           property = { id: pSnap.id, ...pData };
                            propertyName = pData.name;
                            if (pData.images && pData.images.length > 0) {
                                propertyImage = pData.images[0];
                            }
                        }
                     } catch (e) {}
-                    return { ...b, propertyName, propertyImage };
+                    return { ...b, propertyName, propertyImage, property };
                 }));
 
                 // Sort descending by creation
@@ -365,6 +367,7 @@ export const MyBookings: React.FC = () => {
                         <div className="p-6 bg-slate-50">
                             <Calendar 
                                 propertyId={editingBooking.propertyId} 
+                                property={editingBooking.property || undefined}
                                 isEditMode={true}
                                 initialCheckIn={editingBooking.checkIn}
                                 initialCheckOut={editingBooking.checkOut}

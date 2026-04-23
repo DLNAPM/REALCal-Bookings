@@ -8,6 +8,8 @@ import { doc, setDoc, serverTimestamp, getDocs, getDoc, query, collection } from
 import { db } from '../lib/firebase';
 import { v4 as uuidv4 } from 'uuid'; // I need to install uuid
 
+import { Property } from '../types';
+
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_test_placeholder');
 
 const processBooking = async (
@@ -190,7 +192,7 @@ export const Checkout: React.FC = () => {
   const [guestPhone, setGuestPhone] = useState('');
   const [property, setProperty] = useState<Property | null>(null);
   const isTestProperty = !!property?.isTestProperty;
-  const [selectedBedroom, setSelectedBedroom] = useState<any>(null);
+  const [selectedBedroom, setSelectedBedroom] = useState<any>(location.state?.selectedBedroom || null);
   const navigate = useNavigate();
   
   useEffect(() => {

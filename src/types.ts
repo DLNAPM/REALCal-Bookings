@@ -52,6 +52,7 @@ export interface Booking {
   accessCode?: string;
   bookingRef?: string;
   cancellationFee?: number;
+  deletedByGuest?: boolean;
   createdAt: any;
   updatedAt: any;
 }
