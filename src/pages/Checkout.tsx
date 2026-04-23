@@ -17,7 +17,8 @@ const processBooking = async (
   guestPhone: string,
   navigate: ReturnType<typeof useNavigate>,
   setError: (err: string) => void,
-  setProcessing: (b: boolean) => void
+  setProcessing: (b: boolean) => void,
+  isTestMode: boolean = false
 ) => {
   const bookingId = uuidv4();
   try {
@@ -52,7 +53,7 @@ const processBooking = async (
       propertyId: bookingDetails.propertyId,
       checkIn: bookingDetails.checkIn,
       checkOut: bookingDetails.checkOut,
-      status: 'pending',
+      status: isTestMode ? 'confirmed' : 'pending', // Auto-confirm test bookings
       totalPrice: bookingDetails.priceDetails.grandTotal,
       guests: 1, // simplified for demo
       bookingRef,
@@ -129,7 +130,7 @@ const processBooking = async (
   }
 };
 
-const CheckoutForm: React.FC<{ clientSecret: string, bookingDetails: any, guestEmail: string, guestPhone: string }> = ({ clientSecret, bookingDetails, guestEmail, guestPhone }) => {
+const CheckoutForm: React.FC<{ clientSecret: string, bookingDetails: any, guestEmail: string, guestPhone: string, isTestProperty: boolean }> = ({ clientSecret, bookingDetails, guestEmail, guestPhone, isTestProperty }) => {
   const stripe = useStripe();
   const elements = useElements();
   const [error, setError] = useState<string | null>(null);
@@ -152,7 +153,7 @@ const CheckoutForm: React.FC<{ clientSecret: string, bookingDetails: any, guestE
       setProcessing(false);
     } else {
       // Payment successful, generate lock code and write Booking to firestore
-      await processBooking(bookingDetails, user, guestEmail, guestPhone, navigate, setError, setProcessing);
+      await processBooking(bookingDetails, user, guestEmail, guestPhone, navigate, setError, setProcessing, isTestProperty);
     }
   };
 
@@ -179,6 +180,7 @@ export const Checkout: React.FC = () => {
   const [processing, setProcessing] = useState(false);
   const [guestEmail, setGuestEmail] = useState('');
   const [guestPhone, setGuestPhone] = useState('');
+  const [isTestProperty, setIsTestProperty] = useState(false);
   const navigate = useNavigate();
   
   useEffect(() => {
@@ -186,6 +188,14 @@ export const Checkout: React.FC = () => {
        setGuestEmail(user.email);
     }
   }, [user]);
+  
+  useEffect(() => {
+    if (propertyId) {
+        getDoc(doc(db, 'properties', propertyId)).then(snap => {
+            if (snap.exists()) setIsTestProperty(!!snap.data().isTestProperty);
+        });
+    }
+  }, [propertyId]);
 
   if (loading) return <div>Loading...</div>;
   if (!user) return <Navigate to="/" />;
@@ -302,6 +312,12 @@ export const Checkout: React.FC = () => {
                  </div>
              </div>
 
+             {isTestProperty ? (
+                 <div className="p-6 bg-emerald-50 border border-emerald-200 rounded-2xl mb-6">
+                    <p className="text-emerald-800 font-medium mb-4 text-sm">This is a TEST property. You may use the Test Visa card number: 4242 4242 4242 4242</p>
+                 </div>
+             ) : null}
+
              {clientSecret === 'MOCK_TEST_MODE' ? (
                 <div className="p-6 bg-amber-50 border border-amber-200 rounded-2xl md:mt-8">
                    <p className="text-amber-800 font-medium mb-4 text-sm">Stripe is not configured in this environment (STRIPE_SECRET_KEY missing). You can bypass payment for end-to-end testing.</p>
@@ -310,7 +326,7 @@ export const Checkout: React.FC = () => {
                        disabled={processing}
                        onClick={async () => {
                            setProcessing(true);
-                           await processBooking({ propertyId, checkIn, checkOut, priceDetails }, user, guestEmail, guestPhone, navigate, setError, setProcessing);
+                           await processBooking({ propertyId, checkIn, checkOut, priceDetails }, user, guestEmail, guestPhone, navigate, setError, setProcessing, isTestProperty);
                        }}
                        className="w-full bg-amber-600 hover:bg-amber-500 text-white py-4 rounded-xl font-bold transition-colors shadow-sm disabled:opacity-50"
                      >
@@ -321,7 +337,7 @@ export const Checkout: React.FC = () => {
                 </div>
              ) : clientSecret ? (
                 <Elements stripe={stripePromise} options={{ clientSecret }}>
-                  <CheckoutForm clientSecret={clientSecret} bookingDetails={{ propertyId, checkIn, checkOut, priceDetails }} guestEmail={guestEmail} guestPhone={guestPhone} />
+                  <CheckoutForm clientSecret={clientSecret} bookingDetails={{ propertyId, checkIn, checkOut, priceDetails }} guestEmail={guestEmail} guestPhone={guestPhone} isTestProperty={isTestProperty} />
                 </Elements>
              ) : (
                 <div className="animate-pulse flex flex-col space-y-4">
