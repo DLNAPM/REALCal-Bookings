@@ -80,7 +80,7 @@ async function startServer() {
       
       // Initialize Resend
       let resend = null;
-      if (process.env.RESEND_API_KEY && !process.env.RESEND_API_KEY.includes('re_test_')) {
+      if (process.env.RESEND_API_KEY) {
         const { Resend } = await import('resend');
         resend = new Resend(process.env.RESEND_API_KEY);
       }
