@@ -90,7 +90,7 @@ async function startServer() {
       const twilioSid = process.env.TWILIO_ACCOUNT_SID;
       const twilioToken = process.env.TWILIO_AUTH_TOKEN;
       const TWILIO_PHONE = process.env.TWILIO_PHONE_NUMBER || '+1234567890';
-      if (twilioSid && twilioToken && !twilioSid.includes('test_')) {
+      if (twilioSid && twilioToken) {
         const twilio = (await import('twilio')).default;
         twilioClient = twilio(twilioSid, twilioToken);
       }
