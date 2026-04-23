@@ -18,7 +18,8 @@ const processBooking = async (
   navigate: ReturnType<typeof useNavigate>,
   setError: (err: string) => void,
   setProcessing: (b: boolean) => void,
-  isTestMode: boolean = false
+  isTestMode: boolean = false,
+  selectedBedroom: any = null
 ) => {
   const bookingId = uuidv4();
   try {
@@ -57,6 +58,7 @@ const processBooking = async (
       totalPrice: bookingDetails.priceDetails.grandTotal,
       guests: 1, // simplified for demo
       bookingRef,
+      selectedBedroom,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     };
@@ -122,7 +124,7 @@ const processBooking = async (
        console.error("Manager notification failed, but booking succeeded", notifyErr);
     }
 
-    navigate('/confirmation', { state: { bookingId, accessCode, notificationResults, bookingRef }});
+    navigate('/confirmation', { state: { bookingId, accessCode, notificationResults, bookingRef, selectedBedroom }});
   } catch (e: any) {
      console.error("Booking error:", e);
      setError(`Booking failed: ${e.message}`);
@@ -130,7 +132,7 @@ const processBooking = async (
   }
 };
 
-const CheckoutForm: React.FC<{ clientSecret: string, bookingDetails: any, guestEmail: string, guestPhone: string, isTestProperty: boolean }> = ({ clientSecret, bookingDetails, guestEmail, guestPhone, isTestProperty }) => {
+const CheckoutForm: React.FC<{ clientSecret: string, bookingDetails: any, guestEmail: string, guestPhone: string, isTestProperty: boolean, selectedBedroom: any }> = ({ clientSecret, bookingDetails, guestEmail, guestPhone, isTestProperty, selectedBedroom }) => {
   const stripe = useStripe();
   const elements = useElements();
   const [error, setError] = useState<string | null>(null);
@@ -153,7 +155,7 @@ const CheckoutForm: React.FC<{ clientSecret: string, bookingDetails: any, guestE
       setProcessing(false);
     } else {
       // Payment successful, generate lock code and write Booking to firestore
-      await processBooking(bookingDetails, user, guestEmail, guestPhone, navigate, setError, setProcessing, isTestProperty);
+      await processBooking(bookingDetails, user, guestEmail, guestPhone, navigate, setError, setProcessing, isTestProperty, selectedBedroom);
     }
   };
 
@@ -183,7 +185,8 @@ export const Checkout: React.FC = () => {
   const [processing, setProcessing] = useState(false);
   const [guestEmail, setGuestEmail] = useState('');
   const [guestPhone, setGuestPhone] = useState('');
-  const [isTestProperty, setIsTestProperty] = useState(false);
+  const [property, setProperty] = useState<Property | null>(null);
+  const [selectedBedroom, setSelectedBedroom] = useState<any>(null);
   const navigate = useNavigate();
   
   useEffect(() => {
@@ -195,7 +198,10 @@ export const Checkout: React.FC = () => {
   useEffect(() => {
     if (propertyId) {
         getDoc(doc(db, 'properties', propertyId)).then(snap => {
-            if (snap.exists()) setIsTestProperty(!!snap.data().isTestProperty);
+            if (snap.exists()) {
+                const propData = { id: snap.id, ...snap.data() } as Property;
+                setProperty(propData);
+            }
         });
     }
   }, [propertyId]);
@@ -290,6 +296,24 @@ export const Checkout: React.FC = () => {
           <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200 h-fit">
              <h3 className="font-bold text-lg mb-6 text-slate-800">Payment Details</h3>
              
+             {/* Bedroom / SmartLock Section */}
+             {property?.bedrooms && property.bedrooms.length > 0 && (
+                 <div className="mb-6">
+                    <label className="block text-sm font-bold text-slate-700 mb-1">Select Room</label>
+                    <select value={selectedBedroom ? JSON.stringify(selectedBedroom) : ''} onChange={e => setSelectedBedroom(JSON.parse(e.target.value))} className="w-full border border-slate-300 rounded-xl p-3 bg-white shadow-sm">
+                        <option value="">Select a bedroom</option>
+                        {property.bedrooms.map((b, i) => <option key={i} value={JSON.stringify(b)}>{b.type} - Room {b.roomNumber}</option>)}
+                    </select>
+                 </div>
+             )}
+             
+             {property?.hasSmartLock && property?.isTestProperty && (
+                 <div className="mb-6 p-4 bg-indigo-50 border border-indigo-200 rounded-xl text-indigo-900 border-dashed">
+                     <p className="font-bold text-sm">Simulated SmartLock Code</p>
+                     <p className="text-3xl font-mono font-bold tracking-widest mt-1">123456</p>
+                 </div>
+             )}
+             
              {/* Guest Details Capture */}
              <div className="mb-6 space-y-4">
                  <div>
@@ -328,7 +352,7 @@ export const Checkout: React.FC = () => {
                        disabled={processing}
                        onClick={async () => {
                            setProcessing(true);
-                           await processBooking({ propertyId, checkIn, checkOut, priceDetails }, user, guestEmail, guestPhone, navigate, setError, setProcessing, isTestProperty);
+                           await processBooking({ propertyId, checkIn, checkOut, priceDetails }, user, guestEmail, guestPhone, navigate, setError, setProcessing, !!property?.isTestProperty, selectedBedroom);
                        }}
                        className="w-full bg-amber-600 hover:bg-amber-500 text-white py-4 rounded-xl font-bold transition-colors shadow-sm disabled:opacity-50"
                      >

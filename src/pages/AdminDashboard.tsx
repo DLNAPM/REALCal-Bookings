@@ -19,6 +19,7 @@ export const AdminDashboard: React.FC = () => {
   const [activePropertyId, setActivePropertyId] = useState<string | null>(null);
   const [propertyManagers, setPropertyManagers] = useState<PropertyManager[]>([]);
   const [editingManagerId, setEditingManagerId] = useState<string | null>(null);
+  const [editingBedrooms, setEditingBedrooms] = useState<{ roomNumber: string; roomLockNumber: string; type: 'Master Bed' | 'Guest Bedroom' }[]>([]);
   
   const [globalSettings, setGlobalSettings] = useState<any>(null);
   
@@ -56,7 +57,20 @@ export const AdminDashboard: React.FC = () => {
         setProperties(props);
         if (props.length > 0 && !activePropertyId) setActivePropertyId(props[0].id);
     });
-  }, [activePropertyId]);
+  }, []);
+
+  useEffect(() => {
+    if (activePropertyId) {
+        const prop = properties.find(p => p.id === activePropertyId);
+        if (prop) {
+            setEditingBedrooms(prop.bedrooms || []);
+        } else {
+            setEditingBedrooms([]);
+        }
+    } else {
+        setEditingBedrooms([]);
+    }
+  }, [activePropertyId, properties]);
 
   const totalRevenue = bookings.filter(b => b.status === 'confirmed').reduce((sum, b) => sum + b.totalPrice, 0);
   const totalCancellations = bookings.filter(b => b.status === 'cancelled').length;
@@ -795,7 +809,36 @@ export const AdminDashboard: React.FC = () => {
                          <div className="space-y-4">
                              <input name="name" defaultValue={p.name} required placeholder="Property Name" className="w-full border border-slate-200 rounded-xl p-3 bg-white shadow-sm" />
                              <textarea name="description" defaultValue={p.description} required placeholder="Description..." rows={5} className="w-full border border-slate-200 rounded-xl p-3 bg-white shadow-sm" />
+                             <label className="flex items-center gap-2 font-medium">
+                                <input type="checkbox" name="hasSmartLock" defaultChecked={p.hasSmartLock} className="w-4 h-4 text-indigo-600" />
+                                Has SmartLock
+                             </label>
                              <button type="submit" className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-indigo-500 transition-colors">Update Info</button>
+                         </div>
+                         <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+                             <h4 className="font-bold">Bedrooms</h4>
+                             {editingBedrooms.map((b, i) => (
+                                 <div key={i} className="flex gap-2 text-sm bg-white p-2 rounded border border-slate-200">
+                                     <span>{b.type}: {b.roomNumber} (Lock: {b.roomLockNumber}, {b.sqFt} sq ft)</span>
+                                     <button type="button" onClick={() => setEditingBedrooms(prev => prev.filter((_, idx) => idx !== i))} className="text-red-500 ml-auto">X</button>
+                                 </div>
+                             ))}
+                             <input type="text" id="newRoomNumber" placeholder="Room #" className="w-full p-2 border rounded" />
+                             <input type="text" id="newRoomLock" placeholder="Lock #" className="w-full p-2 border rounded" />
+                             <input type="number" id="newRoomSqFt" placeholder="Sq ft." className="w-full p-2 border rounded" />
+                             <select id="newRoomType" className="w-full p-2 border rounded">
+                                 <option value="Master Bed">Master Bed</option>
+                                 <option value="Guest Bedroom">Guest Bedroom</option>
+                             </select>
+                             <button type="button" onClick={() => {
+                                 const roomNumber = (document.getElementById('newRoomNumber') as HTMLInputElement).value;
+                                 const roomLockNumber = (document.getElementById('newRoomLock') as HTMLInputElement).value;
+                                 const sqFt = parseInt((document.getElementById('newRoomSqFt') as HTMLInputElement).value || '0');
+                                 const type = (document.getElementById('newRoomType') as HTMLSelectElement).value as 'Master Bed' | 'Guest Bedroom';
+                                 if(roomNumber && roomLockNumber) {
+                                     setEditingBedrooms(prev => [...prev, { roomNumber, roomLockNumber, type, sqFt }]);
+                                 }
+                             }} className="w-full bg-slate-800 text-white p-2 rounded font-bold">Add Room</button>
                          </div>
                          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm">
                              <div className="flex justify-between items-center mb-4">

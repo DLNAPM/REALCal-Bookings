@@ -6,6 +6,8 @@ export interface Property {
   description: string;
   images: string[];
   isTestProperty?: boolean;
+  hasSmartLock?: boolean;
+  bedrooms?: { roomNumber: string; roomLockNumber: string; type: 'Master Bed' | 'Guest Bedroom'; sqFt: number }[];
   createdAt: any;
 }
 
