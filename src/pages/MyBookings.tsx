@@ -4,7 +4,7 @@ import { db } from '../lib/firebase';
 import { collection, query, where, getDocs, doc, updateDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { Booking, Property } from '../types';
 import { useNavigate, Link } from 'react-router-dom';
-import { ChevronLeft, Calendar as CalendarIcon, XCircle, Home, MapPin, Edit3, X } from 'lucide-react';
+import { ChevronLeft, Calendar as CalendarIcon, XCircle, Home, MapPin, Edit3, X, Trash2 } from 'lucide-react';
 import { parseISO, differenceInHours } from 'date-fns';
 import { Calendar } from '../components/Calendar';
 
@@ -12,6 +12,7 @@ export const MyBookings: React.FC = () => {
     const { user, loading } = useAuth();
     const navigate = useNavigate();
     const [bookings, setBookings] = useState<(Booking & { propertyName?: string; propertyImage?: string })[]>([]);
+    const [filter, setFilter] = useState<'active' | 'cancelled'>('active');
     const [fetching, setFetching] = useState(true);
     const [editingBooking, setEditingBooking] = useState<(Booking & { propertyName?: string; propertyImage?: string }) | null>(null);
 
@@ -32,7 +33,8 @@ export const MyBookings: React.FC = () => {
             try {
                 const q = query(collection(db, 'bookings'), where('userId', '==', user.uid));
                 const snap = await getDocs(q);
-                const fetchedBookings = snap.docs.map(d => ({ id: d.id, ...d.data() } as Booking));
+                const fetchedBookings = snap.docs.map(d => ({ id: d.id, ...d.data() } as Booking))
+                    .filter(b => !b.deletedByGuest);                
                 
                 // Enhance with property details
                 const enhanced = await Promise.all(fetchedBookings.map(async (b) => {
@@ -115,6 +117,18 @@ export const MyBookings: React.FC = () => {
         }
     };
 
+    const handleDeleteCancelled = async (bookingId: string) => {
+        if (!window.confirm("Are you sure you want to permanently delete this cancelled booking record?")) return;
+        try {
+            await updateDoc(doc(db, 'bookings', bookingId), {
+                deletedByGuest: true
+            });
+            setBookings(prev => prev.filter(b => b.id !== bookingId));
+        } catch (err: any) {
+            alert(`Failed to delete booking: ${err.message}`);
+        }
+    };
+
     const handleSaveEdit = async (checkIn: string, checkOut: string, priceDetails: any) => {
         if (!editingBooking || !user) return;
         try {
@@ -194,16 +208,21 @@ export const MyBookings: React.FC = () => {
             <main className="flex-1 max-w-5xl mx-auto w-full px-6">
                 <h1 className="text-3xl font-bold tracking-tight text-slate-900 mb-8">Your Travel Itineraries</h1>
 
-                {bookings.length === 0 ? (
+                <div className="flex gap-4 mb-6">
+                    <button onClick={() => setFilter('active')} className={`px-4 py-2 rounded-full font-bold ${filter === 'active' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}>Active</button>
+                    <button onClick={() => setFilter('cancelled')} className={`px-4 py-2 rounded-full font-bold ${filter === 'cancelled' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}>Cancelled</button>
+                </div>
+
+                {bookings.filter(b => filter === 'cancelled' ? b.status === 'cancelled' : b.status !== 'cancelled').length === 0 ? (
                     <div className="text-center p-12 bg-white rounded-3xl border border-slate-200 shadow-sm">
                         <CalendarIcon className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-                        <h3 className="text-xl font-bold text-slate-700 mb-2">No bookings yet</h3>
-                        <p className="text-slate-500 mb-6">You haven't booked any properties yet.</p>
-                        <Link to="/" className="inline-block bg-indigo-600 text-white font-bold py-3 px-8 rounded-xl hover:bg-indigo-500 transition-colors">Explore Properties</Link>
+                        <h3 className="text-xl font-bold text-slate-700 mb-2">No {filter} bookings</h3>
+                        <p className="text-slate-500 mb-6">You haven't {filter === 'active' ? 'booked any active properties' : 'cancelled any properties'} yet.</p>
+                        {filter === 'active' && <Link to="/" className="inline-block bg-indigo-600 text-white font-bold py-3 px-8 rounded-xl hover:bg-indigo-500 transition-colors">Explore Properties</Link>}
                     </div>
                 ) : (
                     <div className="space-y-6">
-                        {bookings.map(booking => {
+                        {bookings.filter(b => filter === 'cancelled' ? b.status === 'cancelled' : b.status !== 'cancelled').map(booking => {
                             const checkInDate = parseISO(booking.checkIn);
                             const checkOutDate = parseISO(booking.checkOut);
                             const hoursUntilCheckIn = differenceInHours(checkInDate, new Date());
@@ -224,7 +243,7 @@ export const MyBookings: React.FC = () => {
                             return (
                                 <div key={booking.id} className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm flex flex-col md:flex-row">
                                     <div className="md:w-64 h-48 md:h-auto bg-slate-100 relative shrink-0">
-                                        {booking.propertyImage ? (
+                                        {filter === 'active' && booking.propertyImage ? (
                                             <img src={booking.propertyImage} alt={booking.propertyName} className="w-full h-full object-cover" />
                                         ) : (
                                             <div className="w-full h-full flex flex-col items-center justify-center text-slate-400">
@@ -249,9 +268,19 @@ export const MyBookings: React.FC = () => {
                                                     Ref: {booking.bookingRef || booking.id.substring(0, 8)}
                                                 </div>
                                             </div>
-                                            <div className="text-right">
-                                                <div className="text-2xl font-bold text-emerald-600">${(booking.totalPrice / 100).toFixed(2)}</div>
-                                            </div>
+                                            {booking.status !== 'cancelled' ? (
+                                                <div className="text-right">
+                                                    <div className="text-2xl font-bold text-emerald-600">${(booking.totalPrice / 100).toFixed(2)}</div>
+                                                </div>
+                                            ) : (
+                                                <button 
+                                                    onClick={() => handleDeleteCancelled(booking.id)}
+                                                    className="p-2 text-slate-400 hover:text-rose-600 transition-colors"
+                                                    title="Delete cancelled booking record"
+                                                >
+                                                    <Trash2 size={20} />
+                                                </button>
+                                            )}
                                         </div>
 
                                         <div className="grid grid-cols-2 gap-4 mb-6">
