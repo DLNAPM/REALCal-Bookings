@@ -771,6 +771,7 @@ export const AdminDashboard: React.FC = () => {
                  <h3 className="font-bold mb-4 text-slate-800">Add New Property</h3>
                  <div className="space-y-4">
                      <input name="name" required placeholder="Property Name" className="w-full border border-slate-200 rounded-xl p-3 bg-white shadow-sm" />
+                      <input name="location" required placeholder="Location (City, State)" className="w-full border border-slate-200 rounded-xl p-3 bg-white shadow-sm" />
                      <textarea name="description" required placeholder="Description..." rows={3} className="w-full border border-slate-200 rounded-xl p-3 bg-white shadow-sm" />
                      
                      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
@@ -823,6 +824,7 @@ export const AdminDashboard: React.FC = () => {
                       <form key={activePropertyId} onSubmit={handleUpdateProperty} className="grid grid-cols-1 md:grid-cols-2 gap-6">
                          <div className="space-y-4">
                              <input name="name" defaultValue={p.name} required placeholder="Property Name" className="w-full border border-slate-200 rounded-xl p-3 bg-white shadow-sm" />
+                              <input name="location" defaultValue={p.location} required placeholder="Location (City, State)" className="w-full border border-slate-200 rounded-xl p-3 bg-white shadow-sm" />
                              <textarea name="description" defaultValue={p.description} required placeholder="Description..." rows={5} className="w-full border border-slate-200 rounded-xl p-3 bg-white shadow-sm" />
                              
                              <div className="flex flex-wrap gap-6 items-center">

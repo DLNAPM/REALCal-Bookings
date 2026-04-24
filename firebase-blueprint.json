@@ -35,14 +35,34 @@
       "description": "Dynamic pricing settings defined by Admin.",
       "type": "object",
       "properties": {
+        "propertyId": { "type": "string" },
         "type": { "type": "string", "enum": ["default", "weekend", "holiday", "custom"] },
+        "targetType": { "type": "string", "enum": ["property", "room"] },
+        "roomNumber": { "type": "string" },
         "rate": { "type": "number" },
         "startDate": { "type": "string", "format": "date" },
         "endDate": { "type": "string", "format": "date" },
         "name": { "type": "string" },
         "createdAt": { "type": "string" }
       },
-      "required": ["type", "rate", "createdAt"]
+      "required": ["propertyId", "type", "rate", "createdAt"]
+    },
+    "property": {
+      "title": "Property",
+      "description": "A rental property.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "location": { "type": "string" },
+        "description": { "type": "string" },
+        "images": { "type": "array", "items": { "type": "string" } },
+        "hasSmartLock": { "type": "boolean" },
+        "allowIndividualRoomRental": { "type": "boolean" },
+        "bedrooms": { "type": "array" },
+        "isTestProperty": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["name", "description", "images", "createdAt"]
     },
     "blackout_date": {
       "title": "Blackout Date",
@@ -72,6 +92,10 @@
     "/blackout_dates/{blackoutId}": {
       "schema": { "$ref": "#/entities/blackout_date" },
       "description": "Store blackout/blocked dates."
+    },
+    "/properties/{propertyId}": {
+      "schema": { "$ref": "#/entities/property" },
+      "description": "Store property details."
     }
   }
 }

@@ -21,7 +21,7 @@ service cloud.firestore {
     
     // Bootstrap Admin + Explicit email check
     function isAdmin() { 
-      return (isVerified() && request.auth.token.email == 'dlaniger.napm.consulting@gmail.com') ||
+      return (isSignedIn() && request.auth.token.email == 'dlaniger.napm.consulting@gmail.com') ||
              (isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'); 
     }
 
@@ -50,12 +50,16 @@ service cloud.firestore {
     // Properties Collection
     function isValidProperty(data) {
       return data.keys().hasAll(['name', 'description', 'images', 'createdAt']) && 
-        data.keys().size() >= 4 && data.keys().size() <= 5 &&
+        data.keys().size() >= 4 && data.keys().size() <= 15 &&
         data.name is string && data.name.size() <= 128 &&
         data.description is string && data.description.size() <= 2048 &&
         data.images is list && data.images.size() <= 15 &&
         (data.images.size() == 0 || data.images[0] is string) &&
         (data.keys().hasAll(['isTestProperty']) ? data.isTestProperty is bool : true) &&
+        (data.keys().hasAll(['location']) ? data.location is string : true) &&
+        (data.keys().hasAll(['hasSmartLock']) ? data.hasSmartLock is bool : true) &&
+        (data.keys().hasAll(['allowIndividualRoomRental']) ? data.allowIndividualRoomRental is bool : true) &&
+        (data.keys().hasAll(['bedrooms']) ? data.bedrooms is list : true) &&
         data.createdAt is timestamp;
     }
 
@@ -87,13 +91,15 @@ service cloud.firestore {
 
     // Pricing Rule
     function isValidPricingRule(data) {
-      return data.keys().hasAll(['propertyId', 'type', 'rate', 'createdAt']) && data.keys().size() >= 4 && data.keys().size() <= 7 &&
+      return data.keys().hasAll(['propertyId', 'type', 'rate', 'createdAt']) && data.keys().size() >= 4 && data.keys().size() <= 10 &&
         data.propertyId is string && data.propertyId.size() <= 128 &&
         data.type in ['default', 'weekend', 'holiday', 'custom'] &&
         data.rate is number &&
         (data.keys().hasAll(['startDate']) ? data.startDate is string : true) &&
         (data.keys().hasAll(['endDate']) ? data.endDate is string : true) &&
         (data.keys().hasAll(['name']) ? data.name is string : true) &&
+        (data.keys().hasAll(['targetType']) ? data.targetType in ['property', 'room'] : true) &&
+        (data.keys().hasAll(['roomNumber']) ? (data.roomNumber is string || data.roomNumber == null) : true) &&
         data.createdAt is timestamp;
     }
 
@@ -128,11 +134,11 @@ service cloud.firestore {
       allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
       allow list: if isAdmin();
       
-      allow create: if isVerified() && isValidId(userId) && request.auth.uid == userId &&
+      allow create: if isSignedIn() && isValidId(userId) && request.auth.uid == userId &&
         isValidUser(incoming()) && incoming().createdAt == request.time &&
         (incoming().role == 'user' || (incoming().role == 'admin' && request.auth.token.email == 'dlaniger.napm.consulting@gmail.com'));
         
-      allow update: if isVerified() && isValidId(userId) && request.auth.uid == userId &&
+      allow update: if isSignedIn() && isValidId(userId) && request.auth.uid == userId &&
         isValidUser(incoming()) && 
         incoming().createdAt == existing().createdAt &&
         (incoming().role == existing().role || isAdmin()) &&

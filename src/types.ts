@@ -3,6 +3,7 @@ export type RuleType = 'default' | 'weekend' | 'holiday' | 'custom';
 export interface Property {
   id: string;
   name: string;
+  location?: string;
   description: string;
   images: string[];
   isTestProperty?: boolean;
@@ -55,6 +56,7 @@ export interface Booking {
   bookingRef?: string;
   cancellationFee?: number;
   deletedByGuest?: boolean;
+  selectedBedroom?: any;
   createdAt: any;
   updatedAt: any;
 }
