@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { db, signOut } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, serverTimestamp, getDocs, doc, deleteDoc, updateDoc, setDoc, getDoc, writeBatch, orderBy } from 'firebase/firestore';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { format, eachDayOfInterval, parseISO } from 'date-fns';
+import { format, eachDayOfInterval, parseISO, addDays } from 'date-fns';
 import { cn } from '../lib/utils';
 import { BlackoutDate, PricingRule, Booking, Property, PropertyManager } from '../types';
 import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight } from 'lucide-react';
@@ -20,6 +20,8 @@ export const AdminDashboard: React.FC = () => {
   const [activePropertyId, setActivePropertyId] = useState<string | null>(null);
   const [pricingTarget, setPricingTarget] = useState<'property' | 'room'>('property');
   const [selectedRoomForPricing, setSelectedRoomForPricing] = useState<string | null>(null);
+  const [blackoutTarget, setBlackoutTarget] = useState<'property' | 'room'>('property');
+  const [selectedRoomForBlackout, setSelectedRoomForBlackout] = useState<string | null>(null);
   const [propertyManagers, setPropertyManagers] = useState<PropertyManager[]>([]);
   const [editingManagerId, setEditingManagerId] = useState<string | null>(null);
   const [editingBedrooms, setEditingBedrooms] = useState<{ roomNumber: string; roomLockNumber: string; type: 'Master Bed' | 'Guest Bedroom' }[]>([]);
@@ -196,25 +198,32 @@ export const AdminDashboard: React.FC = () => {
       const startDateStr = fd.get('startDate') as string;
       const endDateStr = fd.get('endDate') as string;
       const reason = fd.get('reason') as string || '';
+      const targetType = fd.get('targetType') as 'property' | 'room';
+      const roomNumber = fd.get('roomNumber') as string || null;
       
       const start = parseISO(startDateStr);
-      const end = endDateStr ? parseISO(endDateStr) : start;
+      const end = endDateStr ? addDays(parseISO(endDateStr), 0) : start;
       
-      if (end < start) {
+      const parsedEnd = endDateStr ? parseISO(endDateStr) : start;
+      if (parsedEnd < start) {
          return alert("End date cannot be before start date.");
       }
       
-      const days = eachDayOfInterval({ start, end });
+      const days = eachDayOfInterval({ start, end: parsedEnd });
       const batch = writeBatch(db);
       
       const newDates = days.map(d => format(d, 'yyyy-MM-dd'));
-      const existingBlackouts = blackouts.filter(b => b.propertyId === activePropertyId);
+      const existingBlackouts = blackouts.filter(b => 
+        b.propertyId === activePropertyId && 
+        b.targetType === targetType && 
+        b.roomNumber === roomNumber
+      );
       const existingDates = new Set(existingBlackouts.map(b => b.date));
       
       const datesToAdd = newDates.filter(d => !existingDates.has(d));
       
       if (datesToAdd.length === 0) {
-        return alert("All selected dates are already blacked out.");
+        return alert("All selected dates are already blacked out for this target.");
       }
 
       datesToAdd.forEach(dateStr => {
@@ -223,6 +232,8 @@ export const AdminDashboard: React.FC = () => {
              propertyId: activePropertyId,
              date: dateStr,
              reason,
+             targetType,
+             roomNumber,
              createdAt: serverTimestamp()
           });
       });
@@ -1038,22 +1049,65 @@ export const AdminDashboard: React.FC = () => {
 
                 <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
                    <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-slate-800">Blackout Dates <span className="text-sm font-normal text-slate-500 ml-2 bg-slate-100 px-2 py-1 rounded-md">{properties.find(p => p.id === activePropertyId)?.name}</span></h2>
-                   <form onSubmit={handleCreateBlackout} className="flex flex-col sm:flex-row gap-2 mb-6 p-4 bg-slate-50 rounded-2xl border border-slate-200">
-                      <div className="flex-1 flex gap-2">
-                          <input name="startDate" type="date" required className="w-1/2 border border-slate-200 rounded-xl p-2.5 bg-white shadow-sm" />
-                          <input name="endDate" type="date" className="w-1/2 border border-slate-200 rounded-xl p-2.5 bg-white shadow-sm" title="Optional end date for multi-day blackouts" />
+                   <form onSubmit={handleCreateBlackout} className="flex flex-col gap-4 mb-6 p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="flex gap-2">
+                              <input name="startDate" type="date" required className="w-1/2 border border-slate-200 rounded-xl p-2.5 bg-white shadow-sm" />
+                              <input name="endDate" type="date" className="w-1/2 border border-slate-200 rounded-xl p-2.5 bg-white shadow-sm" title="Optional end date for multi-day blackouts" />
+                          </div>
+                          <input name="reason" type="text" placeholder="Reason/Details" className="border border-slate-200 rounded-xl p-2.5 bg-white shadow-sm" />
                       </div>
-                      <input name="reason" type="text" placeholder="Reason (e.g. Maintenance)" className="flex-1 md:flex-2 border border-slate-200 rounded-xl p-2.5 bg-white shadow-sm" />
-                      <button type="submit" className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-500 transition-colors">Add</button>
+                      
+                      <div className="flex flex-col sm:flex-row gap-4 items-center">
+                         <div className="flex items-center gap-4 bg-white p-2 rounded-xl border border-slate-200 shadow-sm">
+                            <div className="flex items-center gap-2 px-2">
+                               <input 
+                                 type="radio" 
+                                 id="blackout_prop" 
+                                 name="targetType" 
+                                 value="property" 
+                                 checked={blackoutTarget === 'property'} 
+                                 onChange={() => setBlackoutTarget('property')} 
+                               />
+                               <label htmlFor="blackout_prop" className="text-sm font-bold text-slate-700">Entire Property</label>
+                            </div>
+                            <div className="flex items-center gap-2 px-2 border-l border-slate-100">
+                               <input 
+                                 type="radio" 
+                                 id="blackout_room" 
+                                 name="targetType" 
+                                 value="room" 
+                                 disabled={!properties.find(p => p.id === activePropertyId)?.allowIndividualRoomRental}
+                                 checked={blackoutTarget === 'room'} 
+                                 onChange={() => setBlackoutTarget('room')} 
+                               />
+                               <label htmlFor="blackout_room" className={cn("text-sm font-bold", properties.find(p => p.id === activePropertyId)?.allowIndividualRoomRental ? "text-slate-700" : "text-slate-300")}>Specific Room</label>
+                            </div>
+                         </div>
+
+                         {blackoutTarget === 'room' && (
+                            <select name="roomNumber" required value={selectedRoomForBlackout || ''} onChange={e => setSelectedRoomForBlackout(e.target.value)} className="border border-slate-200 rounded-xl p-2.5 bg-white shadow-sm text-sm">
+                               <option value="">Select Room</option>
+                               {properties.find(p => p.id === activePropertyId)?.bedrooms?.map(room => (
+                                   <option key={room.roomNumber} value={room.roomNumber}>{room.type} ({room.roomNumber})</option>
+                               ))}
+                            </select>
+                         )}
+
+                         <button type="submit" className="bg-indigo-600 text-white px-8 py-2.5 rounded-xl font-bold hover:bg-indigo-500 transition-colors ml-auto shadow-md">Add Blackout</button>
+                      </div>
                    </form>
 
                    <div className="space-y-2 max-h-[340px] overflow-y-auto pr-2">
                        {activeBlackouts.length === 0 && <p className="text-sm text-slate-500 text-center">No blackouts configured for this property.</p>}
                       {activeBlackouts.map(b => (
                          <div key={b.id} className="border border-slate-200 p-3 rounded-xl flex justify-between items-center text-sm shadow-sm bg-white group">
-                            <div>
+                            <div className="flex gap-4 items-center">
+                               <span className={cn("px-2 py-0.5 rounded text-[10px] font-bold uppercase", b.targetType === 'room' ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-700")}>
+                                   {b.targetType === 'room' ? `Room ${b.roomNumber}` : 'Full Property'}
+                               </span>
                                <span className="font-bold text-slate-800">{b.date}</span>
-                               <span className="text-slate-500 ml-3">{b.reason || 'No reason'}</span>
+                               <span className="text-slate-500">{b.reason || 'No reason'}</span>
                             </div>
                             <button type="button" onClick={() => handleDeleteBlackout(b.id)} className="text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"><Trash2 size={16}/></button>
                          </div>

@@ -69,11 +69,14 @@
       "description": "Disabled dates defined by Admin.",
       "type": "object",
       "properties": {
+        "propertyId": { "type": "string" },
         "date": { "type": "string", "format": "date" },
+        "targetType": { "type": "string", "enum": ["property", "room"] },
+        "roomNumber": { "type": "string" },
         "reason": { "type": "string" },
         "createdAt": { "type": "string" }
       },
-      "required": ["date", "createdAt"]
+      "required": ["propertyId", "date", "createdAt"]
     }
   },
   "firestore": {

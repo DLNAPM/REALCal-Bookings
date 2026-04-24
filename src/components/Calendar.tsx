@@ -64,7 +64,20 @@ export const Calendar: React.FC<{
 
   const isUnavailable = (date: Date) => {
     // 1. Manual Blackouts
-    if (blackoutDates.some(b => isSameDay(startOfDay(new Date(b.date)), date))) return true;
+    const isDateBlackout = blackoutDates.some(b => {
+      if (!isSameDay(startOfDay(new Date(b.date)), date)) return false;
+      
+      if (rentalMode === 'entire') {
+        // Entire property is blocked if there's ANY blackout (property-wide or any room)
+        return true;
+      } else {
+        // Room mode: blocked if entire property is blacked out OR this specific room is blacked out
+        if (!b.targetType || b.targetType === 'property') return true;
+        return selectedRoom && b.roomNumber === selectedRoom.roomNumber;
+      }
+    });
+
+    if (isDateBlackout) return true;
 
     // 2. Booking Conflicts
     return bookings.some(b => {

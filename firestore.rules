@@ -105,10 +105,12 @@ service cloud.firestore {
 
     // Blackout Date
     function isValidBlackoutDate(data) {
-      return data.keys().hasAll(['propertyId', 'date', 'createdAt']) && data.keys().size() >= 3 && data.keys().size() <= 4 &&
+      return data.keys().hasAll(['propertyId', 'date', 'createdAt']) && data.keys().size() >= 3 && data.keys().size() <= 6 &&
         data.propertyId is string && data.propertyId.size() <= 128 &&
         data.date is string && data.date.size() <= 32 &&
         (data.keys().hasAll(['reason']) ? data.reason is string : true) &&
+        (data.keys().hasAll(['targetType']) ? data.targetType in ['property', 'room'] : true) &&
+        (data.keys().hasAll(['roomNumber']) ? (data.roomNumber is string || data.roomNumber == null) : true) &&
         data.createdAt is timestamp;
     }
 

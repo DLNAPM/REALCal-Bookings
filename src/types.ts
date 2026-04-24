@@ -31,6 +31,8 @@ export interface BlackoutDate {
   propertyId: string;
   date: string;
   reason?: string;
+  targetType?: 'property' | 'room';
+  roomNumber?: string;
   createdAt: any;
 }
 
