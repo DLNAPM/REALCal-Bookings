@@ -22,6 +22,7 @@ export const AdminDashboard: React.FC = () => {
   const [selectedRoomForPricing, setSelectedRoomForPricing] = useState<string | null>(null);
   const [blackoutTarget, setBlackoutTarget] = useState<'property' | 'room'>('property');
   const [selectedRoomForBlackout, setSelectedRoomForBlackout] = useState<string | null>(null);
+  const [selectedBlackoutIds, setSelectedBlackoutIds] = useState<string[]>([]);
   const [propertyManagers, setPropertyManagers] = useState<PropertyManager[]>([]);
   const [editingManagerId, setEditingManagerId] = useState<string | null>(null);
   const [editingBedrooms, setEditingBedrooms] = useState<{ roomNumber: string; roomLockNumber: string; type: 'Master Bed' | 'Guest Bedroom' }[]>([]);
@@ -451,8 +452,39 @@ export const AdminDashboard: React.FC = () => {
     if (!db) return alert("Firebase not configured");
     if(window.confirm('Delete this blackout date?')) {
       await deleteDoc(doc(db, 'blackout_dates', id));
+      setSelectedBlackoutIds(prev => prev.filter(bid => bid !== id));
     }
   }
+
+  const handleDeleteMultipleBlackouts = async () => {
+    if (!db || selectedBlackoutIds.length === 0) return;
+    if (window.confirm(`Are you sure you want to delete ${selectedBlackoutIds.length} selected blackout dates?`)) {
+      try {
+        const batch = writeBatch(db);
+        selectedBlackoutIds.forEach(id => {
+          batch.delete(doc(db, 'blackout_dates', id));
+        });
+        await batch.commit();
+        setSelectedBlackoutIds([]);
+      } catch (err: any) {
+        alert("Batch deletion failed: " + err.message);
+      }
+    }
+  }
+
+  const toggleBlackoutSelection = (id: string) => {
+    setSelectedBlackoutIds(prev => 
+      prev.includes(id) ? prev.filter(bid => bid !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAllBlackouts = () => {
+    if (selectedBlackoutIds.length === activeBlackouts.length) {
+      setSelectedBlackoutIds([]);
+    } else {
+      setSelectedBlackoutIds(activeBlackouts.map(b => b.id));
+    }
+  };
 
   const handleAdminCreateBooking = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1048,7 +1080,28 @@ export const AdminDashboard: React.FC = () => {
                 </div>
 
                 <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
-                   <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-slate-800">Blackout Dates <span className="text-sm font-normal text-slate-500 ml-2 bg-slate-100 px-2 py-1 rounded-md">{properties.find(p => p.id === activePropertyId)?.name}</span></h2>
+                   <div className="flex justify-between items-center mb-4">
+                      <h2 className="text-xl font-bold flex items-center gap-2 text-slate-800">Blackout Dates <span className="text-sm font-normal text-slate-500 ml-2 bg-slate-100 px-2 py-1 rounded-md">{properties.find(p => p.id === activePropertyId)?.name}</span></h2>
+                      
+                      {activeBlackouts.length > 0 && (
+                         <div className="flex items-center gap-3">
+                            {selectedBlackoutIds.length > 0 && (
+                               <button 
+                                 onClick={handleDeleteMultipleBlackouts}
+                                 className="text-xs bg-red-50 text-red-600 font-bold px-3 py-1.5 rounded-lg hover:bg-red-100 transition-colors flex items-center gap-1"
+                               >
+                                  <Trash2 size={14}/> Delete {selectedBlackoutIds.length}
+                               </button>
+                            )}
+                            <button 
+                              onClick={toggleSelectAllBlackouts}
+                              className="text-xs bg-slate-100 text-slate-600 font-bold px-3 py-1.5 rounded-lg hover:bg-slate-200 transition-colors"
+                            >
+                               {selectedBlackoutIds.length === activeBlackouts.length ? 'Unselect All' : 'Select All'}
+                            </button>
+                         </div>
+                      )}
+                   </div>
                    <form onSubmit={handleCreateBlackout} className="flex flex-col gap-4 mb-6 p-4 bg-slate-50 rounded-2xl border border-slate-200">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="flex gap-2">
@@ -1101,13 +1154,21 @@ export const AdminDashboard: React.FC = () => {
                    <div className="space-y-2 max-h-[340px] overflow-y-auto pr-2">
                        {activeBlackouts.length === 0 && <p className="text-sm text-slate-500 text-center">No blackouts configured for this property.</p>}
                       {activeBlackouts.map(b => (
-                         <div key={b.id} className="border border-slate-200 p-3 rounded-xl flex justify-between items-center text-sm shadow-sm bg-white group">
-                            <div className="flex gap-4 items-center">
-                               <span className={cn("px-2 py-0.5 rounded text-[10px] font-bold uppercase", b.targetType === 'room' ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-700")}>
-                                   {b.targetType === 'room' ? `Room ${b.roomNumber}` : 'Full Property'}
-                               </span>
-                               <span className="font-bold text-slate-800">{b.date}</span>
-                               <span className="text-slate-500">{b.reason || 'No reason'}</span>
+                         <div key={b.id} className={cn("border p-3 rounded-xl flex justify-between items-center text-sm shadow-sm transition-colors group", selectedBlackoutIds.includes(b.id) ? "bg-indigo-50 border-indigo-200" : "bg-white border-slate-200")}>
+                            <div className="flex gap-3 items-center">
+                               <input 
+                                 type="checkbox" 
+                                 checked={selectedBlackoutIds.includes(b.id)} 
+                                 onChange={() => toggleBlackoutSelection(b.id)}
+                                 className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"
+                               />
+                               <div className="flex gap-4 items-center">
+                                  <span className={cn("px-2 py-0.5 rounded text-[10px] font-bold uppercase", b.targetType === 'room' ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-700")}>
+                                      {b.targetType === 'room' ? `Room ${b.roomNumber}` : 'Full Property'}
+                                  </span>
+                                  <span className="font-bold text-slate-800">{b.date}</span>
+                                  <span className="text-slate-500">{b.reason || 'No reason'}</span>
+                               </div>
                             </div>
                             <button type="button" onClick={() => handleDeleteBlackout(b.id)} className="text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"><Trash2 size={16}/></button>
                          </div>
