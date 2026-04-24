@@ -306,8 +306,8 @@ export const Checkout: React.FC = () => {
              {property?.bedrooms && property.bedrooms.length > 0 && (
                  <div className="mb-6">
                     <label className="block text-sm font-bold text-slate-700 mb-1">Select Room</label>
-                    <select value={selectedBedroom ? JSON.stringify(selectedBedroom) : ''} onChange={e => setSelectedBedroom(JSON.parse(e.target.value))} className="w-full border border-slate-300 rounded-xl p-3 bg-white shadow-sm">
-                        <option value="">Select a bedroom</option>
+                    <select value={selectedBedroom ? JSON.stringify(selectedBedroom) : ''} onChange={e => setSelectedBedroom(e.target.value ? JSON.parse(e.target.value) : null)} className="w-full border border-slate-300 rounded-xl p-3 bg-white shadow-sm">
+                        <option value="">Entire Property</option>
                         {property.bedrooms.map((b, i) => <option key={i} value={JSON.stringify(b)}>{b.type} - Room {b.roomNumber}</option>)}
                     </select>
                  </div>

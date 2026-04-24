@@ -26,6 +26,7 @@ export const Calendar: React.FC<{
   
   const [pricingRules, setPricingRules] = useState<PricingRule[]>([]);
   const [blackoutDates, setBlackoutDates] = useState<BlackoutDate[]>([]);
+  const [bookings, setBookings] = useState<any[]>([]);
   const [globalSettings, setGlobalSettings] = useState<any>(null);
   
   const navigate = useNavigate();
@@ -38,14 +39,53 @@ export const Calendar: React.FC<{
     const unsubBlackouts = onSnapshot(query(collection(db, 'blackout_dates'), where('propertyId', '==', propertyId)), (snap) => {
       setBlackoutDates(snap.docs.map(d => ({ id: d.id, ...d.data() } as BlackoutDate)));
     });
+    const unsubBookings = onSnapshot(query(collection(db, 'bookings'), where('propertyId', '==', propertyId)), (snap) => {
+      setBookings(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
     const unsubSettings = onSnapshot(doc(db, 'global_settings', 'settings'), (snap) => {
         if(snap.exists()) setGlobalSettings(snap.data());
     });
-    return () => { unsubRules(); unsubBlackouts(); unsubSettings(); };
+    return () => { unsubRules(); unsubBlackouts(); unsubBookings(); unsubSettings(); };
   }, [propertyId]);
 
-  const isBlackout = (date: Date) => {
-    return blackoutDates.some(b => isSameDay(startOfDay(new Date(b.date)), date));
+  useEffect(() => {
+    if (checkIn && checkOut) {
+      const interval = eachDayOfInterval({ start: checkIn, end: addDays(checkOut, -1) });
+      if (interval.some(d => isUnavailable(d))) {
+        setCheckIn(null);
+        setCheckOut(null);
+      }
+    } else if (checkIn) {
+      if (isUnavailable(checkIn)) {
+        setCheckIn(null);
+      }
+    }
+  }, [rentalMode, selectedRoom, bookings, blackoutDates]);
+
+  const isUnavailable = (date: Date) => {
+    // 1. Manual Blackouts
+    if (blackoutDates.some(b => isSameDay(startOfDay(new Date(b.date)), date))) return true;
+
+    // 2. Booking Conflicts
+    return bookings.some(b => {
+      if (b.status === 'cancelled') return false;
+      const start = startOfDay(new Date(b.checkIn));
+      const end = startOfDay(new Date(b.checkOut));
+      
+      // Date is within [checkIn, checkOut)
+      const isOverlap = date >= start && date < end;
+      if (!isOverlap) return false;
+
+      // Conflict logic:
+      if (rentalMode === 'entire') {
+        // If booking entire property, ANY existing booking (entire or room) blocks it
+        return true;
+      } else {
+        // Room mode: blocked if entire property is booked OR this specific room is booked
+        if (!b.selectedBedroom) return true; // Entire property booking blocks all rooms
+        return selectedRoom && b.selectedBedroom.roomNumber === selectedRoom.roomNumber;
+      }
+    });
   };
 
   const getNightlyRate = (date: Date): number => {
@@ -83,7 +123,7 @@ export const Calendar: React.FC<{
   };
 
   const handleDateClick = (day: Date) => {
-    if (isBlackout(day) || isBefore(day, startOfDay(new Date()))) return;
+    if (isUnavailable(day) || isBefore(day, startOfDay(new Date()))) return;
 
     if (!checkIn || (checkIn && checkOut)) {
       setCheckIn(day);
@@ -92,10 +132,11 @@ export const Calendar: React.FC<{
       if (isBefore(day, checkIn)) {
         setCheckIn(day);
       } else {
-        // Enforce no blackouts in between
+        // Enforce no unavailability in between
         const interval = eachDayOfInterval({ start: checkIn, end: day });
-        const hasBlackout = interval.some(d => isBlackout(d));
-        if (hasBlackout) {
+        // NOTE: we check start to end-1 for unavailability because end (checkout) can be the start of another booking
+        const hasConflict = interval.slice(0, -1).some(d => isUnavailable(d));
+        if (hasConflict) {
           setCheckIn(day);
           setCheckOut(null);
         } else {
@@ -168,7 +209,7 @@ export const Calendar: React.FC<{
         const cloneDay = new Date(day);
 
         const isPast = isBefore(cloneDay, startOfDay(new Date()));
-        const isBlocked = isBlackout(cloneDay);
+        const isBlocked = isUnavailable(cloneDay);
         const isDisabled = isPast || isBlocked;
         const isSelected = checkIn && isSameDay(cloneDay, checkIn) || checkOut && isSameDay(cloneDay, checkOut);
         
@@ -226,11 +267,15 @@ export const Calendar: React.FC<{
         )}
         {rentalMode === 'room' && (
             <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
-               {property?.bedrooms?.map(room => (
-                   <button key={room.roomNumber} onClick={() => setSelectedRoom(room)} className={cn("px-4 py-2 rounded-xl text-sm font-bold border", selectedRoom?.roomNumber === room.roomNumber ? "bg-indigo-600 text-white border-indigo-600" : "bg-white border-slate-200 text-slate-700")}>
-                       {room.type} {room.roomNumber} (${room.fee})
-                   </button>
-               ))}
+                {property?.bedrooms?.map(room => (
+                    <button key={room.roomNumber} onClick={() => setSelectedRoom(room)} className={cn("px-4 py-2 rounded-xl text-sm font-bold border flex flex-col items-start gap-0.5", selectedRoom?.roomNumber === room.roomNumber ? "bg-indigo-600 text-white border-indigo-600" : "bg-white border-slate-200 text-slate-700")}>
+                        <div className="flex justify-between w-full gap-4">
+                            <span>{room.type} {room.roomNumber}</span>
+                            <span className="font-mono">${room.fee}</span>
+                        </div>
+                        {room.sqFt > 0 && <span className={cn("text-[10px] font-medium uppercase tracking-wider", selectedRoom?.roomNumber === room.roomNumber ? "text-indigo-200" : "text-slate-400")}>{room.sqFt} sq ft</span>}
+                    </button>
+                ))}
             </div>
         )}
         <div className="flex justify-between items-center mb-6">
@@ -341,7 +386,9 @@ export const Calendar: React.FC<{
                          >
                             <div>
                                 <div className="font-bold">{room.type} {room.roomNumber}</div>
-                                <div className="text-[10px] opacity-70 uppercase tracking-tighter italic">Individual Room</div>
+                                <div className="text-[10px] opacity-70 uppercase tracking-tighter italic">
+                                    Individual Room {room.sqFt > 0 && `• ${room.sqFt} sq ft`}
+                                </div>
                             </div>
                             <div className="text-right">
                                 <span className="font-mono font-bold">${room.fee}/nt</span>
