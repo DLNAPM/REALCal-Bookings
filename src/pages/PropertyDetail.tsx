@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, Navigate } from 'react-router-dom';
 import { Calendar } from '../components/Calendar';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
@@ -9,9 +9,13 @@ import { Property } from '../types';
 
 export const PropertyDetail: React.FC = () => {
     const { id } = useParams<{id: string}>();
-    const { user } = useAuth();
+    const { user, loading: authLoading } = useAuth();
     const [property, setProperty] = useState<Property | null>(null);
     const [loading, setLoading] = useState(true);
+
+    if (user && !user.tollFreeAccept && !authLoading) {
+        return <Navigate to="/opt-in" replace />;
+    }
 
     useEffect(() => {
         if (!id || !db) return;

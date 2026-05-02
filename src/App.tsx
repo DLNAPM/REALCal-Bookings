@@ -12,6 +12,7 @@ import { Checkout } from './pages/Checkout';
 import { Confirmation } from './pages/Confirmation';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { MyBookings } from './pages/MyBookings';
+import { OptIn } from './pages/OptIn';
 import { HelpModal } from './components/HelpModal';
 
 export default function App() {
@@ -25,6 +26,7 @@ export default function App() {
            <Route path="/confirmation" element={<Confirmation />} />
            <Route path="/admin" element={<AdminDashboard />} />
            <Route path="/my-bookings" element={<MyBookings />} />
+           <Route path="/opt-in" element={<OptIn />} />
         </Routes>
         <HelpModal />
       </BrowserRouter>
