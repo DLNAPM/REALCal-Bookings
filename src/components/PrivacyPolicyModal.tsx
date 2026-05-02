@@ -1,6 +1,5 @@
 import React from 'react';
 import { Shield, X, Download, ShieldCheck } from 'lucide-react';
-import { QRCodeSVG } from 'qrcode.react';
 
 interface PrivacyPolicyModalProps {
     isOpen: boolean;
