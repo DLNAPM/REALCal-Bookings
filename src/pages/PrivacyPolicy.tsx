@@ -10,7 +10,10 @@ export const PrivacyPolicy: React.FC = () => {
   const [fullOptInUrl, setFullOptInUrl] = React.useState('');
 
   React.useEffect(() => {
-    setFullOptInUrl(`${window.location.origin}/opt-in`);
+    const origin = window.location.origin;
+    const url = origin && origin !== 'null' ? `${origin}/opt-in` : `${window.location.protocol}//${window.location.host}/opt-in`;
+    setFullOptInUrl(url);
+    console.log('QR Code URL:', url);
   }, []);
 
   return (
@@ -81,8 +84,11 @@ export const PrivacyPolicy: React.FC = () => {
               </p>
               <div className="flex flex-col md:flex-row gap-8 items-center bg-white p-6 rounded-2xl border border-indigo-200">
                 {fullOptInUrl ? (
-                  <div className="p-2 bg-white border border-slate-100 rounded-xl shadow-sm">
-                    <QRCodeSVG value={fullOptInUrl} size={140} level="H" includeMargin={true} />
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="p-2 bg-white border border-slate-100 rounded-xl shadow-sm">
+                      <QRCodeSVG value={fullOptInUrl} size={140} level="H" includeMargin={true} />
+                    </div>
+                    <p className="text-[9px] text-slate-400 font-mono truncate max-w-[150px]">{fullOptInUrl}</p>
                   </div>
                 ) : (
                   <div className="w-[156px] h-[156px] bg-slate-50 animate-pulse rounded-2xl border border-slate-100 flex items-center justify-center text-[10px] text-slate-400 font-bold uppercase tracking-wider">Loading QR...</div>
