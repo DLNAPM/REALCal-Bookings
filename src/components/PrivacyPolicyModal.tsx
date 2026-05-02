@@ -1,5 +1,5 @@
 import React from 'react';
-import { Shield, X, Download } from 'lucide-react';
+import { Shield, X, Download, ShieldCheck } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
 interface PrivacyPolicyModalProps {
@@ -63,6 +63,21 @@ export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen, 
                         </p>
                     </section>
                     
+                    <section>
+                        <h3 className="text-lg font-bold text-slate-900 mb-2">5. Consent to Communications</h3>
+                        <p className="leading-relaxed text-sm mb-4">
+                            By booking with REALCal, you explicitly consent to receiving transactional SMS and email notifications regarding your stay. We maintain a separate, secure <strong>Opt-in menu</strong> for managing these communication preferences.
+                        </p>
+                        <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100 flex items-start gap-3">
+                            <div className="text-indigo-600 mt-0.5">
+                                <ShieldCheck size={18} />
+                            </div>
+                            <div className="text-xs text-indigo-900 font-medium leading-relaxed italic">
+                                To consent to automated messaging (SMS or text messaging) for access codes and booking updates, please use the <a href="/opt-in" className="underline font-bold text-indigo-700">Opt-in link</a> in the main menu. This step is required for Yorkshire smart lock code delivery.
+                            </div>
+                        </div>
+                    </section>
+
                     <div className="pt-6 border-t border-slate-100 flex justify-end">
                         <button 
                             onClick={onClose}

@@ -225,6 +225,9 @@ export const Home: React.FC = () => {
                 <p className="text-sm text-slate-500">
                     By using &quot;REALCal Bookings&quot;, you agree to the terms outlined in this <button onClick={() => setIsPrivacyOpen(true)} className="text-indigo-600 hover:text-indigo-700 hover:underline font-medium focus:outline-none">Privacy Policy</button>.
                 </p>
+                <Link to="/privacy" className="text-xs text-slate-400 hover:text-indigo-600 font-bold uppercase tracking-widest mt-2 transition-colors">
+                    Dedicated Privacy Policy Link &bull; Vendor Verification
+                </Link>
             </footer>
 
             <PrivacyPolicyModal isOpen={isPrivacyOpen} onClose={() => setIsPrivacyOpen(false)} />

@@ -13,6 +13,7 @@ import { Confirmation } from './pages/Confirmation';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { MyBookings } from './pages/MyBookings';
 import { OptIn } from './pages/OptIn';
+import { PrivacyPolicy } from './pages/PrivacyPolicy';
 import { HelpModal } from './components/HelpModal';
 
 export default function App() {
@@ -27,6 +28,7 @@ export default function App() {
            <Route path="/admin" element={<AdminDashboard />} />
            <Route path="/my-bookings" element={<MyBookings />} />
            <Route path="/opt-in" element={<OptIn />} />
+           <Route path="/privacy" element={<PrivacyPolicy />} />
         </Routes>
         <HelpModal />
       </BrowserRouter>
