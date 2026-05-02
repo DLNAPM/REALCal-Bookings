@@ -205,12 +205,19 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    // Production serving
-    const distPath = path.join(process.cwd(), "dist");
+    // Production serving with robust ESM path resolution
+    const __dirname = path.resolve();
+    const distPath = path.join(__dirname, "dist");
+    
     app.use(express.static(distPath));
-    // For Express 4
+    
     app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
+      res.sendFile(path.join(distPath, "index.html"), (err) => {
+        if (err) {
+          console.error("Error sending index.html:", err);
+          res.status(500).send("Server Error: index.html not found. Please verify the build.");
+        }
+      });
     });
   }
 
