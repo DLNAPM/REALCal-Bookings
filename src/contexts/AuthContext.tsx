@@ -9,6 +9,7 @@ export interface AuthUser {
   displayName: string;
   photoURL: string;
   role: 'user' | 'admin';
+  tollFreeAccept?: boolean;
 }
 
 interface AuthContextType {
@@ -60,6 +61,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           displayName: firebaseUser.displayName || 'Guest',
           photoURL: firebaseUser.photoURL || '',
           role,
+          tollFreeAccept: userSnap.exists() ? userSnap.data().tollFreeAccept : undefined,
         });
       } else {
         setUser(null);

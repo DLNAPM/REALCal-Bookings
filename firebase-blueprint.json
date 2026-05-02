@@ -9,6 +9,7 @@
         "displayName": { "type": "string" },
         "photoURL": { "type": "string" },
         "role": { "type": "string", "enum": ["user", "admin"] },
+        "tollFreeAccept": { "type": "boolean" },
         "createdAt": { "type": "string" }
       },
       "required": ["email", "role", "createdAt"]

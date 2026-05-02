@@ -39,7 +39,7 @@ export const AdminDashboard: React.FC = () => {
 
   useEffect(() => {
     if (!db) return;
-    onSnapshot(query(collection(db, 'users')), (snap) => setUsers(snap.docs.map(d => d.data())));
+    onSnapshot(query(collection(db, 'users')), (snap) => setUsers(snap.docs.map(d => ({ uid: d.id, ...d.data() }))));
     onSnapshot(query(collection(db, 'bookings')), (snap) => setBookings(snap.docs.map(d => ({id: d.id, ...d.data() } as Booking))));
     onSnapshot(query(collection(db, 'blackout_dates')), (snap) => setBlackouts(snap.docs.map(d => ({id: d.id, ...d.data() } as BlackoutDate))));
     onSnapshot(query(collection(db, 'pricing_rules')), (snap) => setPricingRules(snap.docs.map(d => ({id: d.id, ...d.data() } as PricingRule))));
@@ -807,7 +807,53 @@ export const AdminDashboard: React.FC = () => {
               </div>
           </div>
 
-          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm mt-8">
+             <h2 className="text-xl font-bold mb-6 flex items-center gap-2"><Users className="text-indigo-600" size={20}/> User Directory & Consent</h2>
+             <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                   <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-y border-slate-100">
+                      <tr>
+                         <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest">User</th>
+                         <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest">Email</th>
+                         <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest">Role</th>
+                         <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-right">Toll-free-accept</th>
+                      </tr>
+                   </thead>
+                   <tbody className="divide-y divide-slate-100">
+                      {users.map((u, i) => (
+                         <tr key={u.uid || i} className="hover:bg-slate-50 transition-colors">
+                            <td className="px-4 py-4 flex items-center gap-3">
+                               <img src={u.photoURL || `https://ui-avatars.com/api/?name=${u.displayName}`} className="w-8 h-8 rounded-full border border-slate-200" />
+                               <span className="font-semibold text-slate-800">{u.displayName}</span>
+                            </td>
+                            <td className="px-4 py-4 text-slate-600">{u.email}</td>
+                            <td className="px-4 py-4">
+                               <span className={cn("px-2 py-1 rounded-md text-[10px] font-bold uppercase", u.role === 'admin' ? "bg-purple-100 text-purple-700" : "bg-slate-100 text-slate-600")}>
+                                  {u.role}
+                               </span>
+                            </td>
+                            <td className="px-4 py-4 text-right">
+                               {u.tollFreeAccept ? (
+                                  <span className="inline-flex items-center gap-1.5 py-1 px-3 rounded-full text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800">
+                                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                     Accepted
+                                  </span>
+                               ) : (
+                                  <span className="inline-flex items-center gap-1.5 py-1 px-3 rounded-full text-[10px] font-bold uppercase bg-slate-100 text-slate-400">
+                                     <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
+                                     Pending
+                                  </span>
+                               )}
+                            </td>
+                         </tr>
+                      ))}
+                   </tbody>
+                </table>
+                {users.length === 0 && <p className="text-center py-8 text-slate-400 text-sm italic">No users found in directory.</p>}
+             </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm mt-8">
              <h2 className="text-2xl font-bold mb-6 text-slate-800">Manage Properties</h2>
              
              <form onSubmit={handleCreateProperty} className="mb-8 p-6 bg-slate-50 rounded-2xl border border-dashed border-slate-300">

@@ -4,7 +4,7 @@ import { useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
-import { doc, setDoc, serverTimestamp, getDocs, getDoc, query, collection } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, getDocs, getDoc, query, collection, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { v4 as uuidv4 } from 'uuid'; // I need to install uuid
 
@@ -341,6 +341,34 @@ export const Checkout: React.FC = () => {
                        placeholder="+1 (123) 456-7890"
                        className="w-full border border-slate-200 rounded-xl px-4 py-3 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent transition-shadow"
                     />
+                 </div>
+
+                 <div className="pt-4 border-t border-slate-100">
+                    <label className="flex items-start gap-3 cursor-pointer group">
+                      <div className="relative flex items-center h-5">
+                        <input 
+                          type="checkbox" 
+                          className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 transition-all cursor-pointer"
+                          checked={user?.tollFreeAccept || false}
+                          onChange={async (e) => {
+                            if (!user || !db) return;
+                            try {
+                              await updateDoc(doc(db, 'users', user.uid), {
+                                tollFreeAccept: e.target.checked
+                              });
+                            } catch (err) {
+                              console.error("Failed to update toll-free consent", err);
+                            }
+                          }}
+                        />
+                      </div>
+                      <div className="flex-1 text-[11px] leading-tight mt-0.5">
+                        <span className="block font-bold text-slate-700 group-hover:text-indigo-600 transition-colors">Toll-free-accept</span>
+                        <span className="block text-slate-500 mt-0.5">
+                          I consent to receive automated SMS messages for access codes and booking updates.
+                        </span>
+                      </div>
+                    </label>
                  </div>
              </div>
 
