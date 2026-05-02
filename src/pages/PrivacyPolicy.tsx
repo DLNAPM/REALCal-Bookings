@@ -10,18 +10,14 @@ export const PrivacyPolicy: React.FC = () => {
   const [fullOptInUrl, setFullOptInUrl] = React.useState('');
 
   React.useEffect(() => {
-    // Determine the base URL by removing the /privacy path from the current URL
-    // This ensures that the generated URL matches the current domain and protocol exactly
-    const currentUrl = window.location.href;
-    const baseUrl = currentUrl.split('/privacy')[0];
-    const origin = window.location.origin && window.location.origin !== 'null' ? window.location.origin : (window.location.protocol + '//' + window.location.host);
-    
-    // If we're on the privacy page, baseUrl should be correct. Fallback to origin if split fails.
-    const urlBase = baseUrl || origin;
-    const url = `${urlBase}/opt-in`.replace(/([^:]\/)\/+/g, "$1"); // Ensure no double slashes except after protocol
-    
-    setFullOptInUrl(url);
-    console.log('QR Code URL:', url);
+    try {
+      // Create a clean URL for the opt-in page relative to the current origin
+      const url = new URL('/opt-in', window.location.href).href;
+      setFullOptInUrl(url);
+    } catch (e) {
+      // absolute fallback if URL constructor fails for any reason
+      setFullOptInUrl(`${window.location.protocol}//${window.location.host}/opt-in`);
+    }
   }, []);
 
   return (

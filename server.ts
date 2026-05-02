@@ -1,11 +1,15 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
+import { fileURLToPath } from "url";
 import Stripe from "stripe";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = process.env.PORT || 3000;
 
   // Use JSON parsing for typical API requests
   app.use(express.json());
@@ -205,25 +209,28 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    // Production serving with robust ESM path resolution
-    const __dirname = path.resolve();
-    const distPath = path.join(__dirname, "dist");
+    // Production serving
+    const distPath = path.resolve(__dirname, "dist");
     
+    // Serve static files from the dist directory
     app.use(express.static(distPath));
     
+    // SPA fallback: return index.html for any unknown routes
     app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"), (err) => {
+      const indexPath = path.join(distPath, "index.html");
+      res.sendFile(indexPath, (err) => {
         if (err) {
-          console.error("Error sending index.html:", err);
-          res.status(500).send("Server Error: index.html not found. Please verify the build.");
+          console.error("Critical: index.html not found at", indexPath);
+          res.status(500).send(`Server Error: index.html not found. (Searching at: ${indexPath}). Please check your production build.`);
         }
       });
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+  app.listen(Number(PORT), "0.0.0.0", () => {
+    console.log(`Server running on http://0.0.0.0:${PORT}`);
   });
 }
 
 startServer().catch(console.error);
+
