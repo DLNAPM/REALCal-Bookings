@@ -7,6 +7,8 @@ import Stripe from "stripe";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+import fs from "fs";
+
 async function startServer() {
   const app = express();
   const PORT = process.env.PORT || 3000;
@@ -217,13 +219,38 @@ async function startServer() {
     
     // SPA fallback: return index.html for any unknown routes
     app.get("*", (req, res) => {
-      const indexPath = path.join(distPath, "index.html");
-      res.sendFile(indexPath, (err) => {
-        if (err) {
-          console.error("Critical: index.html not found at", indexPath);
-          res.status(500).send(`Server Error: index.html not found. (Searching at: ${indexPath}). Please check your production build.`);
-        }
-      });
+      // Specifically avoid catching API routes that might have failed to avoid recursive confusion
+      if (req.path.startsWith('/api/')) {
+        console.warn(`404 API Route: ${req.path}`);
+        return res.status(404).json({ error: `API route ${req.path} not found` });
+      }
+
+      // Try multiple possible paths for index.html to increase resilience
+      const possibleIndexPaths = [
+        path.join(distPath, "index.html"),
+        path.join(process.cwd(), "dist", "index.html"),
+        path.resolve("./dist/index.html")
+      ];
+
+      const validPath = possibleIndexPaths.find(p => fs.existsSync(p));
+
+      if (validPath) {
+        res.sendFile(validPath);
+      } else {
+        console.error("Critical: Could not find index.html in any expected location.");
+        res.status(500).send(`
+          <div style="font-family: sans-serif; padding: 2rem; max-width: 600px; margin: 0 auto;">
+            <h1 style="color: #e11d48;">Server Error</h1>
+            <p>The application could not find the main entry file (index.html).</p>
+            <p><strong>Checked paths:</strong></p>
+            <ul style="background: #f1f5f9; padding: 1rem; border-radius: 0.5rem; list-style: none;">
+              ${possibleIndexPaths.map(p => `<li style="margin-bottom: 0.5rem; font-family: monospace; font-size: 0.8rem;">${p}</li>`).join('')}
+            </ul>
+            <p><strong>Current directory:</strong> <code style="background: #f1f5f9; padding: 0.2rem 0.4rem; border-radius: 0.2rem;">${process.cwd()}</code></p>
+            <p style="color: #64748b; font-size: 0.9rem;">Please ensure 'npm run build' was successful and the 'dist' directory exists.</p>
+          </div>
+        `);
+      }
     });
   }
 

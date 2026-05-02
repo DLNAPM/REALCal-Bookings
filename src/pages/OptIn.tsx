@@ -3,12 +3,21 @@ import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
-import { Calendar as CalendarIcon, ShieldCheck, Mail, MessageSquare, AlertCircle } from 'lucide-react';
+import { Calendar as CalendarIcon, ShieldCheck, Mail, MessageSquare, AlertCircle, LogIn } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { signIn } from '../lib/firebase';
 
 export const OptIn: React.FC = () => {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const navigate = useNavigate();
+
+  const handleSignIn = async () => {
+    try {
+      await signIn();
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const handleConsent = async (accepted: boolean) => {
     if (!user || !db) return;
@@ -79,19 +88,32 @@ export const OptIn: React.FC = () => {
             </div>
 
             <div className="flex flex-col sm:flex-row gap-4 pt-4">
-              <button 
-                onClick={() => handleConsent(true)}
-                className="flex-1 bg-indigo-600 text-white font-bold py-4 rounded-2xl shadow-lg shadow-indigo-200 hover:bg-indigo-500 transition-all transform hover:-translate-y-0.5 active:translate-y-0"
-              >
-                Accept and Continue
-              </button>
-              <button 
-                onClick={() => handleConsent(false)}
-                className="px-8 py-4 text-slate-400 font-bold hover:text-slate-600 transition-colors"
-                title="You may not be able to browse properties without opting in"
-              >
-                Decline
-              </button>
+              {loading ? (
+                <div className="flex-1 bg-slate-100 animate-pulse h-14 rounded-2xl"></div>
+              ) : user ? (
+                <>
+                  <button 
+                    onClick={() => handleConsent(true)}
+                    className="flex-1 bg-indigo-600 text-white font-bold py-4 rounded-2xl shadow-lg shadow-indigo-200 hover:bg-indigo-500 transition-all transform hover:-translate-y-0.5"
+                  >
+                    Accept and Continue
+                  </button>
+                  <button 
+                    onClick={() => handleConsent(false)}
+                    className="px-8 py-4 text-slate-400 font-bold hover:text-slate-600 transition-colors"
+                  >
+                    Decline
+                  </button>
+                </>
+              ) : (
+                <button 
+                  onClick={handleSignIn}
+                  className="flex-1 bg-slate-900 text-white font-bold py-4 rounded-2xl shadow-lg flex items-center justify-center gap-3 hover:bg-indigo-600 transition-all transform hover:-translate-y-0.5"
+                >
+                  <LogIn size={20} />
+                  Login to Manage Preferences
+                </button>
+              )}
             </div>
             
             <p className="text-center text-[10px] text-slate-400 uppercase tracking-widest font-bold">

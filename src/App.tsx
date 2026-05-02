@@ -29,6 +29,7 @@ export default function App() {
            <Route path="/my-bookings" element={<MyBookings />} />
            <Route path="/opt-in" element={<OptIn />} />
            <Route path="/privacy" element={<PrivacyPolicy />} />
+           <Route path="*" element={<Home />} />
         </Routes>
         <HelpModal />
       </BrowserRouter>
