@@ -106,13 +106,18 @@ export const OptIn: React.FC = () => {
                   </button>
                 </>
               ) : (
-                <button 
-                  onClick={handleSignIn}
-                  className="flex-1 bg-slate-900 text-white font-bold py-4 rounded-2xl shadow-lg flex items-center justify-center gap-3 hover:bg-indigo-600 transition-all transform hover:-translate-y-0.5"
-                >
-                  <LogIn size={20} />
-                  Login to Manage Preferences
-                </button>
+                <div className="flex-1 space-y-4">
+                  <button 
+                    onClick={handleSignIn}
+                    className="w-full bg-slate-900 text-white font-bold py-4 rounded-2xl shadow-lg flex items-center justify-center gap-3 hover:bg-indigo-600 transition-all transform hover:-translate-y-0.5"
+                  >
+                    <LogIn size={20} />
+                    Login with Booking Email to Consent
+                  </button>
+                  <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl text-blue-800 text-[11px] font-bold leading-relaxed text-center italic">
+                    VENDORS: This page serves as our official verification portal for communication consent. Users must log in with their registered booking email to confirm preferences.
+                  </div>
+                </div>
               )}
             </div>
             
