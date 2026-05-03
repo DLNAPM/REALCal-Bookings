@@ -11,12 +11,12 @@ export const PrivacyPolicy: React.FC = () => {
 
   React.useEffect(() => {
     try {
-      // Create a clean URL for the opt-in page relative to the current origin
-      const url = new URL('/opt-in', window.location.href).href;
+      // Create a clean URL for the legal consent document relative to the current origin
+      const url = new URL('/consent_document.html', window.location.href).href;
       setFullOptInUrl(url);
     } catch (e) {
       // absolute fallback if URL constructor fails for any reason
-      setFullOptInUrl(`${window.location.protocol}//${window.location.host}/opt-in`);
+      setFullOptInUrl(`${window.location.protocol}//${window.location.host}/consent_document.html`);
     }
   }, []);
 
