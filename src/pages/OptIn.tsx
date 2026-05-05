@@ -3,13 +3,15 @@ import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
-import { Calendar as CalendarIcon, ShieldCheck, Mail, MessageSquare, AlertCircle, LogIn } from 'lucide-react';
+import { Calendar as CalendarIcon, ShieldCheck, Mail, MessageSquare, AlertCircle, LogIn, CheckCircle2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { signIn } from '../lib/firebase';
+import { motion, AnimatePresence } from 'motion/react';
 
 export const OptIn: React.FC = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const [showSuccess, setShowSuccess] = React.useState(false);
 
   const handleSignIn = async () => {
     try {
@@ -26,6 +28,12 @@ export const OptIn: React.FC = () => {
         tollFreeAccept: accepted
       });
       if (accepted) {
+        setShowSuccess(true);
+        // Automatically navigate after 3 seconds
+        setTimeout(() => {
+          navigate('/');
+        }, 3500);
+      } else {
         navigate('/');
       }
     } catch (err) {
@@ -131,6 +139,43 @@ export const OptIn: React.FC = () => {
       <footer className="py-8 text-center text-slate-400 text-sm">
         &copy; 2026 C.&.S.H. Group Properties &bull; Trusted Automation
       </footer>
+
+      <AnimatePresence>
+        {showSuccess && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-6"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              className="bg-white rounded-[32px] p-8 md:p-12 max-w-lg w-full text-center shadow-2xl relative overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 w-full h-2 bg-indigo-600"></div>
+              
+              <div className="w-20 h-20 bg-green-50 text-green-600 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-sm border border-green-100 ring-8 ring-green-50/50">
+                <CheckCircle2 size={40} />
+              </div>
+              
+              <h2 className="text-3xl font-bold text-slate-900 mb-4 tracking-tight">Thank You!</h2>
+              <p className="text-lg text-slate-600 mb-8 leading-relaxed">
+                Thank you for your consent to receive <span className="font-bold text-indigo-600 italic">SMS and Email Updates</span>. You can now access all property information and guest services.
+              </p>
+              
+              <button 
+                onClick={() => navigate('/')}
+                className="w-full bg-slate-900 text-white font-bold py-4 rounded-2xl hover:bg-indigo-600 transition-all flex items-center justify-center gap-2"
+              >
+                Browse Properties
+              </button>
+              
+              <p className="mt-6 text-sm text-slate-400 italic">Redirecting you shortly...</p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
