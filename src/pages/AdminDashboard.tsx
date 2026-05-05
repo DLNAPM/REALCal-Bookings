@@ -6,7 +6,7 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { format, eachDayOfInterval, parseISO, addDays } from 'date-fns';
 import { cn } from '../lib/utils';
 import { BlackoutDate, PricingRule, Booking, Property, PropertyManager } from '../types';
-import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight } from 'lucide-react';
+import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight, RefreshCw } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 export const AdminDashboard: React.FC = () => {
@@ -18,6 +18,7 @@ export const AdminDashboard: React.FC = () => {
   const [pricingRules, setPricingRules] = useState<PricingRule[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
   const [activePropertyId, setActivePropertyId] = useState<string | null>(null);
+  const [refreshingUsers, setRefreshingUsers] = useState(false);
   const [pricingTarget, setPricingTarget] = useState<'property' | 'room'>('property');
   const [selectedRoomForPricing, setSelectedRoomForPricing] = useState<string | null>(null);
   const [blackoutTarget, setBlackoutTarget] = useState<'property' | 'room'>('property');
@@ -91,6 +92,20 @@ export const AdminDashboard: React.FC = () => {
         setEditingBedrooms([]);
     }
   }, [activePropertyId, properties]);
+
+  const handleRefreshUsers = async () => {
+    if (!db) return;
+    setRefreshingUsers(true);
+    try {
+      const snap = await getDocs(query(collection(db, 'users')));
+      setUsers(snap.docs.map(d => ({ uid: d.id, ...d.data() })));
+    } catch (error) {
+      console.error("Manual refresh users error:", error);
+    } finally {
+      // Small timeout to give visual feedback
+      setTimeout(() => setRefreshingUsers(false), 600);
+    }
+  };
 
   const totalRevenue = bookings.filter(b => b.status === 'confirmed').reduce((sum, b) => sum + b.totalPrice, 0);
   const totalCancellations = bookings.filter(b => b.status === 'cancelled').length;
@@ -822,7 +837,22 @@ export const AdminDashboard: React.FC = () => {
           </div>
 
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm mt-8">
-             <h2 className="text-xl font-bold mb-6 flex items-center gap-2"><Users className="text-indigo-600" size={20}/> User Directory & Consent</h2>
+             <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-bold flex items-center gap-2"><Users className="text-indigo-600" size={20}/> User Directory & Consent</h2>
+                <button 
+                  onClick={handleRefreshUsers}
+                  disabled={refreshingUsers}
+                  className={cn(
+                    "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all",
+                    refreshingUsers 
+                      ? "bg-slate-100 text-slate-400 cursor-not-allowed" 
+                      : "bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white"
+                  )}
+                >
+                  <RefreshCw size={16} className={cn(refreshingUsers && "animate-spin")} />
+                  {refreshingUsers ? 'Refreshing...' : 'Refresh Directory'}
+                </button>
+             </div>
              <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left">
                    <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-y border-slate-100">
