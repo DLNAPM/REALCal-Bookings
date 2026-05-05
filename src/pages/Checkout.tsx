@@ -214,6 +214,10 @@ export const Checkout: React.FC = () => {
 
   if (loading) return <div>Loading...</div>;
   if (!user) return <Navigate to="/" />;
+  
+  if (user && user.tollFreeAccept !== true) {
+    return <Navigate to="/opt-in" replace />;
+  }
 
   if (!propertyId || !checkIn || !checkOut || !priceDetails) return <Navigate to="/" />;
 

@@ -18,7 +18,7 @@ export const Home: React.FC = () => {
             handleSignIn();
             return;
         }
-        if (!user.tollFreeAccept) {
+        if (user.tollFreeAccept === undefined) {
             navigate('/opt-in');
             return;
         }

@@ -13,7 +13,7 @@ export const PropertyDetail: React.FC = () => {
     const [property, setProperty] = useState<Property | null>(null);
     const [loading, setLoading] = useState(true);
 
-    if (user && !user.tollFreeAccept && !authLoading) {
+    if (user && user.tollFreeAccept === undefined && !authLoading) {
         return <Navigate to="/opt-in" replace />;
     }
 
