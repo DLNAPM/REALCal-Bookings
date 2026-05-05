@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { format, addDays, getDay, isBefore, isSameDay, startOfDay, addMonths, subMonths, eachDayOfInterval } from 'date-fns';
 import { collection, onSnapshot, query, where, doc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { useAuth } from '../contexts/AuthContext';
 import { BlackoutDate, PricingRule } from '../types';
 import { Property } from '../types';
 import { cn } from '../lib/utils';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { ChevronLeft, ChevronRight, Lock } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
 
 export const Calendar: React.FC<{ 
     propertyId: string, 
@@ -17,6 +18,7 @@ export const Calendar: React.FC<{
     onSaveEdit?: (checkIn: string, checkOut: string, priceDetails: any) => void,
     onCancelEdit?: () => void
 }> = ({ propertyId, property, isEditMode, initialCheckIn, initialCheckOut, onSaveEdit, onCancelEdit }) => {
+  const { user } = useAuth();
   const [currentMonth, setCurrentMonth] = useState(initialCheckIn ? startOfDay(new Date(initialCheckIn)) : startOfDay(new Date()));
   const [checkIn, setCheckIn] = useState<Date | null>(initialCheckIn ? new Date(initialCheckIn) : null);
   const [checkOut, setCheckOut] = useState<Date | null>(initialCheckOut ? new Date(initialCheckOut) : null);
@@ -426,6 +428,15 @@ export const Calendar: React.FC<{
               </div>
             )}
             
+            {user && user.tollFreeAccept !== true && !isEditMode && (
+               <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-amber-200 text-xs text-center leading-relaxed font-medium mb-4">
+                  <p className="flex items-center justify-center gap-1.5 mb-2 font-bold uppercase tracking-wider text-[10px]">
+                     <Lock size={12} className="text-amber-500" /> Checkout Restricted
+                  </p>
+                  To proceed with this booking, you must first accept our <Link to="/opt-in" className="text-amber-500 underline hover:text-amber-400">Communication Consent</Link> for SMS & Email updates.
+               </div>
+            )}
+            
             <button 
               onClick={() => {
                   if (isEditMode && onSaveEdit && checkIn && checkOut && priceDetails) {
@@ -434,8 +445,8 @@ export const Calendar: React.FC<{
                       handleBook();
                   }
               }}
-              disabled={!checkIn || !checkOut}
-              className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-2xl transition-colors flex items-center justify-center gap-2 disabled:bg-slate-700 disabled:text-slate-500"
+              disabled={!checkIn || !checkOut || (user && user.tollFreeAccept !== true && !isEditMode)}
+              className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-2xl transition-colors flex items-center justify-center gap-2 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed"
             >
               {isEditMode ? 'Save Changes' : 'Proceed to Checkout'}
             </button>
