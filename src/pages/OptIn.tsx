@@ -1,12 +1,59 @@
 import React from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, setDoc } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import { Calendar as CalendarIcon, ShieldCheck, Mail, MessageSquare, AlertCircle, LogIn, CheckCircle2, Info } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { signIn } from '../lib/firebase';
+import { signIn, auth } from '../lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
+
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  }
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth?.currentUser?.uid,
+      email: auth?.currentUser?.email,
+      emailVerified: auth?.currentUser?.emailVerified,
+      isAnonymous: auth?.currentUser?.isAnonymous,
+      tenantId: auth?.currentUser?.tenantId,
+      providerInfo: auth?.currentUser?.providerData?.map(provider => ({
+        providerId: provider.providerId,
+        email: provider.email,
+      })) || []
+    },
+    operationType,
+    path
+  }
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
 
 export const OptIn: React.FC = () => {
   const { user, loading } = useAuth();
@@ -24,10 +71,12 @@ export const OptIn: React.FC = () => {
 
   const handleConsent = async (accepted: boolean) => {
     if (!user || !db) return;
+    const userPath = `users/${user.uid}`;
     try {
-      await updateDoc(doc(db, 'users', user.uid), {
+      await setDoc(doc(db, 'users', user.uid), {
         tollFreeAccept: accepted
-      });
+      }, { merge: true });
+      
       if (accepted) {
         setShowSuccess(true);
         // Automatically navigate after 3.5 seconds
@@ -42,8 +91,7 @@ export const OptIn: React.FC = () => {
         }, 6000);
       }
     } catch (err) {
-      console.error("Failed to update consent", err);
-      alert("Error updating consent. Please try again.");
+      handleFirestoreError(err, OperationType.WRITE, userPath);
     }
   };
 

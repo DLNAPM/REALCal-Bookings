@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { auth, db } from '../lib/firebase';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 
 export interface AuthUser {
   uid: string;
@@ -29,19 +29,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    let userUnsubscribe: (() => void) | null = null;
+
+    const authUnsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      // Clear existing snapshot listener
+      if (userUnsubscribe) {
+        userUnsubscribe();
+        userUnsubscribe = null;
+      }
+
       if (firebaseUser) {
-        // Sync user to firestore
         const userRef = doc(db!, 'users', firebaseUser.uid);
-        const userSnap = await getDoc(userRef);
         
+        // Ensure user document exists
+        const userSnap = await getDoc(userRef);
         let role: 'user' | 'admin' = 'user';
         if (firebaseUser.email === 'dlaniger.napm.consulting@gmail.com') {
           role = 'admin';
         }
 
         if (!userSnap.exists()) {
-          // Create user
           await setDoc(userRef, {
             email: firebaseUser.email || '',
             displayName: firebaseUser.displayName || 'Guest',
@@ -49,27 +56,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             role,
             createdAt: serverTimestamp(),
           });
-        } else {
-          role = userSnap.data().role || 'user';
-          // Ensure bootstrap email is always forced admin if rule checking works correctly 
-          if(firebaseUser.email === 'dlaniger.napm.consulting@gmail.com') role = 'admin';
         }
 
-        setUser({
-          uid: firebaseUser.uid,
-          email: firebaseUser.email || '',
-          displayName: firebaseUser.displayName || 'Guest',
-          photoURL: firebaseUser.photoURL || '',
-          role,
-          tollFreeAccept: userSnap.exists() ? userSnap.data().tollFreeAccept : undefined,
+        // Set up real-time listener for the user record
+        userUnsubscribe = onSnapshot(userRef, (docSnap) => {
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            let currentRole = data.role || 'user';
+            if (firebaseUser.email === 'dlaniger.napm.consulting@gmail.com') {
+              currentRole = 'admin';
+            }
+
+            setUser({
+              uid: firebaseUser.uid,
+              email: firebaseUser.email || '',
+              displayName: firebaseUser.displayName || 'Guest',
+              photoURL: firebaseUser.photoURL || '',
+              role: currentRole as 'user' | 'admin',
+              tollFreeAccept: data.tollFreeAccept,
+            });
+            setLoading(false);
+          }
+        }, (error) => {
+          console.error("User snapshot error:", error);
+          setLoading(false);
         });
       } else {
         setUser(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
-    return unsubscribe;
+    return () => {
+      authUnsubscribe();
+      if (userUnsubscribe) userUnsubscribe();
+    };
   }, []);
 
   return <AuthContext.Provider value={{ user, loading }}>{children}</AuthContext.Provider>;
