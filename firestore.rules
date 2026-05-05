@@ -156,7 +156,7 @@ service cloud.firestore {
 
     match /bookings/{bookingId} {
       allow get: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
-      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn(); // Allow listing for calendar availability checks
       
       allow create: if isSignedIn() && isValidId(bookingId) && 
         isValidBooking(incoming()) && 
@@ -164,7 +164,7 @@ service cloud.firestore {
         incoming().updatedAt == request.time &&
         (incoming().status in ['pending', 'confirmed', 'cancelled'] || isAdmin());
         
-      allow update: if isVerified() && isValidId(bookingId) &&
+      allow update: if isSignedIn() && isValidId(bookingId) &&
         isValidBooking(incoming()) &&
         incoming().userId == existing().userId &&
         incoming().createdAt == existing().createdAt &&

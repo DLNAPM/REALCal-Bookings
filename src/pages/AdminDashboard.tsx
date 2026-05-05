@@ -39,11 +39,21 @@ export const AdminDashboard: React.FC = () => {
 
   useEffect(() => {
     if (!db) return;
-    onSnapshot(query(collection(db, 'users')), (snap) => setUsers(snap.docs.map(d => ({ uid: d.id, ...d.data() }))));
-    onSnapshot(query(collection(db, 'bookings')), (snap) => setBookings(snap.docs.map(d => ({id: d.id, ...d.data() } as Booking))));
-    onSnapshot(query(collection(db, 'blackout_dates')), (snap) => setBlackouts(snap.docs.map(d => ({id: d.id, ...d.data() } as BlackoutDate))));
-    onSnapshot(query(collection(db, 'pricing_rules')), (snap) => setPricingRules(snap.docs.map(d => ({id: d.id, ...d.data() } as PricingRule))));
-    onSnapshot(query(collection(db, 'property_managers')), (snap) => setPropertyManagers(snap.docs.map(d => ({id: d.id, ...d.data() } as PropertyManager))));
+    onSnapshot(query(collection(db, 'users')), (snap) => setUsers(snap.docs.map(d => ({ uid: d.id, ...d.data() }))), (error) => {
+      console.error("Admin users snapshot error:", error);
+    });
+    onSnapshot(query(collection(db, 'bookings')), (snap) => setBookings(snap.docs.map(d => ({id: d.id, ...d.data() } as Booking))), (error) => {
+      console.error("Admin bookings snapshot error:", error);
+    });
+    onSnapshot(query(collection(db, 'blackout_dates')), (snap) => setBlackouts(snap.docs.map(d => ({id: d.id, ...d.data() } as BlackoutDate))), (error) => {
+      console.error("Admin blackout dates snapshot error:", error);
+    });
+    onSnapshot(query(collection(db, 'pricing_rules')), (snap) => setPricingRules(snap.docs.map(d => ({id: d.id, ...d.data() } as PricingRule))), (error) => {
+      console.error("Admin pricing rules snapshot error:", error);
+    });
+    onSnapshot(query(collection(db, 'property_managers')), (snap) => setPropertyManagers(snap.docs.map(d => ({id: d.id, ...d.data() } as PropertyManager))), (error) => {
+      console.error("Admin property managers snapshot error:", error);
+    });
     onSnapshot(doc(db, 'global_settings', 'settings'), (snap) => {
         if (snap.exists()) {
             setGlobalSettings(snap.data());
@@ -56,12 +66,16 @@ export const AdminDashboard: React.FC = () => {
                 ]
             });
         }
+    }, (error) => {
+      console.error("Admin settings snapshot error:", error);
     });
 
     onSnapshot(query(collection(db, 'properties'), orderBy('createdAt', 'desc')), (snap) => {
         const props = snap.docs.map(d => ({id: d.id, ...d.data() } as Property));
         setProperties(props);
         if (props.length > 0 && !activePropertyId) setActivePropertyId(props[0].id);
+    }, (error) => {
+      console.error("Admin properties snapshot error:", error);
     });
   }, []);
 

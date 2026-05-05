@@ -37,15 +37,23 @@ export const Calendar: React.FC<{
     if (!propertyId || !db) return;
     const unsubRules = onSnapshot(query(collection(db, 'pricing_rules'), where('propertyId', '==', propertyId)), (snap) => {
       setPricingRules(snap.docs.map(d => ({ id: d.id, ...d.data() } as PricingRule)));
+    }, (error) => {
+      console.error("Calendar pricing rules snapshot error:", error);
     });
     const unsubBlackouts = onSnapshot(query(collection(db, 'blackout_dates'), where('propertyId', '==', propertyId)), (snap) => {
       setBlackoutDates(snap.docs.map(d => ({ id: d.id, ...d.data() } as BlackoutDate)));
+    }, (error) => {
+      console.error("Calendar blackout dates snapshot error:", error);
     });
     const unsubBookings = onSnapshot(query(collection(db, 'bookings'), where('propertyId', '==', propertyId)), (snap) => {
       setBookings(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (error) => {
+      console.error("Calendar bookings snapshot error:", error);
     });
     const unsubSettings = onSnapshot(doc(db, 'global_settings', 'settings'), (snap) => {
         if(snap.exists()) setGlobalSettings(snap.data());
+    }, (error) => {
+      console.error("Calendar global settings snapshot error:", error);
     });
     return () => { unsubRules(); unsubBlackouts(); unsubBookings(); unsubSettings(); };
   }, [propertyId]);

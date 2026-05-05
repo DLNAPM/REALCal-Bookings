@@ -38,6 +38,8 @@ export const Home: React.FC = () => {
             const canViewTestProps = user && user.email && allowedTestEmails.includes(user.email);
             
             setProperties(allProperties.filter(p => !p.isTestProperty || canViewTestProps));
+        }, (error) => {
+            console.error("Home properties snapshot error:", error);
         });
         return unsub;
     }, [user]);
