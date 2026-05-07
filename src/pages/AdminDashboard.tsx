@@ -26,7 +26,7 @@ export const AdminDashboard: React.FC = () => {
   const [selectedBlackoutIds, setSelectedBlackoutIds] = useState<string[]>([]);
   const [propertyManagers, setPropertyManagers] = useState<PropertyManager[]>([]);
   const [editingManagerId, setEditingManagerId] = useState<string | null>(null);
-  const [editingBedrooms, setEditingBedrooms] = useState<{ roomNumber: string; roomLockNumber: string; type: 'Master Bed' | 'Guest Bedroom' }[]>([]);
+  const [editingBedrooms, setEditingBedrooms] = useState<{ roomNumber: string; roomLockNumber: string; type: 'Master Bed' | 'Guest Bedroom'; sqFt: number; fee: number }[]>([]);
   
   const [globalSettings, setGlobalSettings] = useState<any>(null);
   
@@ -973,32 +973,137 @@ export const AdminDashboard: React.FC = () => {
 
                              <button type="submit" className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-indigo-500 transition-colors">Update Info</button>
                          </div>
-                         <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
-                             <h4 className="font-bold">Bedrooms</h4>
-                             {editingBedrooms.map((b, i) => (
-                                 <div key={i} className="flex gap-2 text-sm bg-white p-2 rounded border border-slate-200">
-                                     <span>{b.type}: {b.roomNumber} (Lock: {b.roomLockNumber}, {b.sqFt} sq ft, Fee: ${b.fee})</span>
-                                     <button type="button" onClick={() => setEditingBedrooms(prev => prev.filter((_, idx) => idx !== i))} className="text-red-500 ml-auto">X</button>
+                         <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
+                             <div className="flex justify-between items-center bg-white p-3 rounded-xl border border-slate-100 shadow-sm mb-2">
+                                <h4 className="font-bold text-slate-800">Bedrooms Configuration</h4>
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50 px-2 py-1 rounded-md">{editingBedrooms.length} Rooms Total</span>
+                             </div>
+                             
+                             <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+                                 {editingBedrooms.map((b, i) => (
+                                     <div key={i} className="p-4 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow relative group">
+                                         <button 
+                                            type="button" 
+                                            onClick={() => setEditingBedrooms(prev => prev.filter((_, idx) => idx !== i))} 
+                                            className="absolute top-3 right-3 text-slate-300 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-lg transition-all"
+                                         >
+                                             <Trash2 size={16} />
+                                         </button>
+
+                                         <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
+                                            <div className="col-span-1">
+                                                <label className="text-[10px] uppercase font-black text-slate-400 block mb-1.5 tracking-wider">Room Number</label>
+                                                <input 
+                                                    type="text" 
+                                                    value={b.roomNumber} 
+                                                    onChange={(e) => {
+                                                        const newRooms = [...editingBedrooms];
+                                                        newRooms[i] = { ...newRooms[i], roomNumber: e.target.value };
+                                                        setEditingBedrooms(newRooms);
+                                                    }}
+                                                    className="w-full border border-slate-200 rounded-xl p-2.5 text-sm bg-slate-50 hover:bg-white focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all outline-none font-semibold text-slate-700" 
+                                                />
+                                            </div>
+                                            <div className="col-span-1">
+                                                <label className="text-[10px] uppercase font-black text-slate-400 block mb-1.5 tracking-wider">Lock #</label>
+                                                <input 
+                                                    type="text" 
+                                                    value={b.roomLockNumber} 
+                                                    onChange={(e) => {
+                                                        const newRooms = [...editingBedrooms];
+                                                        newRooms[i] = { ...newRooms[i], roomLockNumber: e.target.value };
+                                                        setEditingBedrooms(newRooms);
+                                                    }}
+                                                    className="w-full border border-slate-200 rounded-xl p-2.5 text-sm bg-slate-50 hover:bg-white focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all outline-none font-semibold text-slate-700" 
+                                                />
+                                            </div>
+                                            <div className="col-span-1">
+                                                <label className="text-[10px] uppercase font-black text-slate-400 block mb-1.5 tracking-wider">Sq Ft</label>
+                                                <input 
+                                                    type="number" 
+                                                    value={b.sqFt} 
+                                                    onChange={(e) => {
+                                                        const newRooms = [...editingBedrooms];
+                                                        newRooms[i] = { ...newRooms[i], sqFt: parseInt(e.target.value) || 0 };
+                                                        setEditingBedrooms(newRooms);
+                                                    }}
+                                                    className="w-full border border-slate-200 rounded-xl p-2.5 text-sm bg-slate-50 hover:bg-white focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all outline-none font-semibold text-slate-700" 
+                                                />
+                                            </div>
+                                            <div className="col-span-1">
+                                                <label className="text-[10px] uppercase font-black text-slate-400 block mb-1.5 tracking-wider">Per Night Fee ($)</label>
+                                                <input 
+                                                    type="number" 
+                                                    value={b.fee} 
+                                                    onChange={(e) => {
+                                                        const newRooms = [...editingBedrooms];
+                                                        newRooms[i] = { ...newRooms[i], fee: parseInt(e.target.value) || 0 };
+                                                        setEditingBedrooms(newRooms);
+                                                    }}
+                                                    className="w-full border border-indigo-100 rounded-xl p-2.5 text-sm bg-indigo-50/30 hover:bg-white focus:bg-white focus:ring-2 focus:ring-indigo-200 transition-all outline-none font-bold text-indigo-600" 
+                                                />
+                                            </div>
+                                            <div className="col-span-2">
+                                                <label className="text-[10px] uppercase font-black text-slate-400 block mb-1.5 tracking-wider">Room Type</label>
+                                                <select 
+                                                    value={b.type} 
+                                                    onChange={(e) => {
+                                                        const newRooms = [...editingBedrooms];
+                                                        newRooms[i] = { ...newRooms[i], type: e.target.value as 'Master Bed' | 'Guest Bedroom' };
+                                                        setEditingBedrooms(newRooms);
+                                                    }}
+                                                    className="w-full border border-slate-200 rounded-xl p-2.5 text-sm bg-slate-50 hover:bg-white focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all outline-none font-semibold text-slate-700"
+                                                >
+                                                    <option value="Master Bed">Master Bed</option>
+                                                    <option value="Guest Bedroom">Guest Bedroom</option>
+                                                </select>
+                                            </div>
+                                         </div>
+                                     </div>
+                                 ))}
+                                 {editingBedrooms.length === 0 && (
+                                     <div className="text-center py-10 bg-white rounded-2xl border border-dashed border-slate-200 text-slate-400 text-sm italic">
+                                         No rooms added yet. Use the tool below to add bedrooms.
+                                     </div>
+                                 )}
+                             </div>
+                             
+                             <div className="bg-white p-6 rounded-2xl border-2 border-indigo-100 shadow-lg shadow-indigo-100/20 space-y-4">
+                                 <h5 className="text-xs font-black uppercase text-indigo-500 tracking-widest flex items-center gap-2">
+                                     <Plus size={14} /> Add New Bedroom
+                                 </h5>
+                                 <div className="grid grid-cols-2 gap-3">
+                                     <input type="text" id="newRoomNumber" placeholder="Room #" className="p-3 border border-slate-200 rounded-xl text-sm bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-100 focus:bg-white transition-all" />
+                                     <input type="text" id="newRoomLock" placeholder="Lock #" className="p-3 border border-slate-200 rounded-xl text-sm bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-100 focus:bg-white transition-all" />
+                                     <input type="number" id="newRoomSqFt" placeholder="Sq Ft" className="p-3 border border-slate-200 rounded-xl text-sm bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-100 focus:bg-white transition-all" />
+                                     <input type="number" id="newRoomFee" placeholder="Fee ($)" className="p-3 border border-slate-200 rounded-xl text-sm bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-100 focus:bg-white transition-all" />
                                  </div>
-                             ))}
-                             <input type="text" id="newRoomNumber" placeholder="Room Number" className="w-full p-2 border rounded" />
-                             <input type="text" id="newRoomLock" placeholder="Lock #" className="w-full p-2 border rounded" />
-                             <input type="number" id="newRoomSqFt" placeholder="Sq ft." className="w-full p-2 border rounded" />
-                             <input type="number" id="newRoomFee" placeholder="Fee ($)" className="w-full p-2 border rounded" />
-                             <select id="newRoomType" className="w-full p-2 border rounded">
-                                 <option value="Master Bed">Master Bed</option>
-                                 <option value="Guest Bedroom">Guest Bedroom</option>
-                             </select>
-                             <button type="button" onClick={() => {
-                                 const roomNumber = (document.getElementById('newRoomNumber') as HTMLInputElement).value;
-                                 const roomLockNumber = (document.getElementById('newRoomLock') as HTMLInputElement).value;
-                                 const sqFt = parseInt((document.getElementById('newRoomSqFt') as HTMLInputElement).value || '0');
-                                 const fee = parseInt((document.getElementById('newRoomFee') as HTMLInputElement).value || '0');
-                                 const type = (document.getElementById('newRoomType') as HTMLSelectElement).value as 'Master Bed' | 'Guest Bedroom';
-                                 if(roomNumber && roomLockNumber) {
-                                     setEditingBedrooms(prev => [...prev, { roomNumber, roomLockNumber, type, sqFt, fee }]);
-                                 }
-                             }} className="w-full bg-slate-800 text-white p-2 rounded font-bold">Add Room</button>
+                                 <select id="newRoomType" className="w-full p-3 border border-slate-200 rounded-xl text-sm bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-100 focus:bg-white transition-all">
+                                     <option value="Master Bed">Master Bed</option>
+                                     <option value="Guest Bedroom">Guest Bedroom</option>
+                                 </select>
+                                 <button 
+                                     type="button" 
+                                     onClick={() => {
+                                         const roomNumber = (document.getElementById('newRoomNumber') as HTMLInputElement).value;
+                                         const roomLockNumber = (document.getElementById('newRoomLock') as HTMLInputElement).value;
+                                         const sqFt = parseInt((document.getElementById('newRoomSqFt') as HTMLInputElement).value || '0');
+                                         const fee = parseInt((document.getElementById('newRoomFee') as HTMLInputElement).value || '0');
+                                         const type = (document.getElementById('newRoomType') as HTMLSelectElement).value as 'Master Bed' | 'Guest Bedroom';
+                                         if(roomNumber && roomLockNumber) {
+                                             setEditingBedrooms(prev => [...prev, { roomNumber, roomLockNumber, type, sqFt, fee }]);
+                                             // Reset inputs
+                                             (document.getElementById('newRoomNumber') as HTMLInputElement).value = '';
+                                             (document.getElementById('newRoomLock') as HTMLInputElement).value = '';
+                                             (document.getElementById('newRoomSqFt') as HTMLInputElement).value = '';
+                                             (document.getElementById('newRoomFee') as HTMLInputElement).value = '';
+                                         }
+                                     }} 
+                                     className="w-full bg-indigo-600 hover:bg-slate-900 text-white p-3.5 rounded-xl font-bold shadow-md shadow-indigo-100 transition-all flex items-center justify-center gap-2"
+                                 >
+                                     <Plus size={18} /> Add Room to List
+                                 </button>
+                             </div>
                          </div>
                          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm">
                              <div className="flex justify-between items-center mb-4">
