@@ -212,10 +212,12 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     // Production serving
-    const distPath = path.resolve(process.cwd(), "dist");
+    const distPath = path.resolve(__dirname, "dist");
     
     // Serve static files from the dist directory
-    app.use(express.static(distPath));
+    // We use index: false because we handle the index.html serving via the wildcard route 
+    // to ensure client-side routing works for all deep links
+    app.use(express.static(distPath, { index: false }));
     
     // SPA fallback: return index.html for any unknown routes
     app.get("*", (req, res) => {
@@ -227,11 +229,11 @@ async function startServer() {
       // Serve index.html for all other routes to support SPA routing
       const indexPath = path.join(distPath, "index.html");
       
-      // Additional check to handle direct access to routes like /opt-in
       res.sendFile(indexPath, (err) => {
         if (err) {
           console.error("Critical: index.html not found at", indexPath);
-          res.status(500).send("Application Error: Main entry file missing. Please check the build output.");
+          // If index.html is missing, the build might have failed or the path is wrong
+          res.status(500).send("Application Error: Main entry file missing. If you just deployed, please ensure the build command 'npm run build' completed successfully.");
         }
       });
     });
