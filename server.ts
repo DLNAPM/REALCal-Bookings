@@ -212,26 +212,27 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     // Production serving
-    const distPath = path.join(process.cwd(), "dist");
+    const distPath = path.resolve(__dirname, "dist");
     
     console.log(`Production mode: serving static files from ${distPath}`);
 
-    // 1. Serve static files first
+    // Serve static files from the dist directory
     app.use(express.static(distPath));
     
-    // 2. Catch-all for SPA routes - MUST be after static and API routes
-    app.get("*", (req, res) => {
+    // SPA fallback: return index.html for any unknown routes
+    app.all("*", (req, res) => {
       // Don't handle API routes as SPA
       if (req.path.startsWith('/api/')) {
+        console.log(`API 404: ${req.path}`);
         return res.status(404).json({ error: "API route not found" });
       }
 
       const indexPath = path.join(distPath, "index.html");
+      console.log(`SPA Fallback: Serving ${indexPath} for ${req.path}`);
       
-      // Send the index.html file for any unknown route to let terminal React router handle it
       res.sendFile(indexPath, (err) => {
         if (err) {
-          console.error("Error sending index.html:", err);
+          console.error(`Error sending index.html from ${indexPath}:`, err);
           res.status(500).send("The application is currently building or index.html is missing. Please refresh in a moment.");
         }
       });
