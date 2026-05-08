@@ -94,9 +94,14 @@ export const Home: React.FC = () => {
                                 </button>
                             </div>
                         ) : (
-                            <button onClick={handleSignIn} className="px-6 py-2.5 bg-slate-900 text-white font-bold rounded-xl hover:bg-indigo-600 transition-colors text-sm shadow-md">
-                                Login to Book
-                            </button>
+                            <div className="flex items-center gap-4">
+                                <Link to="/opt-in" className="text-slate-500 hover:text-indigo-600 font-bold text-xs uppercase tracking-widest transition-colors mr-2">
+                                    Opt-In Preview
+                                </Link>
+                                <button onClick={handleSignIn} className="px-6 py-2.5 bg-slate-900 text-white font-bold rounded-xl hover:bg-indigo-600 transition-colors text-sm shadow-md">
+                                    Login to Book
+                                </button>
+                            </div>
                         )}
                     </div>
                 </div>
@@ -227,9 +232,14 @@ export const Home: React.FC = () => {
                 <p className="text-sm text-slate-500">
                     By using &quot;REALCal Bookings&quot;, you agree to the terms outlined in this <button onClick={() => setIsPrivacyOpen(true)} className="text-indigo-600 hover:text-indigo-700 hover:underline font-medium focus:outline-none">Privacy Policy</button>.
                 </p>
-                <Link to="/privacy" className="text-xs text-slate-400 hover:text-indigo-600 font-bold uppercase tracking-widest mt-2 transition-colors">
-                    Dedicated Privacy Policy Link &bull; Vendor Verification
-                </Link>
+                <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 mt-4">
+                  <Link to="/privacy" className="text-xs text-slate-400 hover:text-indigo-600 font-bold uppercase tracking-widest transition-colors">
+                      Privacy Policy &bull; Vendor Verification
+                  </Link>
+                  <Link to="/opt-in" className="text-xs text-slate-400 hover:text-indigo-600 font-bold uppercase tracking-widest transition-colors">
+                      Opt-In Consent &bull; Preview Mode
+                  </Link>
+                </div>
             </footer>
 
             <PrivacyPolicyModal isOpen={isPrivacyOpen} onClose={() => setIsPrivacyOpen(false)} />
