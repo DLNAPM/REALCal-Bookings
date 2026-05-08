@@ -212,32 +212,29 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     // Production serving
-    const distPath = path.resolve(__dirname, "dist");
+    const distPath = path.join(process.cwd(), "dist");
     
-    // Log for debugging
     console.log(`Production mode: serving static files from ${distPath}`);
 
-    // Serve static files from the dist directory
+    // 1. Serve static files first
     app.use(express.static(distPath));
     
-    // SPA fallback: return index.html for any unknown routes
+    // 2. Catch-all for SPA routes - MUST be after static and API routes
     app.get("*", (req, res) => {
       // Don't handle API routes as SPA
       if (req.path.startsWith('/api/')) {
         return res.status(404).json({ error: "API route not found" });
       }
 
-      const indexPath = path.resolve(distPath, "index.html");
+      const indexPath = path.join(distPath, "index.html");
       
-      // Additional fallback check for index.html existence
-      if (fs.existsSync(indexPath)) {
-        res.sendFile(indexPath);
-      } else {
-        console.error("Critical: index.html not found! Build might be broken or path incorrect.");
-        // If index.html is truly missing, the server would normally infinite loop or 404
-        // We provide a clear error message instead
-        res.status(500).send("Application Build Error: index.html is missing. Please contact support.");
-      }
+      // Send the index.html file for any unknown route to let terminal React router handle it
+      res.sendFile(indexPath, (err) => {
+        if (err) {
+          console.error("Error sending index.html:", err);
+          res.status(500).send("The application is currently building or index.html is missing. Please refresh in a moment.");
+        }
+      });
     });
   }
 
