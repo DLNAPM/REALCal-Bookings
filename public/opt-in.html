@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Opt-In Consent | REALCal Bookings</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .animate-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+        .modal { transition: opacity 0.3s ease-out; }
+    </style>
+</head>
+<body class="min-h-screen bg-slate-50 flex flex-col text-slate-900">
+
+    <header class="py-6 px-6 max-w-7xl mx-auto w-full">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200">
+                <i data-lucide="calendar" size="20"></i>
+            </div>
+            <h1 class="text-2xl font-bold tracking-tight text-slate-800">REALCal <span class="text-indigo-600">Bookings</span></h1>
+        </div>
+    </header>
+
+    <main class="flex-1 flex items-center justify-center p-6">
+        <div class="max-w-2xl w-full bg-white rounded-[32px] shadow-xl shadow-indigo-100/50 border border-slate-100 overflow-hidden">
+            <div class="p-8 md:p-12 text-center border-b border-slate-50">
+                <div class="w-20 h-20 bg-indigo-50 text-indigo-600 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-sm border border-indigo-100 ring-8 ring-indigo-50/50">
+                    <i data-lucide="shield-check" size="40"></i>
+                </div>
+                <h2 class="text-3xl font-extrabold text-slate-900 mb-4 tracking-tight">Stay Connected</h2>
+                <div id="preview-badge" class="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50 text-indigo-600 rounded-full text-[10px] font-black uppercase tracking-widest mb-4 border border-indigo-100">
+                    <span class="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse"></span>
+                    Preview Mode (Static Portal)
+                </div>
+                <p class="text-lg text-slate-500 leading-relaxed">
+                    To provide you with the best experience, we need your consent to communicate important booking details and access codes.
+                </p>
+            </div>
+
+            <div class="p-8 md:p-12 space-y-8">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="p-6 bg-slate-50 rounded-2xl border border-slate-200 transition-all hover:border-indigo-200 hover:bg-indigo-50/30 group">
+                        <div class="w-12 h-12 bg-white rounded-xl flex items-center justify-center mb-4 shadow-sm text-indigo-600 group-hover:scale-110 transition-transform">
+                            <i data-lucide="message-square" size="24"></i>
+                        </div>
+                        <h3 class="font-bold text-slate-900 mb-2">SMS Notifications</h3>
+                        <p class="text-sm text-slate-500 leading-relaxed italic">
+                            Receive your York smart lock guest codes, check-in instructions, and urgent property updates via text messaging (SMS).
+                        </p>
+                    </div>
+                    <div class="p-6 bg-slate-50 rounded-2xl border border-slate-200 transition-all hover:border-indigo-200 hover:bg-indigo-50/30 group">
+                        <div class="w-12 h-12 bg-white rounded-xl flex items-center justify-center mb-4 shadow-sm text-blue-600 group-hover:scale-110 transition-transform">
+                            <i data-lucide="mail" size="24"></i>
+                        </div>
+                        <h3 class="font-bold text-slate-900 mb-2">Email Updates</h3>
+                        <p class="text-sm text-slate-500 leading-relaxed italic">
+                            Get your booking confirmations, digital receipts, and property guides sent directly to your inbox.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="bg-amber-50 border border-amber-200 rounded-2xl p-6 flex gap-4 items-start">
+                    <i data-lucide="alert-circle" class="text-amber-600 shrink-0 mt-0.5" size="20"></i>
+                    <div class="text-sm text-amber-800 leading-relaxed italic">
+                        <p class="font-bold mb-1">Opt-In Consent</p>
+                        By clicking "Accept and Continue", you expressly consent to receive automated messaging (SMS or text messaging) from REALCal Bookings at the phone number associated with your account. Messaging frequency varies. Message and data rates may apply. Reply STOP to opt-out at any time.
+                    </div>
+                </div>
+
+                <div class="flex flex-col sm:flex-row gap-4 pt-4">
+                    <button onclick="handleConsent(true)" class="flex-1 bg-indigo-600 text-white font-bold py-4 rounded-2xl shadow-lg shadow-indigo-200 hover:bg-indigo-500 transition-all transform hover:-translate-y-0.5">
+                        Accept and Continue
+                    </button>
+                    <button onclick="handleConsent(false)" class="px-8 py-4 text-slate-400 font-bold hover:text-slate-600 transition-colors">
+                        Decline
+                    </button>
+                </div>
+
+                <div class="space-y-4">
+                    <div class="relative">
+                        <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-slate-100"></div></div>
+                        <div class="relative flex justify-center text-[10px] uppercase font-bold tracking-widest text-slate-400">
+                            <span class="bg-white px-4 italic">Verification Required</span>
+                        </div>
+                    </div>
+
+                    <button onclick="window.location.href='/'" class="w-full bg-slate-900 text-white font-bold py-4 rounded-2xl shadow-lg flex items-center justify-center gap-3 hover:bg-indigo-600 transition-all transform hover:-translate-y-0.5">
+                        <i data-lucide="log-in" size="20"></i>
+                        Login to Save Official Preference
+                    </button>
+                    <div class="p-4 bg-blue-50 border border-blue-100 rounded-xl text-blue-800 text-[11px] font-bold leading-relaxed text-center italic">
+                        VENDORS: This page serves as our official verification portal for communication consent. Users must log in with their registered booking email to confirm preferences.
+                    </div>
+                </div>
+                
+                <p class="text-center text-[10px] text-slate-400 uppercase tracking-widest font-bold">
+                    Secure Opt-In Verification &bull; REALCal 2026
+                </p>
+            </div>
+        </div>
+    </main>
+
+    <footer class="py-8 text-center text-slate-400 text-sm">
+        &copy; 2026 C.&.S.H. Group Properties &bull; Trusted Automation
+    </footer>
+
+    <!-- Success Modal -->
+    <div id="success-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-6">
+        <div class="bg-white rounded-[32px] p-8 md:p-12 max-w-lg w-full text-center shadow-2xl relative overflow-hidden">
+            <div class="absolute top-0 left-0 w-full h-2 bg-indigo-600"></div>
+            <div class="w-20 h-20 bg-green-50 text-green-600 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-sm border border-green-100 ring-8 ring-green-50/50">
+                <i data-lucide="check-circle-2" size="40"></i>
+            </div>
+            <h2 class="text-3xl font-bold text-slate-900 mb-4 tracking-tight">Thank You!</h2>
+            <p class="text-lg text-slate-600 mb-8 leading-relaxed">
+                Thank you for your consent to receive <span class="font-bold text-indigo-600 italic">SMS and Email Updates</span>. You can now access all property information and guest services.
+            </p>
+            <button onclick="closeModals()" class="w-full bg-slate-900 text-white font-bold py-4 rounded-2xl hover:bg-indigo-600 transition-all">
+                Close Preview
+            </button>
+            <p class="mt-6 text-sm text-slate-400 italic">You are viewing a demonstration</p>
+        </div>
+    </div>
+
+    <!-- Decline Modal -->
+    <div id="decline-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-6">
+        <div class="bg-white rounded-[32px] p-8 md:p-12 max-w-lg w-full text-center shadow-2xl relative overflow-hidden">
+            <div class="absolute top-0 left-0 w-full h-2 bg-amber-500"></div>
+            <div class="w-20 h-20 bg-amber-50 text-amber-600 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-sm border border-amber-100 ring-8 ring-amber-50/50">
+                <i data-lucide="info" size="40"></i>
+            </div>
+            <h2 class="text-2xl font-bold text-slate-900 mb-4 tracking-tight">Preference Saved</h2>
+            <div class="text-slate-600 mb-8 leading-relaxed space-y-4 text-left p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                <p>You have chosen to <span class="font-bold text-amber-600">Decline</span> communication consent.</p>
+                <div class="p-3 bg-white rounded-xl border border-slate-200">
+                    <p class="text-sm font-medium">
+                        <span class="text-red-500 font-bold underline">PLEASE NOTE:</span> Although you will be able to see property dates and availability, you <span class="font-bold">will not be able to proceed to "Checkout"</span> unless you choose "Accept and Continue" in the Opt-in Consent section.
+                    </p>
+                </div>
+            </div>
+            <button onclick="closeModals()" class="w-full bg-slate-900 text-white font-bold py-4 rounded-2xl hover:bg-indigo-600 transition-all">
+                Close Preview
+            </button>
+            <p class="mt-6 text-sm text-slate-400 italic">Demonstration mode active</p>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+
+        function handleConsent(accepted) {
+            if (accepted) {
+                document.getElementById('success-modal').classList.remove('hidden');
+            } else {
+                document.getElementById('decline-modal').classList.remove('hidden');
+            }
+        }
+
+        function closeModals() {
+            document.getElementById('success-modal').classList.add('hidden');
+            document.getElementById('decline-modal').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>

@@ -219,6 +219,19 @@ async function startServer() {
     // Serve static files from the dist directory
     app.use(express.static(distPath));
     
+    // CUSTOM ROUTE: Specifically handle /opt-in to serve the static HTML file
+    // This ensures it works even on direct link or refresh without 404
+    app.get("/opt-in", (req, res) => {
+      const optInPath = path.resolve(distPath, "opt-in.html");
+      console.log(`Explicit Opt-In requested. Checking ${optInPath}`);
+      if (fs.existsSync(optInPath)) {
+        res.sendFile(optInPath);
+      } else {
+        // Fallback to React app if the static file is missing for some reason
+        res.sendFile(path.resolve(distPath, "index.html"));
+      }
+    });
+
     // SPA fallback: return index.html for any unknown routes
     app.all("*", (req, res) => {
       // Don't handle API routes as SPA
@@ -227,7 +240,7 @@ async function startServer() {
         return res.status(404).json({ error: "API route not found" });
       }
 
-      const indexPath = path.join(distPath, "index.html");
+      const indexPath = path.resolve(distPath, "index.html");
       console.log(`SPA Fallback: Serving ${indexPath} for ${req.path}`);
       
       res.sendFile(indexPath, (err) => {
