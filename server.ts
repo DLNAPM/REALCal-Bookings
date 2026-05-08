@@ -214,28 +214,30 @@ async function startServer() {
     // Production serving
     const distPath = path.resolve(__dirname, "dist");
     
+    // Log for debugging
+    console.log(`Production mode: serving static files from ${distPath}`);
+
     // Serve static files from the dist directory
-    // We use index: false because we handle the index.html serving via the wildcard route 
-    // to ensure client-side routing works for all deep links
-    app.use(express.static(distPath, { index: false }));
+    app.use(express.static(distPath));
     
     // SPA fallback: return index.html for any unknown routes
     app.get("*", (req, res) => {
-      // Specifically avoid catching API routes
+      // Don't handle API routes as SPA
       if (req.path.startsWith('/api/')) {
         return res.status(404).json({ error: "API route not found" });
       }
 
-      // Serve index.html for all other routes to support SPA routing
-      const indexPath = path.join(distPath, "index.html");
+      const indexPath = path.resolve(distPath, "index.html");
       
-      res.sendFile(indexPath, (err) => {
-        if (err) {
-          console.error("Critical: index.html not found at", indexPath);
-          // If index.html is missing, the build might have failed or the path is wrong
-          res.status(500).send("Application Error: Main entry file missing. If you just deployed, please ensure the build command 'npm run build' completed successfully.");
-        }
-      });
+      // Additional fallback check for index.html existence
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        console.error("Critical: index.html not found! Build might be broken or path incorrect.");
+        // If index.html is truly missing, the server would normally infinite loop or 404
+        // We provide a clear error message instead
+        res.status(500).send("Application Build Error: index.html is missing. Please contact support.");
+      }
     });
   }
 
