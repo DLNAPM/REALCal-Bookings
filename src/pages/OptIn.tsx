@@ -60,6 +60,7 @@ export const OptIn: React.FC = () => {
   const navigate = useNavigate();
   const [showSuccess, setShowSuccess] = React.useState(false);
   const [showDeclineMessage, setShowDeclineMessage] = React.useState(false);
+  const [isPreviewAction, setIsPreviewAction] = React.useState(false);
 
   const handleSignIn = async () => {
     try {
@@ -70,7 +71,26 @@ export const OptIn: React.FC = () => {
   };
 
   const handleConsent = async (accepted: boolean) => {
-    if (!user || !db) return;
+    if (!user) {
+      // Preview mode behavior
+      setIsPreviewAction(true);
+      if (accepted) {
+        setShowSuccess(true);
+        setTimeout(() => {
+          setShowSuccess(false);
+          setIsPreviewAction(false);
+        }, 3500);
+      } else {
+        setShowDeclineMessage(true);
+        setTimeout(() => {
+          setShowDeclineMessage(false);
+          setIsPreviewAction(false);
+        }, 6000);
+      }
+      return;
+    }
+
+    if (!db) return;
     const userPath = `users/${user.uid}`;
     try {
       await setDoc(doc(db, 'users', user.uid), {
@@ -113,6 +133,12 @@ export const OptIn: React.FC = () => {
               <ShieldCheck size={40} />
             </div>
             <h2 className="text-3xl font-extrabold text-slate-900 mb-4 tracking-tight">Stay Connected</h2>
+            {!user && !loading && (
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50 text-indigo-600 rounded-full text-[10px] font-black uppercase tracking-widest mb-4 border border-indigo-100">
+                <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse"></span>
+                Preview Mode
+              </div>
+            )}
             <p className="text-lg text-slate-500 leading-relaxed">
               To provide you with the best experience, we need your consent to communicate important booking details and access codes.
             </p>
@@ -151,36 +177,47 @@ export const OptIn: React.FC = () => {
             <div className="flex flex-col sm:flex-row gap-4 pt-4">
               {loading ? (
                 <div className="flex-1 bg-slate-100 animate-pulse h-14 rounded-2xl"></div>
-              ) : user ? (
-                <>
-                  <button 
-                    onClick={() => handleConsent(true)}
-                    className="flex-1 bg-indigo-600 text-white font-bold py-4 rounded-2xl shadow-lg shadow-indigo-200 hover:bg-indigo-500 transition-all transform hover:-translate-y-0.5"
-                  >
-                    Accept and Continue
-                  </button>
-                  <button 
-                    onClick={() => handleConsent(false)}
-                    className="px-8 py-4 text-slate-400 font-bold hover:text-slate-600 transition-colors"
-                  >
-                    Decline
-                  </button>
-                </>
               ) : (
-                <div className="flex-1 space-y-4">
-                  <button 
-                    onClick={handleSignIn}
-                    className="w-full bg-slate-900 text-white font-bold py-4 rounded-2xl shadow-lg flex items-center justify-center gap-3 hover:bg-indigo-600 transition-all transform hover:-translate-y-0.5"
-                  >
-                    <LogIn size={20} />
-                    Login with Booking Email to Consent
-                  </button>
-                  <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl text-blue-800 text-[11px] font-bold leading-relaxed text-center italic">
-                    VENDORS: This page serves as our official verification portal for communication consent. Users must log in with their registered booking email to confirm preferences.
+                <>
+                  <div className="flex-1 flex flex-col sm:flex-row gap-4">
+                    <button 
+                      onClick={() => handleConsent(true)}
+                      className="flex-1 bg-indigo-600 text-white font-bold py-4 rounded-2xl shadow-lg shadow-indigo-200 hover:bg-indigo-500 transition-all transform hover:-translate-y-0.5"
+                    >
+                      Accept and Continue
+                    </button>
+                    <button 
+                      onClick={() => handleConsent(false)}
+                      className="px-8 py-4 text-slate-400 font-bold hover:text-slate-600 transition-colors"
+                    >
+                      Decline
+                    </button>
                   </div>
-                </div>
+                </>
               )}
             </div>
+
+            {!user && !loading && (
+              <div className="space-y-4">
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-100"></div></div>
+                  <div className="relative flex justify-center text-[10px] uppercase font-bold tracking-widest text-slate-400">
+                    <span className="bg-white px-4 italic">Verification Required</span>
+                  </div>
+                </div>
+
+                <button 
+                  onClick={handleSignIn}
+                  className="w-full bg-slate-900 text-white font-bold py-4 rounded-2xl shadow-lg flex items-center justify-center gap-3 hover:bg-indigo-600 transition-all transform hover:-translate-y-0.5"
+                >
+                  <LogIn size={20} />
+                  Login with Booking Email to Save Preference
+                </button>
+                <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl text-blue-800 text-[11px] font-bold leading-relaxed text-center italic">
+                    VENDORS: This page serves as our official verification portal for communication consent. Users must log in with their registered booking email to confirm preferences.
+                </div>
+              </div>
+            )}
             
             <p className="text-center text-[10px] text-slate-400 uppercase tracking-widest font-bold">
               Secure Opt-In Verification &bull; REALCal 2026
@@ -218,13 +255,20 @@ export const OptIn: React.FC = () => {
               </p>
               
               <button 
-                onClick={() => navigate('/')}
+                onClick={() => {
+                  if (isPreviewAction) {
+                    setShowSuccess(false);
+                    setIsPreviewAction(false);
+                    return;
+                  }
+                  navigate('/');
+                }}
                 className="w-full bg-slate-900 text-white font-bold py-4 rounded-2xl hover:bg-indigo-600 transition-all flex items-center justify-center gap-2"
               >
-                Browse Properties
+                {isPreviewAction ? 'Close Preview' : 'Browse Properties'}
               </button>
               
-              <p className="mt-6 text-sm text-slate-400 italic">Redirecting you shortly...</p>
+              <p className="mt-6 text-sm text-slate-400 italic">{isPreviewAction ? 'You are viewing a demonstration' : 'Redirecting you shortly...'}</p>
             </motion.div>
           </motion.div>
         )}
@@ -262,13 +306,20 @@ export const OptIn: React.FC = () => {
               </div>
               
               <button 
-                onClick={() => navigate('/')}
+                onClick={() => {
+                  if (isPreviewAction) {
+                    setShowDeclineMessage(false);
+                    setIsPreviewAction(false);
+                    return;
+                  }
+                  navigate('/');
+                }}
                 className="w-full bg-slate-900 text-white font-bold py-4 rounded-2xl hover:bg-indigo-600 transition-all flex items-center justify-center gap-2"
               >
-                Continue to Browse
+                {isPreviewAction ? 'Close Preview' : 'Continue to Browse'}
               </button>
               
-              <p className="mt-6 text-sm text-slate-400 italic">Redirecting to properties...</p>
+              <p className="mt-6 text-sm text-slate-400 italic">{isPreviewAction ? 'Demonstration mode active' : 'Redirecting to properties...'}</p>
             </motion.div>
           </motion.div>
         )}
