@@ -626,8 +626,13 @@ export const AdminDashboard: React.FC = () => {
               </div>
               <button 
                 onClick={async () => {
-                  await signOut();
-                  navigate('/');
+                  try {
+                    await signOut();
+                    window.location.href = '/';
+                  } catch (err) {
+                    console.error("Logout error", err);
+                    window.location.reload();
+                  }
                 }} 
                 className="text-slate-400 hover:text-red-500 transition-colors p-2 bg-white rounded-full border border-slate-200 shadow-sm outline-none w-10 h-10 flex items-center justify-center cursor-pointer"
                 title="Logout"

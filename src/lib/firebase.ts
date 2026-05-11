@@ -34,6 +34,12 @@ export { app, db, auth, googleProvider };
 
 export async function signIn() {
   if (!auth) throw new Error("Firebase Auth is not initialized. Please configure Firebase Environment Variables.");
+  
+  // Force account selection prompt so users can switch accounts easily
+  googleProvider.setCustomParameters({
+    prompt: 'select_account'
+  });
+
   console.log("Starting Firebase signInWithPopup...");
   try {
     const result = await signInWithPopup(auth, googleProvider);

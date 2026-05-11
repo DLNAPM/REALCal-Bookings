@@ -59,6 +59,17 @@ export const Home: React.FC = () => {
         }
     };
 
+    const handleSignOut = async () => {
+        try {
+            await signOut();
+            // Force a reload to clear any internal state and ensure a clean slate
+            window.location.href = '/';
+        } catch (error) {
+            console.error("Sign out error:", error);
+            window.location.reload();
+        }
+    };
+
     return (
         <div className="min-h-screen bg-white flex flex-col font-sans text-slate-900 pb-12 overflow-x-hidden">
             <header className="pt-6 px-6 max-w-7xl mx-auto w-full z-10 relative">
@@ -95,7 +106,7 @@ export const Home: React.FC = () => {
                                     <p className="text-xs text-indigo-600 font-medium">Welcome back</p>
                                   </div>
                                 </div>
-                                <button onClick={signOut} className="text-slate-400 hover:text-red-500 transition-colors p-2 bg-white rounded-full border border-slate-200 shadow-sm">
+                                <button onClick={handleSignOut} className="text-slate-400 hover:text-red-500 transition-colors p-2 bg-white rounded-full border border-slate-200 shadow-sm">
                                    <LogOut size={16} />
                                 </button>
                             </div>
