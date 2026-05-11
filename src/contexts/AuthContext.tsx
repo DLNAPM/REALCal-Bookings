@@ -32,8 +32,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let userUnsubscribe: (() => void) | null = null;
 
     const authUnsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      console.log("Auth state changed:", firebaseUser ? `Logged in: ${firebaseUser.email}` : "Logged out");
+      
       // Clear existing snapshot listener
       if (userUnsubscribe) {
+        console.log("Clearing previous user snapshot listener");
         userUnsubscribe();
         userUnsubscribe = null;
       }
@@ -41,46 +44,60 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (firebaseUser) {
         const userRef = doc(db!, 'users', firebaseUser.uid);
         
-        // Ensure user document exists
-        const userSnap = await getDoc(userRef);
-        let role: 'user' | 'admin' = 'user';
-        if (firebaseUser.email === 'dlaniger.napm.consulting@gmail.com') {
-          role = 'admin';
-        }
+        try {
+          // Ensure user document exists
+          console.log("Checking for user document in Firestore...");
+          const userSnap = await getDoc(userRef);
+          let role: 'user' | 'admin' = 'user';
+          if (firebaseUser.email === 'dlaniger.napm.consulting@gmail.com') {
+            role = 'admin';
+          }
 
-        if (!userSnap.exists()) {
-          await setDoc(userRef, {
-            email: firebaseUser.email || '',
-            displayName: firebaseUser.displayName || 'Guest',
-            photoURL: firebaseUser.photoURL || '',
-            role,
-            createdAt: serverTimestamp(),
-          });
-        }
-
-        // Set up real-time listener for the user record
-        userUnsubscribe = onSnapshot(userRef, (docSnap) => {
-          if (docSnap.exists()) {
-            const data = docSnap.data();
-            let currentRole = data.role || 'user';
-            if (firebaseUser.email === 'dlaniger.napm.consulting@gmail.com') {
-              currentRole = 'admin';
-            }
-
-            setUser({
-              uid: firebaseUser.uid,
+          if (!userSnap.exists()) {
+            console.log("User document does not exist, creating...");
+            await setDoc(userRef, {
               email: firebaseUser.email || '',
               displayName: firebaseUser.displayName || 'Guest',
               photoURL: firebaseUser.photoURL || '',
-              role: currentRole as 'user' | 'admin',
-              tollFreeAccept: data.tollFreeAccept,
+              role,
+              createdAt: serverTimestamp(),
             });
-            setLoading(false);
+            console.log("User document created.");
           }
-        }, (error) => {
-          console.error("User snapshot error:", error);
+
+          // Set up real-time listener for the user record
+          console.log("Setting up real-time listener for user record");
+          userUnsubscribe = onSnapshot(userRef, (docSnap) => {
+            if (docSnap.exists()) {
+              const data = docSnap.data();
+              console.log("User doc update received:", data);
+              let currentRole = data.role || 'user';
+              if (firebaseUser.email === 'dlaniger.napm.consulting@gmail.com') {
+                currentRole = 'admin';
+              }
+
+              setUser({
+                uid: firebaseUser.uid,
+                email: firebaseUser.email || '',
+                displayName: firebaseUser.displayName || 'Guest',
+                photoURL: firebaseUser.photoURL || '',
+                role: currentRole as 'user' | 'admin',
+                tollFreeAccept: data.tollFreeAccept,
+              });
+              setLoading(false);
+            } else {
+              console.warn("User doc snapshot exists but is empty? (this shouldn't happen usually)");
+              setLoading(false);
+            }
+          }, (error) => {
+            console.error("User snapshot listener error:", error);
+            // This is critical: if rules block this, we must still stop loading
+            setLoading(false);
+          });
+        } catch (err) {
+          console.error("Error in onAuthStateChanged persistence logic:", err);
           setLoading(false);
-        });
+        }
       } else {
         setUser(null);
         setLoading(false);

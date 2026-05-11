@@ -16,6 +16,14 @@ async function startServer() {
   // Use JSON parsing for typical API requests
   app.use(express.json());
 
+  // Security headers for Firebase Auth popups
+  app.use((_req, res, next) => {
+    // unsafe-none is the most permissive and often required for complex iframe/popup auth flows
+    res.setHeader("Cross-Origin-Opener-Policy", "unsafe-none");
+    res.setHeader("Cross-Origin-Embedder-Policy", "unsafe-none");
+    next();
+  });
+
   // API Routes
   app.post("/api/provision-lock", async (req, res) => {
     try {

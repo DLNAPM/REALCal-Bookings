@@ -34,7 +34,19 @@ export { app, db, auth, googleProvider };
 
 export async function signIn() {
   if (!auth) throw new Error("Firebase Auth is not initialized. Please configure Firebase Environment Variables.");
-  return await signInWithPopup(auth, googleProvider);
+  console.log("Starting Firebase signInWithPopup...");
+  try {
+    const result = await signInWithPopup(auth, googleProvider);
+    console.log("Sign in successful for user:", result.user.email);
+    return result;
+  } catch (error: any) {
+    console.error("Firebase signInWithPopup error detail:", {
+      code: error.code,
+      message: error.message,
+      stack: error.stack
+    });
+    throw error;
+  }
 }
 
 export async function signOut() {

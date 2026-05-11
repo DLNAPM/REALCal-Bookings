@@ -14,6 +14,7 @@ export const Home: React.FC = () => {
     const navigate = useNavigate();
 
     const checkOptInAndNavigate = (path: string) => {
+        if (loading) return;
         if (!user) {
             handleSignIn();
             return;
@@ -69,7 +70,12 @@ export const Home: React.FC = () => {
                         <h1 className="text-2xl font-bold tracking-tight text-slate-800">REALCal <span className="text-indigo-600">Bookings</span></h1>
                     </div>
                     <div className="flex items-center gap-4">
-                        {!loading && user ? (
+                        {loading ? (
+                            <div className="flex items-center gap-2 px-4 py-2 bg-slate-100 rounded-xl">
+                                <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                                <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Verifying...</span>
+                            </div>
+                        ) : user ? (
                             <div className="flex items-center gap-4">
                                 {user.role === 'admin' && (
                                    <Link to="/admin" className="text-slate-600 hover:text-indigo-600 font-bold flex items-center gap-2 text-sm transition-colors rounded-lg px-3 py-2 hover:bg-slate-50">
@@ -121,16 +127,25 @@ export const Home: React.FC = () => {
                         Experience the ultimate property rental workflow. Select your dates, process payments securely, and receive smart lock access codes instantly out of the box.
                     </p>
                     <div className="flex justify-center gap-4">
-                        <button 
-                            onClick={() => checkOptInAndNavigate('#properties')} 
-                            className="px-8 py-4 bg-indigo-600 text-white font-bold rounded-xl shadow-lg shadow-indigo-200 hover:bg-indigo-500 transition-colors transform hover:-translate-y-0.5"
-                        >
-                            Browse Properties
-                        </button>
-                        {!user && (
-                            <button onClick={handleSignIn} className="px-8 py-4 bg-white text-slate-700 font-bold rounded-xl border border-slate-200 hover:border-indigo-200 hover:bg-indigo-50 transition-colors">
-                                Sign In Now
-                            </button>
+                        {loading ? (
+                            <div className="px-8 py-4 bg-slate-100 text-slate-400 font-bold rounded-xl flex items-center gap-3">
+                                <div className="w-5 h-5 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin"></div>
+                                Updating Session...
+                            </div>
+                        ) : (
+                            <>
+                                <button 
+                                    onClick={() => checkOptInAndNavigate('#properties')} 
+                                    className="px-8 py-4 bg-indigo-600 text-white font-bold rounded-xl shadow-lg shadow-indigo-200 hover:bg-indigo-500 transition-colors transform hover:-translate-y-0.5"
+                                >
+                                    Browse Properties
+                                </button>
+                                {!user && (
+                                    <button onClick={handleSignIn} className="px-8 py-4 bg-white text-slate-700 font-bold rounded-xl border border-slate-200 hover:border-indigo-200 hover:bg-indigo-50 transition-colors">
+                                        Sign In Now
+                                    </button>
+                                )}
+                            </>
                         )}
                     </div>
                 </div>
