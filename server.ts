@@ -18,8 +18,8 @@ async function startServer() {
 
   // Security headers for Firebase Auth popups
   app.use((_req, res, next) => {
-    // unsafe-none is the most permissive and often required for complex iframe/popup auth flows
-    res.setHeader("Cross-Origin-Opener-Policy", "unsafe-none");
+    // same-origin-allow-popups is generally the best for Firebase Auth within iframes
+    res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
     res.setHeader("Cross-Origin-Embedder-Policy", "unsafe-none");
     next();
   });
