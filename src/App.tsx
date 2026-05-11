@@ -14,6 +14,7 @@ import { AdminDashboard } from './pages/AdminDashboard';
 import { MyBookings } from './pages/MyBookings';
 import { OptIn } from './pages/OptIn';
 import { PrivacyPolicy } from './pages/PrivacyPolicy';
+import { TermsOfService } from './pages/TermsOfService';
 import { HelpModal } from './components/HelpModal';
 
 export default function App() {
@@ -29,6 +30,7 @@ export default function App() {
            <Route path="/my-bookings" element={<MyBookings />} />
            <Route path="/opt-in" element={<OptIn />} />
            <Route path="/privacy" element={<PrivacyPolicy />} />
+           <Route path="/terms" element={<TermsOfService />} />
            <Route path="*" element={<Home />} />
         </Routes>
         <HelpModal />

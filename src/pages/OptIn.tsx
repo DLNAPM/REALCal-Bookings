@@ -2,8 +2,8 @@ import React from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
-import { useNavigate } from 'react-router-dom';
-import { Calendar as CalendarIcon, ShieldCheck, Mail, MessageSquare, AlertCircle, LogIn, CheckCircle2, Info } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
+import { Calendar as CalendarIcon, ShieldCheck, Mail, MessageSquare, AlertCircle, LogIn, CheckCircle2, Info, Check } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { signIn, auth } from '../lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
@@ -61,6 +61,7 @@ export const OptIn: React.FC = () => {
   const [showSuccess, setShowSuccess] = React.useState(false);
   const [showDeclineMessage, setShowDeclineMessage] = React.useState(false);
   const [isPreviewAction, setIsPreviewAction] = React.useState(false);
+  const [smsConsent, setSmsConsent] = React.useState(false);
 
   const handleSignIn = async () => {
     try {
@@ -72,6 +73,10 @@ export const OptIn: React.FC = () => {
 
   const handleConsent = async (accepted: boolean) => {
     if (!user) {
+      if (accepted && !smsConsent) {
+        alert("Please check the explicit SMS consent box to continue.");
+        return;
+      }
       // Preview mode behavior
       setIsPreviewAction(true);
       if (accepted) {
@@ -92,6 +97,12 @@ export const OptIn: React.FC = () => {
 
     if (!db) return;
     const userPath = `users/${user.uid}`;
+    
+    if (accepted && !smsConsent) {
+      alert("Please check the explicit SMS consent box to continue.");
+      return;
+    }
+
     try {
       await setDoc(doc(db, 'users', user.uid), {
         tollFreeAccept: accepted
@@ -145,8 +156,26 @@ export const OptIn: React.FC = () => {
           </div>
 
           <div className="p-8 md:p-12 space-y-8">
+            <div className="space-y-4">
+               <h3 className="text-xl font-bold text-slate-900 border-l-4 border-indigo-600 pl-4">Sign up to get updates from REALCal Bookings by SMS</h3>
+               <p className="text-slate-500 text-sm leading-relaxed">
+                 Stay informed about your stay, receive smart lock access codes, and get urgent property updates directly on your phone.
+               </p>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200 transition-all hover:border-indigo-200 hover:bg-indigo-50/30 group">
+              <div className={cn(
+                "p-6 rounded-2xl border transition-all group relative cursor-pointer",
+                smsConsent ? "bg-indigo-50/50 border-indigo-200" : "bg-slate-50 border-slate-200 hover:border-indigo-200 hover:bg-indigo-50/30"
+              )} onClick={() => setSmsConsent(!smsConsent)}>
+                <div className="absolute top-4 right-4">
+                  <div className={cn(
+                    "w-6 h-6 rounded-md border-2 transition-all flex items-center justify-center",
+                    smsConsent ? "bg-indigo-600 border-indigo-600" : "bg-white border-slate-300"
+                  )}>
+                    {smsConsent && <Check size={16} className="text-white" />}
+                  </div>
+                </div>
                 <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center mb-4 shadow-sm text-indigo-600 group-hover:scale-110 transition-transform">
                   <MessageSquare size={24} />
                 </div>
@@ -154,6 +183,11 @@ export const OptIn: React.FC = () => {
                 <p className="text-sm text-slate-500 leading-relaxed italic">
                   Receive your York smart lock guest codes, check-in instructions, and urgent property updates via text messaging (SMS).
                 </p>
+                <div className="mt-4 flex items-center gap-2">
+                  <span className={cn("text-[10px] font-black uppercase tracking-widest", smsConsent ? "text-indigo-600" : "text-slate-400")}>
+                    {smsConsent ? "Consent Granted" : "Click to Opt-In"}
+                  </span>
+                </div>
               </div>
               <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200 transition-all hover:border-indigo-200 hover:bg-indigo-50/30 group">
                 <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center mb-4 shadow-sm text-blue-600 group-hover:scale-110 transition-transform">
@@ -163,14 +197,25 @@ export const OptIn: React.FC = () => {
                 <p className="text-sm text-slate-500 leading-relaxed italic">
                   Get your booking confirmations, digital receipts, and property guides sent directly to your inbox.
                 </p>
+                <div className="mt-4 flex items-center gap-2">
+                   <div className="w-5 h-5 bg-blue-100 rounded flex items-center justify-center">
+                     <Check size={12} className="text-blue-600" />
+                   </div>
+                   <span className="text-[10px] text-blue-600 font-black uppercase tracking-widest">Always Active</span>
+                </div>
               </div>
             </div>
 
             <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 flex gap-4 items-start">
               <AlertCircle className="text-amber-600 shrink-0 mt-0.5" size={20} />
               <div className="text-sm text-amber-800 leading-relaxed italic">
-                <p className="font-bold mb-1">Opt-In Consent</p>
-                By clicking &quot;Accept and Continue&quot;, you expressly consent to receive automated messaging (SMS or text messaging) from REALCal Bookings at the phone number associated with your account. Messaging frequency varies. Message and data rates may apply. Reply STOP to opt-out at any time.
+                <p className="font-bold mb-1">Opt-In Consent Disclosure</p>
+                By clicking &quot;Accept and Continue&quot;, you expressly consent to receive automated messaging (SMS or text messaging) from REALCal Bookings at the phone number associated with your account. 
+                <strong> Messaging frequency is once per Property Booked transaction (confirmation, check-in, check-out).</strong> Message and data rates may apply. Reply STOP to opt-out at any time. Reply HELP for assistance.
+                <div className="mt-4 pt-4 border-t border-amber-200 flex flex-wrap gap-4 font-bold not-italic">
+                  <Link to="/privacy" className="text-indigo-600 underline hover:text-indigo-800">Privacy Policy</Link>
+                  <Link to="/terms" className="text-indigo-600 underline hover:text-indigo-800">Terms of Service</Link>
+                </div>
               </div>
             </div>
 

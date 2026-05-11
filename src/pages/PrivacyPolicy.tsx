@@ -103,6 +103,12 @@ export const PrivacyPolicy: React.FC = () => {
                     To satisfy vendor verification and ensure Yorkshire smart lock code delivery, please visit our <button onClick={() => navigate('/opt-in')} className="text-indigo-600 underline font-bold group hover:text-indigo-500 transition-colors">dedicated Opt-in menu <ChevronRight size={14} className="inline group-hover:translate-x-0.5 transition-transform" /></button> to manage your communication preferences.
                   </p>
                   <div className="flex flex-wrap gap-3">
+                    <button 
+                      onClick={() => navigate('/terms')}
+                      className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-xs font-bold hover:bg-indigo-500 transition-all flex items-center gap-2"
+                    >
+                      View Terms of Service
+                    </button>
                     <a 
                       href={CONSENT_Doc_URL} 
                       target="_blank" 
