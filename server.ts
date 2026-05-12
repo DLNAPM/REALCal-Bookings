@@ -1,11 +1,21 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
-import path from "path";
 import { fileURLToPath } from "url";
+import path from "path";
 import Stripe from "stripe";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+let __filename: string;
+let __dirname: string;
+
+try {
+  __filename = fileURLToPath(import.meta.url);
+  __dirname = path.dirname(__filename);
+} catch (e) {
+  // @ts-ignore
+  __filename = typeof __filename !== 'undefined' ? __filename : '';
+  // @ts-ignore
+  __dirname = typeof __dirname !== 'undefined' ? __dirname : '';
+}
 
 import fs from "fs";
 
@@ -288,14 +298,18 @@ async function startServer() {
         to: to
       });
 
-      console.log("Twilio send result SID:", result.sid);
+      console.log("Twilio send result SID received:", result.sid);
       
-      res.json({ 
+      const payload = { 
         success: true, 
         messageId: result.sid || "UNKNOWN",
         status: result.status || "sent",
-        ts: Date.now()
-      });
+        server_time: new Date().toISOString(),
+        node_env: process.env.NODE_ENV || 'development'
+      };
+
+      console.log("Sending explicit JSON response body:", JSON.stringify(payload));
+      return res.status(200).json(payload);
     } catch (e: any) {
       console.error("Test SMS Detailed Error:", e);
       res.status(500).json({ 
