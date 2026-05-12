@@ -54,8 +54,8 @@ const processBooking = async (
     const payload: any = {
       userId: user.uid,
       propertyId: bookingDetails.propertyId,
-      checkIn: bookingDetails.checkIn,
-      checkOut: bookingDetails.checkOut,
+      checkIn: bookingDetails.checkIn.split('T')[0],
+      checkOut: bookingDetails.checkOut.split('T')[0],
       status: isTestMode ? 'confirmed' : 'pending', // Auto-confirm test bookings
       totalPrice: bookingDetails.priceDetails.grandTotal,
       guests: 1, // simplified for demo
@@ -98,8 +98,8 @@ const processBooking = async (
             body: JSON.stringify({
                managers,
                bookingDetails: {
-                  checkIn: bookingDetails.checkIn,
-                  checkOut: bookingDetails.checkOut,
+                  checkIn: bookingDetails.checkIn.split('T')[0],
+                  checkOut: bookingDetails.checkOut.split('T')[0],
                   totalAmount: Math.round(bookingDetails.priceDetails.grandTotal * 100),
                   propertyName: propertyName,
                   guestName: user.displayName,

@@ -136,9 +136,11 @@ export const MyBookings: React.FC = () => {
         if (!editingBooking || !user) return;
         try {
             const newTotal = Math.round(priceDetails.grandTotal * 100);
+            const cleanCheckIn = checkIn.split('T')[0];
+            const cleanCheckOut = checkOut.split('T')[0];
             await updateDoc(doc(db, 'bookings', editingBooking.id), {
-                checkIn: checkIn,
-                checkOut: checkOut,
+                checkIn: cleanCheckIn,
+                checkOut: cleanCheckOut,
                 totalPrice: newTotal,
                 updatedAt: serverTimestamp()
             });
@@ -162,8 +164,8 @@ export const MyBookings: React.FC = () => {
                        managers,
                        bookingDetails: {
                           isUpdate: true,
-                          checkIn: checkIn,
-                          checkOut: checkOut,
+                          checkIn: cleanCheckIn,
+                          checkOut: cleanCheckOut,
                           totalAmount: newTotal,
                           propertyName: editingBooking.propertyName || 'Property',
                           guestName: user.displayName,
@@ -180,8 +182,8 @@ export const MyBookings: React.FC = () => {
             // Refresh list locally
             setBookings(prev => prev.map(b => b.id === editingBooking.id ? { 
                 ...b, 
-                checkIn, 
-                checkOut,
+                checkIn: cleanCheckIn, 
+                checkOut: cleanCheckOut,
                 totalPrice: newTotal 
             } : b));
             
@@ -289,11 +291,11 @@ export const MyBookings: React.FC = () => {
                                         <div className="grid grid-cols-2 gap-4 mb-6">
                                             <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
                                                 <span className="block text-xs font-bold uppercase text-slate-400 tracking-wider mb-1">Check In</span>
-                                                <span className="font-medium text-slate-800">{booking.checkIn}</span>
+                                                <span className="font-medium text-slate-800">{booking.checkIn.split('T')[0]}</span>
                                             </div>
                                             <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
                                                 <span className="block text-xs font-bold uppercase text-slate-400 tracking-wider mb-1">Check Out</span>
-                                                <span className="font-medium text-slate-800">{booking.checkOut}</span>
+                                                <span className="font-medium text-slate-800">{booking.checkOut.split('T')[0]}</span>
                                             </div>
                                         </div>
 

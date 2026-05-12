@@ -553,8 +553,8 @@ export const AdminDashboard: React.FC = () => {
         const payload: any = {
            userId: payloadUserId,
            propertyId: formPropId,
-           checkIn: new Date(checkIn).toISOString(),
-           checkOut: new Date(checkOut).toISOString(),
+           checkIn: new Date(checkIn).toISOString().split('T')[0],
+           checkOut: new Date(checkOut).toISOString().split('T')[0],
            status: 'confirmed',
            totalPrice: Number(totalAmountStr),
            guests: 1,
