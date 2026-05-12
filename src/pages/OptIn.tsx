@@ -73,10 +73,6 @@ export const OptIn: React.FC = () => {
 
   const handleConsent = async (accepted: boolean) => {
     if (!user) {
-      if (accepted && !smsConsent) {
-        alert("Please check the explicit SMS consent box to continue.");
-        return;
-      }
       // Preview mode behavior
       setIsPreviewAction(true);
       if (accepted) {
@@ -98,17 +94,15 @@ export const OptIn: React.FC = () => {
     if (!db) return;
     const userPath = `users/${user.uid}`;
     
-    if (accepted && !smsConsent) {
-      alert("Please check the explicit SMS consent box to continue.");
-      return;
-    }
+    // tollFreeAccept will store the SMS preference (true = opt-in, false = opt-out)
+    const finalPreference = accepted ? smsConsent : false;
 
     try {
       await setDoc(doc(db, 'users', user.uid), {
-        tollFreeAccept: accepted
+        tollFreeAccept: finalPreference
       }, { merge: true });
       
-      if (accepted) {
+      if (finalPreference) {
         setShowSuccess(true);
         // Automatically navigate after 3.5 seconds
         setTimeout(() => {
@@ -116,7 +110,7 @@ export const OptIn: React.FC = () => {
         }, 3500);
       } else {
         setShowDeclineMessage(true);
-        // Automatically navigate after 6 seconds to ensure they read the warning
+        // Automatically navigate after 6 seconds
         setTimeout(() => {
           navigate('/');
         }, 6000);
@@ -183,11 +177,13 @@ export const OptIn: React.FC = () => {
                 <p className="text-sm text-slate-500 leading-relaxed italic">
                   Receive your York smart lock guest codes, check-in instructions, and urgent property updates via text messaging (SMS).
                 </p>
-                <div className="mt-4 flex items-center gap-2">
-                  <span className={cn("text-[10px] font-black uppercase tracking-widest", smsConsent ? "text-indigo-600" : "text-slate-400")}>
-                    {smsConsent ? "Consent Granted" : "Click to Opt-In"}
-                  </span>
-                </div>
+                {smsConsent && (
+                  <div className="mt-4 flex items-center gap-2">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600">
+                      Consent Granted
+                    </span>
+                  </div>
+                )}
               </div>
               <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200 transition-all hover:border-indigo-200 hover:bg-indigo-50/30 group">
                 <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center mb-4 shadow-sm text-blue-600 group-hover:scale-110 transition-transform">
@@ -210,6 +206,7 @@ export const OptIn: React.FC = () => {
               <AlertCircle className="text-amber-600 shrink-0 mt-0.5" size={20} />
               <div className="text-sm text-amber-800 leading-relaxed italic">
                 <p className="font-bold mb-1">Opt-In Consent Disclosure</p>
+                <p className="mb-2">Agreeing to receive SMS messages is optional and is not required to complete your booking or receive service.</p>
                 By clicking &quot;Accept and Continue&quot;, you expressly consent to receive automated messaging (SMS or text messaging) from REALCal Bookings at the phone number associated with your account. 
                 <strong> Messaging frequency is once per Property Booked transaction (confirmation, check-in, check-out).</strong> Message and data rates may apply. Reply STOP to opt-out at any time. Reply HELP for assistance.
                 <div className="mt-4 pt-4 border-t border-amber-200 flex flex-wrap gap-4 font-bold not-italic">
@@ -341,11 +338,11 @@ export const OptIn: React.FC = () => {
               <h2 className="text-2xl font-bold text-slate-900 mb-4 tracking-tight">Preference Saved</h2>
               <div className="text-slate-600 mb-8 leading-relaxed space-y-4 text-left p-6 bg-slate-50 rounded-2xl border border-slate-100">
                 <p>
-                  You have chosen to <span className="font-bold text-amber-600">Decline</span> communication consent. 
+                  You have chosen to <span className="font-bold text-amber-600">Opt-Out</span> of SMS communication. 
                 </p>
                 <div className="p-3 bg-white rounded-xl border border-slate-200">
                   <p className="text-sm font-medium">
-                    <span className="text-red-500 font-bold underline">PLEASE NOTE:</span> Although you will be able to see property dates and availability, you <span className="font-bold">will not be able to proceed to &quot;Checkout&quot;</span> unless you choose &quot;Accept and Continue&quot; in the Opt-in Consent section.
+                    <span className="text-indigo-600 font-bold underline">PLEASE NOTE:</span> You will still receive booking confirmations via email. Your preference has been saved and you can proceed to browse and book properties.
                   </p>
                 </div>
               </div>
