@@ -98,8 +98,12 @@ async function startServer() {
       // Initialize Resend
       let resend = null;
       if (process.env.RESEND_API_KEY) {
-        const { Resend } = await import('resend');
-        resend = new Resend(process.env.RESEND_API_KEY);
+        try {
+          const { Resend } = await import('resend');
+          resend = new Resend(process.env.RESEND_API_KEY);
+        } catch (e: any) {
+          console.error("Resend init failed:", e.message);
+        }
       }
       
       // Initialize Twilio
@@ -108,29 +112,25 @@ async function startServer() {
       const twilioToken = process.env.TWILIO_AUTH_TOKEN;
       const TWILIO_PHONE = process.env.TWILIO_PHONE_NUMBER;
       
-      console.log(`Twilio SID: ${twilioSid?.substring(0, 5)}... | Token: ${twilioToken ? "Configured" : "Missing"}`);
-
       if (twilioSid && twilioToken && twilioSid.startsWith('AC') && twilioSid !== 'AC_test_...') {
         try {
-          const twilio = (await import('twilio')).default;
-          // Check if it's the function directly or if we need to call it differently
-          if (typeof twilio === 'function') {
-            twilioClient = twilio(twilioSid, twilioToken);
+          const twilioExport = (await import('twilio')).default;
+          if (typeof twilioExport === 'function') {
+            twilioClient = twilioExport(twilioSid, twilioToken);
           } else {
-             // Fallback for different import structures
              const twilioPkg = await import('twilio');
              const clientFunc = twilioPkg.default || twilioPkg;
              twilioClient = (clientFunc as any)(twilioSid, twilioToken);
           }
-          console.log("Twilio client initialized successfully");
+          console.log("Twilio client initialized for notifications");
         } catch (initErr: any) {
-          console.error("Twilio initialization failed:", initErr.message);
+          console.error("Twilio notification init failed:", initErr.message);
         }
       }
 
       if (managers && managers.length > 0) {
         for (const m of managers) {
-            // Send Email
+            // Send Email to Manager
             if (resend) {
                try {
                   await resend.emails.send({
@@ -145,28 +145,25 @@ async function startServer() {
                   results.push(`Manager Email error for ${m.email}: ${e.message}`);
                }
             } else {
-               console.log(`[Mock Manager Email] To: ${m.email} | Subject: ${subject}`);
-               results.push(`Manager Email mocked to ${m.email}`);
+               results.push(`Manager Email skipped (not configured) for ${m.email}`);
             }
 
-            // Send SMS
+            // Send SMS to Manager
             if (twilioClient && m.phone && TWILIO_PHONE) {
                try {
-                  await twilioClient.messages.create({
+                  const msg = await twilioClient.messages.create({
                      body: textMsg,
                      from: TWILIO_PHONE,
                      to: m.phone
                   });
-                  console.log(`Manager SMS sent to ${m.phone}`);
+                  console.log(`Manager SMS sent to ${m.phone}, SID: ${msg.sid}`);
                   results.push(`Manager SMS sent to ${m.phone}`);
                } catch(e: any) {
                   console.error(`SMS error for ${m.phone}:`, e.message);
                   results.push(`Manager SMS failed for ${m.phone}: ${e.message}`);
                }
             } else if (m.phone) {
-               const reason = !twilioClient ? "Client not initialized" : (!TWILIO_PHONE ? "Sender phone missing" : "Unknown");
-               console.log(`[Mock Manager SMS] To: ${m.phone} | Body: ${textMsg} | Reason: ${reason}`);
-               results.push(`Manager SMS mocked to ${m.phone} (${reason})`);
+               results.push(`Manager SMS skipped/mocked for ${m.phone}`);
             }
         }
       }
@@ -175,11 +172,7 @@ async function startServer() {
       let guestText = `Hi ${guestName || 'Guest'},\n\nYour booking for ${propertyName} from ${new Date(checkIn).toLocaleDateString()} to ${new Date(checkOut).toLocaleDateString()} has been ${isUpdate ? 'updated' : 'confirmed'}!\nTotal: $${(totalAmount/100).toFixed(2)}\n\n`;
       
       if (accessCode) {
-          if (isTestProperty) {
-             guestText += `Since this is a test property, here is your simulated York Code for entry: ${accessCode}\n\n`;
-          } else {
-             guestText += `Your York Code for entry is: ${accessCode}\n\n`;
-          }
+          guestText += `Your access code for entry is: ${accessCode}\n\n`;
       }
       
       guestText += `Thank you for choosing us!`;
@@ -200,8 +193,7 @@ async function startServer() {
                 results.push(`Guest Email error for ${guestEmail}: ${e.message}`);
              }
          } else {
-             console.log(`[Mock Guest Email] To: ${guestEmail} | Subject: ${guestSubject} | Body: ${guestText}`);
-             results.push(`Guest Email mocked to ${guestEmail}`);
+             results.push(`Guest Email skipped for ${guestEmail}`);
          }
       }
 
@@ -209,21 +201,19 @@ async function startServer() {
       if (guestPhone) {
          if (twilioClient && TWILIO_PHONE) {
              try {
-                await twilioClient.messages.create({
+                const msg = await twilioClient.messages.create({
                    body: guestText,
                    from: TWILIO_PHONE,
                    to: guestPhone
                 });
-                console.log(`Guest SMS sent to ${guestPhone}`);
+                console.log(`Guest SMS sent to ${guestPhone}, SID: ${msg.sid}`);
                 results.push(`Guest SMS sent to ${guestPhone}`);
              } catch(e: any) {
                 console.error(`Guest SMS error for ${guestPhone}:`, e.message);
                 results.push(`Guest SMS failed for ${guestPhone}: ${e.message}`);
              }
          } else {
-             const reason = !twilioClient ? "Client not initialized" : (!TWILIO_PHONE ? "Sender phone missing" : "Unknown");
-             console.log(`[Mock Guest SMS] To: ${guestPhone} | Body: ${guestText} | Reason: ${reason}`);
-             results.push(`Guest SMS mocked to ${guestPhone} (${reason})`);
+             results.push(`Guest SMS skipped/mocked for ${guestPhone}`);
          }
       }
 
@@ -241,15 +231,17 @@ async function startServer() {
       const twilioToken = process.env.TWILIO_AUTH_TOKEN;
       const from = process.env.TWILIO_PHONE_NUMBER;
 
+      console.log(`Test SMS request to: ${to}`);
+
       if (!twilioSid || !twilioToken || !from || twilioSid === 'AC_test_...') {
         return res.status(400).json({ error: "Twilio credentials not configured in secrets." });
       }
 
       let twilioClient: any = null;
       try {
-        const twilio = (await import('twilio')).default;
-        if (typeof twilio === 'function') {
-          twilioClient = twilio(twilioSid, twilioToken);
+        const twilioExport = (await import('twilio')).default;
+        if (typeof twilioExport === 'function') {
+          twilioClient = twilioExport(twilioSid, twilioToken);
         } else {
            const twilioPkg = await import('twilio');
            const clientFunc = twilioPkg.default || twilioPkg;
@@ -269,12 +261,19 @@ async function startServer() {
         to: to
       });
 
-      res.json({ success: true, messageId: result.sid });
+      console.log("Twilio Test SMS Raw Result:", JSON.stringify(result, null, 2));
+
+      // Twilio SID can be in .sid or sometimes ._sid depending on internal state, 
+      // but usually .sid is the public getter.
+      const sid = result.sid || (result.data && result.data.sid);
+      
+      res.json({ success: true, messageId: sid || "Unknown SID" });
     } catch (e: any) {
       console.error("Test SMS Error:", e);
       res.status(500).json({ error: e.message });
     }
   });
+
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
