@@ -669,7 +669,7 @@ export const AdminDashboard: React.FC = () => {
     try {
       const res = await fetch("/api/ping");
       const text = await res.text();
-      alert("Ping! (v2.1)\nStatus: " + res.status + "\nResponse: " + text);
+      alert("Ping! (v2.7)\nStatus: " + res.status + "\nResponse: " + text);
     } catch (err: any) {
       alert("Ping failed: " + err.message + "\nCheck browser console for details.");
     }
