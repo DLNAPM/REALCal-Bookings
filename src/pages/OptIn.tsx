@@ -230,7 +230,13 @@ export const OptIn: React.FC = () => {
                     </button>
                     <button 
                       onClick={() => handleConsent(false)}
-                      className="px-8 py-4 text-slate-400 font-bold hover:text-slate-600 transition-colors"
+                      disabled={smsConsent}
+                      className={cn(
+                        "px-8 py-4 font-bold transition-all",
+                        smsConsent 
+                          ? "text-slate-200 cursor-not-allowed opacity-50" 
+                          : "text-slate-400 hover:text-slate-600 cursor-pointer"
+                      )}
                     >
                       Decline
                     </button>
