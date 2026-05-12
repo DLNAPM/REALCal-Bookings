@@ -793,7 +793,11 @@ export const AdminDashboard: React.FC = () => {
                     <form onSubmit={handleCreateManager} className="space-y-4">
                        <input name="name" required placeholder="Name (e.g. John Doe)" className="w-full border border-slate-200 rounded-xl p-2.5 bg-white shadow-sm" />
                        <input name="email" type="email" required placeholder="Email Address" className="w-full border border-slate-200 rounded-xl p-2.5 bg-white shadow-sm" />
-                       <input name="phone" required placeholder="Phone Number (e.g. +1...)" className="w-full border border-slate-200 rounded-xl p-2.5 bg-white shadow-sm" />
+                       <div className="flex items-center gap-1.5 mb-1 text-[9px] font-black uppercase tracking-widest text-slate-400 italic">
+                           <span>*</span>
+                           <span>E.164 Format Required (e.g., +14155552671)</span>
+                        </div>
+                        <input name="phone" required placeholder="Phone Number (e.g. +1...)" className="w-full border border-slate-200 rounded-xl p-2.5 bg-white shadow-sm" />
                        <button type="submit" className="w-full bg-indigo-600 text-white px-4 py-2.5 rounded-xl font-bold hover:bg-indigo-500 transition-colors">Save Contact</button>
                     </form>
                  </div>
@@ -806,7 +810,10 @@ export const AdminDashboard: React.FC = () => {
                               <form onSubmit={(e) => handleUpdateManager(e, m.id)} className="flex-1 flex flex-col gap-3 w-full">
                                   <div className="flex gap-2">
                                      <input name="name" defaultValue={m.name} required placeholder="Name" className="flex-1 border border-slate-200 rounded-lg p-2 text-sm bg-white shadow-sm" />
-                                     <input name="phone" defaultValue={m.phone} required placeholder="Phone" className="flex-1 border border-slate-200 rounded-lg p-2 text-sm bg-white shadow-sm" />
+                                     <div className="flex-1 flex flex-col gap-1">
+                                      <div className="text-[8px] font-black uppercase tracking-widest text-slate-400 italic leading-none mb-1">* E.164 Format Required</div>
+                                      <input name="phone" defaultValue={m.phone} required placeholder="Phone" className="w-full border border-slate-200 rounded-lg p-2 text-sm bg-white shadow-sm" />
+                                   </div>
                                   </div>
                                   <input name="email" type="email" defaultValue={m.email} required placeholder="Email Address" className="w-full border border-slate-200 rounded-lg p-2 text-sm bg-white shadow-sm" />
                                   <div className="flex gap-2 justify-end mt-1">

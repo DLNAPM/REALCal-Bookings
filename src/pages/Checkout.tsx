@@ -337,7 +337,11 @@ export const Checkout: React.FC = () => {
                     />
                  </div>
                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-1">Mobile Number (For Access Code SMS)</label>
+                    <div className="flex items-center gap-1.5 mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400 italic">
+                        <span>*</span>
+                        <span>Mobile number must be in E.164 format (e.g., +14155552671) for automated access codes</span>
+                     </div>
+                     <label className="block text-sm font-bold text-slate-700 mb-1">Mobile Number (For Access Code SMS)</label>
                     <input 
                        type="tel" 
                        value={guestPhone}
