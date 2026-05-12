@@ -61,8 +61,11 @@ async function startServer() {
       const { amount, currency = "usd", metadata } = req.body;
       
       const key = process.env.STRIPE_SECRET_KEY;
-      if (!key) {
-        throw new Error("STRIPE_SECRET_KEY environment variable is required");
+      console.log(`Payment Intent request: Amount=${amount}, Secret Key Present: ${!!key}`);
+
+      if (!key || key === "sk_test_...") {
+        console.warn("Stripe Secret Key is missing or using placeholder.");
+        return res.status(400).json({ error: "STRIPE_SECRET_KEY is not configured on the server." });
       }
       
       const stripe = new Stripe(key);

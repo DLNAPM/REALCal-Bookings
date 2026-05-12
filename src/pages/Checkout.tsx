@@ -187,11 +187,15 @@ export const Checkout: React.FC = () => {
   
   const [clientSecret, setClientSecret] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [stripeConfigError, setStripeConfigError] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
   const [guestEmail, setGuestEmail] = useState('');
   const [guestPhone, setGuestPhone] = useState('');
   const [property, setProperty] = useState<Property | null>(null);
   const isTestProperty = !!property?.isTestProperty;
+  
+  const hasPublishableKey = !!import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY && import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY !== 'pk_test_placeholder';
+
   const [selectedBedroom, setSelectedBedroom] = useState<any>(location.state?.selectedBedroom || null);
   const navigate = useNavigate();
   
@@ -222,6 +226,8 @@ export const Checkout: React.FC = () => {
   if (!propertyId || !checkIn || !checkOut || !priceDetails) return <Navigate to="/" />;
 
   useEffect(() => {
+    setStripeConfigError(null);
+    
     fetch('/api/create-payment-intent', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -234,25 +240,33 @@ export const Checkout: React.FC = () => {
         const text = await res.text();
         if (!text) {
            setClientSecret('MOCK_TEST_MODE');
+           setStripeConfigError("No response from server.");
            return;
         }
         const data = JSON.parse(text);
         if (!res.ok) {
            console.error("Stripe Error:", data?.error);
            setClientSecret('MOCK_TEST_MODE');
+           setStripeConfigError(data.error || "Server error occurred");
            return;
         }
         setClientSecret(data.clientSecret || 'MOCK_TEST_MODE');
+        
+        if (!hasPublishableKey) {
+          setStripeConfigError("VITE_STRIPE_PUBLISHABLE_KEY is missing on the client.");
+        }
       } catch (err) {
         console.error("Payment intent JSON parse error:", err);
         setClientSecret('MOCK_TEST_MODE');
+        setStripeConfigError("Failed to parse server response.");
       }
     })
     .catch((err) => {
        console.error("Payment intent fetch error:", err);
        setClientSecret('MOCK_TEST_MODE');
+       setStripeConfigError("Network error connecting to payment service.");
     });
-  }, [priceDetails]);
+  }, [priceDetails, hasPublishableKey]);
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
@@ -360,7 +374,11 @@ export const Checkout: React.FC = () => {
 
              {clientSecret === 'MOCK_TEST_MODE' ? (
                 <div className="p-6 bg-amber-50 border border-amber-200 rounded-2xl md:mt-8">
-                   <p className="text-amber-800 font-medium mb-4 text-sm">Stripe is not configured in this environment (STRIPE_SECRET_KEY missing). You can bypass payment for end-to-end testing.</p>
+                   <p className="text-amber-800 font-bold mb-2 text-sm">Stripe Testing Mode Active</p>
+                    <p className="text-amber-700 text-sm mb-4">
+                       {stripeConfigError || "Stripe is not fully configured."}
+                       <span className="block mt-2 font-semibold">You can bypass payment to test the flow.</span>
+                    </p>
                    <div className="flex flex-col gap-3">
                      <button 
                        disabled={processing}
