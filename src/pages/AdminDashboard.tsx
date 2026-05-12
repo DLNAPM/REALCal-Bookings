@@ -633,18 +633,20 @@ export const AdminDashboard: React.FC = () => {
       });
       
       const text = await res.text();
+      console.log("Raw SMS Response:", text);
       let data;
       try {
         data = text ? JSON.parse(text) : {};
       } catch (parseErr) {
         console.error("Failed to parse SMS response:", text);
-        throw new Error("Server returned non-JSON response: " + (text.substring(0, 50) || "Empty body"));
+        alert("Parse Error. Raw text: " + text);
+        throw new Error("Server returned non-JSON response");
       }
 
       if (res.ok) {
-        alert("Server Response: " + JSON.stringify(data));
+        alert("Debug - Raw Text: " + text + "\nData: " + JSON.stringify(data));
       } else {
-        alert("SMS Failed (Status " + res.status + "): " + (data.error || JSON.stringify(data)));
+        alert("SMS Failed (Status " + res.status + "). Body: " + text);
       }
     } catch (err: any) {
       alert("Error: " + err.message);

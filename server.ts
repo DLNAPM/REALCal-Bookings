@@ -224,16 +224,22 @@ async function startServer() {
     }
   });
 
+  app.get("/api/ping", (req, res) => {
+    res.json({ pong: true, time: Date.now() });
+  });
+
   app.post("/api/test-sms", async (req, res) => {
+    console.log("POST /api/test-sms reached");
     try {
       const { to, message } = req.body;
+      console.log(`Payload: to=${to}, message=${message}`);
+
       const twilioSid = process.env.TWILIO_ACCOUNT_SID;
       const twilioToken = process.env.TWILIO_AUTH_TOKEN;
       const from = process.env.TWILIO_PHONE_NUMBER;
 
-      console.log(`Test SMS request to: ${to}`);
-
       if (!twilioSid || !twilioToken || !from || twilioSid === 'AC_test_...') {
+        console.warn("Missing Twilio credentials");
         return res.status(400).json({ error: "Twilio credentials not configured in secrets." });
       }
 
@@ -248,53 +254,39 @@ async function startServer() {
            twilioClient = (clientFunc as any)(twilioSid, twilioToken);
         }
       } catch (initErr: any) {
+        console.error("Twilio init failed:", initErr);
         return res.status(500).json({ error: "Twilio init failed: " + initErr.message });
       }
 
       if (!twilioClient) {
+        console.error("Twilio client null");
         return res.status(500).json({ error: "Twilio client not initialized." });
       }
       
-      console.log("Attempting to send Twilio message...");
+      console.log("Twilio client OK, sending...");
       const result = await twilioClient.messages.create({
         body: message || "Test message from REALCal Bookings",
         from: from,
         to: to
       });
 
-      console.log("Twilio Test SMS Result Keys:", Object.keys(result));
-      console.log("Twilio Test SMS Result Prototype Keys:", Object.getOwnPropertyNames(Object.getPrototypeOf(result)));
-
-      // Twilio SID is usually in .sid
-      let sid = result.sid;
+      console.log("Twilio send result received");
       
-      // Fallbacks
+      let sid = result.sid;
       if (!sid && result.data) sid = result.data.sid;
-      if (!sid) {
-         // Some versions or mock structures might put it elsewhere
-         for (const key in result) {
-            if (key.toLowerCase().includes('sid') && typeof result[key] === 'string') {
-               sid = result[key];
-               break;
-            }
-         }
-      }
-
-      console.log("Final SID extracted:", sid);
       
       const responseBody = { 
         success: true, 
-        messageId: sid ? String(sid) : "SID_MISSING",
-        status: result.status || "completed",
-        debug_route: "test-sms",
+        messageId: sid ? String(sid) : "SID_NOT_FOUND",
+        status: result.status || "sent_or_queued",
         ts: Date.now()
       };
 
-      console.log("Sending response:", responseBody);
-      res.json(responseBody);
+      console.log("Final response body:", responseBody);
+      res.status(200).json(responseBody);
     } catch (e: any) {
-      console.error("Test SMS Error:", e);
-      res.status(500).json({ error: e.message });
+      console.error("Test SMS Route Exception:", e);
+      res.status(500).json({ error: e.message || "Unknown server error" });
     }
   });
 
