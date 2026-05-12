@@ -245,10 +245,25 @@ async function startServer() {
         return res.status(400).json({ error: "Twilio credentials not configured in secrets." });
       }
 
-      const twilio = (await import('twilio')).default;
-      const client = (twilio as any)(twilioSid, twilioToken);
+      let twilioClient: any = null;
+      try {
+        const twilio = (await import('twilio')).default;
+        if (typeof twilio === 'function') {
+          twilioClient = twilio(twilioSid, twilioToken);
+        } else {
+           const twilioPkg = await import('twilio');
+           const clientFunc = twilioPkg.default || twilioPkg;
+           twilioClient = (clientFunc as any)(twilioSid, twilioToken);
+        }
+      } catch (initErr: any) {
+        return res.status(500).json({ error: "Twilio init failed: " + initErr.message });
+      }
+
+      if (!twilioClient) {
+        return res.status(500).json({ error: "Twilio client not initialized." });
+      }
       
-      const result = await client.messages.create({
+      const result = await twilioClient.messages.create({
         body: message || "Test message from REALCal Bookings",
         from: from,
         to: to

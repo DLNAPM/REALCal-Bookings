@@ -631,11 +631,20 @@ export const AdminDashboard: React.FC = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ to: formatPhoneE164(testSmsTarget), message: testSmsMessage })
       });
-      const data = await res.json();
+      
+      const text = await res.text();
+      let data;
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch (parseErr) {
+        console.error("Failed to parse SMS response:", text);
+        throw new Error("Server returned non-JSON response: " + (text.substring(0, 50) || "Empty body"));
+      }
+
       if (res.ok) {
         alert("Test SMS Sent! Message SID: " + data.messageId);
       } else {
-        alert("SMS Failed: " + data.error);
+        alert("SMS Failed: " + (data.error || "Unknown error"));
       }
     } catch (err: any) {
       alert("Error: " + err.message);
