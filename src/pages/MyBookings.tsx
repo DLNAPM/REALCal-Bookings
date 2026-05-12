@@ -8,6 +8,8 @@ import { ChevronLeft, Calendar as CalendarIcon, XCircle, Home, MapPin, Edit3, X,
 import { parseISO, differenceInHours } from 'date-fns';
 import { Calendar } from '../components/Calendar';
 
+import { LegalFooter } from '../components/LegalFooter';
+
 export const MyBookings: React.FC = () => {
     const { user, loading } = useAuth();
     const navigate = useNavigate();
@@ -380,6 +382,7 @@ export const MyBookings: React.FC = () => {
                     </div>
                 </div>
             )}
+            <LegalFooter />
         </div>
     );
 };

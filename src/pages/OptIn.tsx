@@ -55,6 +55,8 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
   throw new Error(JSON.stringify(errInfo));
 }
 
+import { LegalFooter } from '../components/LegalFooter';
+
 export const OptIn: React.FC = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
@@ -267,17 +269,12 @@ export const OptIn: React.FC = () => {
               </div>
             )}
             
-            <p className="text-center text-[10px] text-slate-400 uppercase tracking-widest font-bold">
-              Secure Opt-In Verification &bull; REALCal 2026
-            </p>
+          <LegalFooter />
           </div>
         </div>
       </main>
 
-      <footer className="py-8 text-center text-slate-400 text-sm">
-        &copy; 2026 C.&.S.H. Group Properties &bull; Trusted Automation
-      </footer>
-
+      {/* Modals and other stuff... */}
       <AnimatePresence>
         {showSuccess && (
           <motion.div 

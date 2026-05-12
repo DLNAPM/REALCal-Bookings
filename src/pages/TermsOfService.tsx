@@ -68,6 +68,15 @@ export const TermsOfService: React.FC = () => {
                 REALCal Bookings is not liable for data delivery failures or interruptions caused by mobile carrier networks. Property access is contingent upon successful identity verification and payment.
               </p>
             </section>
+
+            <section className="pt-8 border-t border-slate-100">
+               <button 
+                 onClick={() => navigate('/privacy')}
+                 className="text-indigo-600 font-bold underline hover:text-indigo-800 transition-colors"
+               >
+                 Privacy Policy
+               </button>
+            </section>
           </div>
 
           <footer className="pt-12 border-t border-slate-100 text-center">

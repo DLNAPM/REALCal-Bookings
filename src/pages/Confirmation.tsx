@@ -1,6 +1,7 @@
 import React from 'react';
 import { useLocation, Link, Navigate } from 'react-router-dom';
 import { CheckCircle, Key } from 'lucide-react';
+import { LegalFooter } from '../components/LegalFooter';
 
 export const Confirmation: React.FC = () => {
     const location = useLocation();
@@ -54,10 +55,11 @@ export const Confirmation: React.FC = () => {
                     </div>
                 )}
 
-                <Link to="/" className="w-full block py-4 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-500 transition-colors shadow-sm">
-                    Return Home
-                </Link>
-            </div>
+            <Link to="/" className="w-full block py-4 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-500 transition-colors shadow-sm">
+                Return Home
+            </Link>
         </div>
+        <LegalFooter />
+    </div>
     )
 }

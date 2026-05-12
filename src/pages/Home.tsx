@@ -7,6 +7,8 @@ import { Calendar as CalendarIcon, Key, LogOut, ChevronRight, Lock, BellRing, Sh
 import { Property } from '../types';
 import { PrivacyPolicyModal } from '../components/PrivacyPolicyModal';
 
+import { LegalFooter } from '../components/LegalFooter';
+
 export const Home: React.FC = () => {
     const { user, loading } = useAuth();
     const [properties, setProperties] = useState<Property[]>([]);
@@ -251,22 +253,7 @@ export const Home: React.FC = () => {
                )}
             </main>
 
-            <footer className="w-full max-w-7xl mx-auto px-6 pt-12 pb-6 border-t border-slate-100 text-center flex flex-col items-center gap-2">
-                <p className="text-sm font-bold tracking-widest uppercase text-slate-700">
-                    A C.&.S.H. Group Properties A.I. APP
-                </p>
-                <p className="text-sm text-slate-500">
-                    By using &quot;REALCal Bookings&quot;, you agree to the terms outlined in this <button onClick={() => setIsPrivacyOpen(true)} className="text-indigo-600 hover:text-indigo-700 hover:underline font-medium focus:outline-none">Privacy Policy</button>.
-                </p>
-                <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 mt-4">
-                  <Link to="/privacy" className="text-xs text-slate-400 hover:text-indigo-600 font-bold uppercase tracking-widest transition-colors">
-                      Privacy Policy &bull; Vendor Verification
-                  </Link>
-                  <Link to="/opt-in" className="text-xs text-slate-400 hover:text-indigo-600 font-bold uppercase tracking-widest transition-colors">
-                      Opt-In Consent &bull; Preview Mode
-                  </Link>
-                </div>
-            </footer>
+            <LegalFooter />
 
             <PrivacyPolicyModal isOpen={isPrivacyOpen} onClose={() => setIsPrivacyOpen(false)} />
         </div>

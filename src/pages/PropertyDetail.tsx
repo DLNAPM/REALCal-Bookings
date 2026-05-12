@@ -7,6 +7,8 @@ import { doc, getDoc } from 'firebase/firestore';
 import { ChevronLeft, Calendar as CalendarIcon } from 'lucide-react';
 import { Property } from '../types';
 
+import { LegalFooter } from '../components/LegalFooter';
+
 export const PropertyDetail: React.FC = () => {
     const { id } = useParams<{id: string}>();
     const { user, loading: authLoading } = useAuth();
@@ -96,6 +98,7 @@ export const PropertyDetail: React.FC = () => {
                
                <Calendar propertyId={property.id} property={property} />
             </main>
+            <LegalFooter />
         </div>
     )
 }
