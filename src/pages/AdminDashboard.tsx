@@ -6,8 +6,20 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { format, eachDayOfInterval, parseISO, addDays } from 'date-fns';
 import { cn } from '../lib/utils';
 import { BlackoutDate, PricingRule, Booking, Property, PropertyManager } from '../types';
-import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight, RefreshCw } from 'lucide-react';
+import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight, RefreshCw, MessageSquare } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
+
+const formatPhoneE164 = (phone: string) => {
+  // Remove all non-numeric characters except +
+  let cleaned = phone.replace(/[^\d+]/g, '');
+  
+  // If it doesn't start with +, and it's 10 digits, assume US (+1)
+  if (!cleaned.startsWith('+') && cleaned.length === 10) {
+    cleaned = '+1' + cleaned;
+  }
+  
+  return cleaned;
+};
 
 export const AdminDashboard: React.FC = () => {
   const { user, loading } = useAuth();
@@ -285,7 +297,7 @@ export const AdminDashboard: React.FC = () => {
       await addDoc(collection(db, 'property_managers'), {
          name: fd.get('name') as string,
          email: fd.get('email') as string,
-         phone: fd.get('phone') as string,
+         phone: formatPhoneE164(fd.get('phone') as string),
          enabled: true,
          createdAt: serverTimestamp()
       });
@@ -308,7 +320,7 @@ export const AdminDashboard: React.FC = () => {
       await updateDoc(doc(db, 'property_managers', id), {
          name: fd.get('name') as string,
          email: fd.get('email') as string,
-         phone: fd.get('phone') as string,
+         phone: formatPhoneE164(fd.get('phone') as string),
       });
       setEditingManagerId(null);
     } catch (err: any) { alert(err.message); }
@@ -523,6 +535,8 @@ export const AdminDashboard: React.FC = () => {
     const checkIn = fd.get('checkIn') as string;
     const checkOut = fd.get('checkOut') as string;
     const guestName = fd.get('guestName') as string;
+    const guestPhoneInput = fd.get('guestPhone') as string;
+    const guestPhone = guestPhoneInput ? formatPhoneE164(guestPhoneInput) : "";
     const totalAmountStr = fd.get('totalPrice') as string;
     const bookingId = uuidv4();
     
@@ -557,6 +571,7 @@ export const AdminDashboard: React.FC = () => {
            checkOut: new Date(checkOut).toISOString().split('T')[0],
            status: 'confirmed',
            totalPrice: Math.round(Number(totalAmountStr) * 100),
+           guestPhone: guestPhone,
            guests: 1,
            createdAt: serverTimestamp(),
            updatedAt: serverTimestamp()
@@ -574,7 +589,7 @@ export const AdminDashboard: React.FC = () => {
            const prop = properties.find(p => p.id === formPropId);
            if (prop) propertyName = prop.name;
 
-           if (managers.length > 0) {
+           if (managers.length > 0 || guestPhone) {
               await fetch('/api/notify-managers', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -585,7 +600,9 @@ export const AdminDashboard: React.FC = () => {
                       checkOut: payload.checkOut,
                       totalAmount: payload.totalPrice,
                       propertyName: propertyName,
-                      guestName: guestName
+                      guestName: guestName,
+                      guestPhone: guestPhone,
+                      accessCode: accessCode
                    }
                 })
               });
@@ -599,6 +616,33 @@ export const AdminDashboard: React.FC = () => {
 
     } catch (err: any) { alert(err.message); }
   }
+
+  const [testSmsTarget, setTestSmsTarget] = useState("");
+  const [testSmsMessage, setTestSmsMessage] = useState("Testing Twilio SMS from REALCal Bookings!");
+  const [sendingTestSms, setSendingTestSms] = useState(false);
+
+  const handleTestSms = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!testSmsTarget) return;
+    setSendingTestSms(true);
+    try {
+      const res = await fetch("/api/test-sms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to: formatPhoneE164(testSmsTarget), message: testSmsMessage })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert("Test SMS Sent! Message SID: " + data.messageId);
+      } else {
+        alert("SMS Failed: " + data.error);
+      }
+    } catch (err: any) {
+      alert("Error: " + err.message);
+    } finally {
+      setSendingTestSms(false);
+    }
+  };
 
   const activeRules = pricingRules.filter(r => r.propertyId === activePropertyId);
   const activeBlackouts = blackouts
@@ -752,33 +796,71 @@ export const AdminDashboard: React.FC = () => {
 
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm mt-8">
              <h2 className="text-xl font-bold mb-6 flex items-center gap-2"><CalendarIcon size={20}/> Create Manual Booking</h2>
-             <form onSubmit={handleAdminCreateBooking} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end bg-slate-50 p-6 rounded-2xl border border-slate-300 border-dashed">
+             <form onSubmit={handleAdminCreateBooking} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 items-end bg-slate-50 p-6 rounded-2xl border border-slate-300 border-dashed">
                 <div className="lg:col-span-1">
                    <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Property</label>
-                   <select name="propertyId" required className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 required bg-white shadow-sm">
+                   <select name="propertyId" required className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 required bg-white shadow-sm text-sm">
                       <option value="">Select...</option>
                       {properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                    </select>
                 </div>
                 <div className="lg:col-span-1">
                    <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Check In</label>
-                   <input name="checkIn" type="date" required className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm" />
+                   <input name="checkIn" type="date" required className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm" />
                 </div>
                 <div className="lg:col-span-1">
                    <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Check Out</label>
-                   <input name="checkOut" type="date" required className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm" />
+                   <input name="checkOut" type="date" required className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm" />
                 </div>
                 <div className="lg:col-span-1">
                    <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Guest Name</label>
-                   <input name="guestName" required placeholder="Guest Name" className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm" />
+                   <input name="guestName" required placeholder="Guest Name" className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm" />
+                </div>
+                <div className="lg:col-span-1">
+                   <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Guest Phone</label>
+                   <input name="guestPhone" placeholder="+1..." className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm" />
                 </div>
                 <div className="lg:col-span-1">
                    <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Total Price ($)</label>
-                   <input name="totalPrice" type="number" required placeholder="0.00" className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm" />
+                   <input name="totalPrice" type="number" required placeholder="0.00" className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm" />
                 </div>
-                <div className="md:col-span-2 lg:col-span-5 flex justify-end">
+                <div className="md:col-span-2 lg:col-span-6 flex justify-end">
                    <button type="submit" className="w-full bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-indigo-500 transition-colors">
                       Create Override Booking
+                   </button>
+                </div>
+             </form>
+          </div>
+
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm mt-8 border-indigo-200 border-2 shadow-indigo-50">
+             <h2 className="text-xl font-bold mb-6 flex items-center gap-2 text-indigo-900"><MessageSquare className="text-indigo-600" size={20}/> Test Twilio SMS</h2>
+             <form onSubmit={handleTestSms} className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end bg-indigo-50/50 p-6 rounded-2xl border border-indigo-100">
+                <div className="md:col-span-1">
+                   <label className="text-xs font-bold text-indigo-400 uppercase tracking-tight mb-1.5 block italic">Destination Number (E.164)</label>
+                   <input 
+                      type="tel"
+                      value={testSmsTarget}
+                      onChange={e => setTestSmsTarget(e.target.value)}
+                      placeholder="+14155552671"
+                      className="w-full border border-indigo-200 rounded-xl p-3 bg-white shadow-sm focus:ring-2 focus:ring-indigo-300 outline-none"
+                   />
+                </div>
+                <div className="md:col-span-1">
+                   <label className="text-xs font-bold text-indigo-400 uppercase tracking-tight mb-1.5 block italic">Message Body</label>
+                   <input 
+                      type="text"
+                      value={testSmsMessage}
+                      onChange={e => setTestSmsMessage(e.target.value)}
+                      className="w-full border border-indigo-200 rounded-xl p-3 bg-white shadow-sm focus:ring-2 focus:ring-indigo-300 outline-none"
+                   />
+                </div>
+                <div className="md:col-span-1">
+                   <button 
+                      type="submit" 
+                      disabled={sendingTestSms || !testSmsTarget}
+                      className="w-full bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-indigo-500 transition-all shadow-md active:scale-[0.98] disabled:opacity-50"
+                   >
+                      {sendingTestSms ? 'Sending...' : 'Send Live Test SMS'}
                    </button>
                 </div>
              </form>

@@ -108,32 +108,24 @@ async function startServer() {
       const twilioToken = process.env.TWILIO_AUTH_TOKEN;
       const TWILIO_PHONE = process.env.TWILIO_PHONE_NUMBER;
       
-      console.log(`Twilio config: SID present: ${!!twilioSid}, Token present: ${!!twilioToken}, Phone: ${TWILIO_PHONE}`);
+      console.log(`Twilio SID: ${twilioSid?.substring(0, 5)}... | Token: ${twilioToken ? "Configured" : "Missing"}`);
 
       if (twilioSid && twilioToken && twilioSid.startsWith('AC') && twilioSid !== 'AC_test_...') {
         try {
-          const twilioModule: any = await import('twilio');
-          // Standard twilio export is often the function itself or .default
-          const twilioInit = twilioModule.default || twilioModule;
-          
-          if (typeof twilioInit === 'function') {
-            twilioClient = twilioInit(twilioSid, twilioToken);
-          } else if (twilioInit.default && typeof twilioInit.default === 'function') {
-            twilioClient = twilioInit.default(twilioSid, twilioToken);
-          } else if (typeof twilioModule === 'function') {
-             twilioClient = twilioModule(twilioSid, twilioToken);
-          }
-          
-          if (twilioClient) {
-            console.log("Twilio client initialized successfully");
+          const twilio = (await import('twilio')).default;
+          // Check if it's the function directly or if we need to call it differently
+          if (typeof twilio === 'function') {
+            twilioClient = twilio(twilioSid, twilioToken);
           } else {
-            console.warn("Twilio client could not be initialized from exports");
+             // Fallback for different import structures
+             const twilioPkg = await import('twilio');
+             const clientFunc = twilioPkg.default || twilioPkg;
+             twilioClient = (clientFunc as any)(twilioSid, twilioToken);
           }
+          console.log("Twilio client initialized successfully");
         } catch (initErr: any) {
           console.error("Twilio initialization failed:", initErr.message);
         }
-      } else {
-        console.warn("Twilio not fully configured or using placeholders. SMS will be mocked.");
       }
 
       if (managers && managers.length > 0) {
@@ -239,6 +231,33 @@ async function startServer() {
     } catch (error: any) {
       console.error('Notification failed:', error);
       res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/test-sms", async (req, res) => {
+    try {
+      const { to, message } = req.body;
+      const twilioSid = process.env.TWILIO_ACCOUNT_SID;
+      const twilioToken = process.env.TWILIO_AUTH_TOKEN;
+      const from = process.env.TWILIO_PHONE_NUMBER;
+
+      if (!twilioSid || !twilioToken || !from || twilioSid === 'AC_test_...') {
+        return res.status(400).json({ error: "Twilio credentials not configured in secrets." });
+      }
+
+      const twilio = (await import('twilio')).default;
+      const client = (twilio as any)(twilioSid, twilioToken);
+      
+      const result = await client.messages.create({
+        body: message || "Test message from REALCal Bookings",
+        from: from,
+        to: to
+      });
+
+      res.json({ success: true, messageId: result.sid });
+    } catch (e: any) {
+      console.error("Test SMS Error:", e);
+      res.status(500).json({ error: e.message });
     }
   });
 

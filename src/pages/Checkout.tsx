@@ -12,6 +12,18 @@ import { Property } from '../types';
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_test_placeholder');
 
+const formatPhoneE164 = (phone: string) => {
+  // Remove all non-numeric characters except +
+  let cleaned = phone.replace(/[^\d+]/g, '');
+  
+  // If it doesn't start with +, and it's 10 digits, assume US (+1)
+  if (!cleaned.startsWith('+') && cleaned.length === 10) {
+    cleaned = '+1' + cleaned;
+  }
+  
+  return cleaned;
+};
+
 const processBooking = async (
   bookingDetails: any,
   user: any,
@@ -24,6 +36,8 @@ const processBooking = async (
   selectedBedroom: any = null
 ) => {
   const bookingId = uuidv4();
+  const e164Phone = formatPhoneE164(guestPhone);
+  
   try {
     // Provision Yale access code via backend
     const lockRes = await fetch('/api/provision-lock', {
@@ -61,6 +75,7 @@ const processBooking = async (
       guests: 1, // simplified for demo
       bookingRef,
       selectedBedroom,
+      guestPhone: e164Phone, // Save formatted phone
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     };
@@ -104,7 +119,7 @@ const processBooking = async (
                   propertyName: propertyName,
                   guestName: user.displayName,
                   guestEmail: guestEmail,
-                  guestPhone: guestPhone,
+                  guestPhone: e164Phone,
                   accessCode: accessCode,
                   isTestProperty: isTestProperty
                }
