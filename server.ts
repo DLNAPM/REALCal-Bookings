@@ -250,12 +250,18 @@ async function startServer() {
 
       if (!twilioSid || !twilioToken || !from) {
         console.warn("Credentials missing in env");
-        return res.status(400).json({ error: "Twilio credentials not configured in secrets." });
+        return res.status(400).json({ 
+          error: "Twilio credentials missing.", 
+          details: "Please add TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER to your Studio Secrets." 
+        });
       }
 
-      if (twilioSid === 'AC_test_...') {
+      if (twilioSid.includes('PROVID_REAL') || twilioSid.includes('AC_test')) {
         console.warn("Using placeholder SID");
-        return res.status(400).json({ error: "Please configure a real TWILIO_ACCOUNT_SID." });
+        return res.status(400).json({ 
+          error: "Placeholder SID detected.", 
+          details: "Go to Settings -> Secrets and replace the Twilio placeholder values with your real Account SID and Auth Token." 
+        });
       }
 
       console.log("Importing Twilio module...");

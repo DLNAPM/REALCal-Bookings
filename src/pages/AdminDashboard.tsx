@@ -654,7 +654,9 @@ export const AdminDashboard: React.FC = () => {
       if (res.ok) {
         alert("Success! Status: " + res.status + "\nData: " + JSON.stringify(data));
       } else {
-        alert("SMS Failed (Status " + res.status + "). Body: " + text);
+        const errorMsg = data.error || "Unknown error";
+        const details = data.details ? ("\n\nAction Required: " + data.details) : "";
+        alert("SMS Failed (Status " + res.status + ")\nError: " + errorMsg + details);
       }
     } catch (err: any) {
       alert("Fetch Error: " + err.message);
