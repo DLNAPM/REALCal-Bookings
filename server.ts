@@ -25,6 +25,15 @@ async function startServer() {
   });
 
   // API Routes
+  app.use("/api", (req, res, next) => {
+    console.log(`API Request: ${req.method} ${req.path}`);
+    next();
+  });
+
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok", uptime: process.uptime() });
+  });
+
   app.post("/api/provision-lock", async (req, res) => {
     try {
       const { checkIn, checkOut, name } = req.body;
@@ -225,71 +234,68 @@ async function startServer() {
   });
 
   app.get("/api/ping", (req, res) => {
-    res.json({ pong: true, time: Date.now() });
+    console.log("Ping route hit");
+    res.json({ pong: true, time: Date.now(), env: process.env.NODE_ENV || 'development' });
   });
 
   app.post("/api/test-sms", async (req, res) => {
-    console.log("POST /api/test-sms reached. Headers:", JSON.stringify(req.headers));
+    console.log("POST /api/test-sms reached. Content-Type:", req.get('Content-Type'));
     try {
       const { to, message } = req.body;
-      console.log(`Payload received: to=${to}, message=${message}`);
+      console.log(`Parsed Payload: to=${to}, message=${message}`);
 
       const twilioSid = process.env.TWILIO_ACCOUNT_SID;
       const twilioToken = process.env.TWILIO_AUTH_TOKEN;
       const from = process.env.TWILIO_PHONE_NUMBER;
 
-      if (!twilioSid || !twilioToken || !from || twilioSid === 'AC_test_...') {
-        console.warn("Credentials missing or placeholder");
-        return res.status(400).send(JSON.stringify({ error: "Twilio credentials not configured in secrets." }));
+      if (!twilioSid || !twilioToken || !from) {
+        console.warn("Credentials missing in env");
+        return res.status(400).json({ error: "Twilio credentials not configured in secrets." });
       }
 
-      console.log("Importing Twilio...");
-      let twilioClient: any = null;
+      if (twilioSid === 'AC_test_...') {
+        console.warn("Using placeholder SID");
+        return res.status(400).json({ error: "Please configure a real TWILIO_ACCOUNT_SID." });
+      }
+
+      console.log("Importing Twilio module...");
+      const twilioPkg = await import('twilio');
+      console.log("Checking Twilio export structure...");
+      const twilioFunc = twilioPkg.default || twilioPkg;
+      
+      let twilioClient;
       try {
-        const twilioExport = (await import('twilio')).default;
-        if (typeof twilioExport === 'function') {
-          twilioClient = twilioExport(twilioSid, twilioToken);
-        } else {
-           const twilioPkg = await import('twilio');
-           const clientFunc = twilioPkg.default || twilioPkg;
-           twilioClient = (clientFunc as any)(twilioSid, twilioToken);
-        }
-      } catch (initErr: any) {
-        console.error("Twilio init failed exception:", initErr);
-        return res.status(500).send(JSON.stringify({ error: "Twilio init failed: " + initErr.message }));
+        twilioClient = (twilioFunc as any)(twilioSid, twilioToken);
+      } catch (initFail) {
+        console.error("Factory call failed:", initFail);
+        throw initFail;
       }
 
       if (!twilioClient) {
-        console.error("Twilio client result is nully");
-        return res.status(500).send(JSON.stringify({ error: "Twilio client not initialized." }));
+        throw new Error("Failed to create Twilio client instance");
       }
       
-      console.log("Twilio client OK, calling messages.create...");
+      console.log("Twilio client initialized. Sending message to", to);
       const result = await twilioClient.messages.create({
         body: message || "Test message from REALCal Bookings",
         from: from,
         to: to
       });
 
-      console.log("Twilio send result received. Status:", result.status);
+      console.log("Twilio send result SID:", result.sid);
       
-      let sid = result.sid;
-      if (!sid && result.data) sid = result.data.sid;
-      
-      const responseBody = { 
+      res.json({ 
         success: true, 
-        messageId: sid ? String(sid) : "SID_NOT_FOUND",
-        status: String(result.status || "sent_or_queued"),
-        ts: Date.now(),
-        echo_to: to
-      };
-
-      console.log("Final response body ready:", JSON.stringify(responseBody));
-      res.setHeader('Content-Type', 'application/json');
-      res.status(200).send(JSON.stringify(responseBody));
+        messageId: result.sid || "UNKNOWN",
+        status: result.status || "sent",
+        ts: Date.now()
+      });
     } catch (e: any) {
-      console.error("Test SMS Route Exception caught:", e);
-      res.status(500).send(JSON.stringify({ error: e.message || "Unknown server error" }));
+      console.error("Test SMS Detailed Error:", e);
+      res.status(500).json({ 
+        error: e.message || "Internal Server Error",
+        stack: process.env.NODE_ENV === 'production' ? undefined : e.stack 
+      });
     }
   });
 

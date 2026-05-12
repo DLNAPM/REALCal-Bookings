@@ -636,17 +636,23 @@ export const AdminDashboard: React.FC = () => {
       console.log("Response status:", res.status);
       const text = await res.text();
       console.log("Raw SMS Response Body:", text);
+      
+      if (!text) {
+        alert("Server returned EMPTY body. Status: " + res.status);
+        throw new Error("Empty response body");
+      }
+
       let data;
       try {
-        data = text ? JSON.parse(text) : {};
+        data = JSON.parse(text);
       } catch (parseErr) {
         console.error("Failed to parse SMS response:", text);
         alert("Parse Error. Raw text: " + text + "\nStatus: " + res.status);
-        throw new Error("Server returned non-JSON response");
+        throw new Error("Invalid JSON response");
       }
 
       if (res.ok) {
-        alert("Debug - Status: " + res.status + "\nRaw Text: " + text + "\nData: " + JSON.stringify(data));
+        alert("Success! Status: " + res.status + "\nData: " + JSON.stringify(data));
       } else {
         alert("SMS Failed (Status " + res.status + "). Body: " + text);
       }
