@@ -642,9 +642,9 @@ export const AdminDashboard: React.FC = () => {
       }
 
       if (res.ok) {
-        alert("Test SMS Sent! Message SID: " + data.messageId);
+        alert("Server Response: " + JSON.stringify(data));
       } else {
-        alert("SMS Failed: " + (data.error || "Unknown error"));
+        alert("SMS Failed (Status " + res.status + "): " + (data.error || JSON.stringify(data)));
       }
     } catch (err: any) {
       alert("Error: " + err.message);

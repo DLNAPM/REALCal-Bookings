@@ -255,19 +255,43 @@ async function startServer() {
         return res.status(500).json({ error: "Twilio client not initialized." });
       }
       
+      console.log("Attempting to send Twilio message...");
       const result = await twilioClient.messages.create({
         body: message || "Test message from REALCal Bookings",
         from: from,
         to: to
       });
 
-      console.log("Twilio Test SMS Raw Result:", JSON.stringify(result, null, 2));
+      console.log("Twilio Test SMS Result Keys:", Object.keys(result));
+      console.log("Twilio Test SMS Result Prototype Keys:", Object.getOwnPropertyNames(Object.getPrototypeOf(result)));
 
-      // Twilio SID can be in .sid or sometimes ._sid depending on internal state, 
-      // but usually .sid is the public getter.
-      const sid = result.sid || (result.data && result.data.sid);
+      // Twilio SID is usually in .sid
+      let sid = result.sid;
       
-      res.json({ success: true, messageId: sid || "Unknown SID" });
+      // Fallbacks
+      if (!sid && result.data) sid = result.data.sid;
+      if (!sid) {
+         // Some versions or mock structures might put it elsewhere
+         for (const key in result) {
+            if (key.toLowerCase().includes('sid') && typeof result[key] === 'string') {
+               sid = result[key];
+               break;
+            }
+         }
+      }
+
+      console.log("Final SID extracted:", sid);
+      
+      const responseBody = { 
+        success: true, 
+        messageId: sid ? String(sid) : "SID_MISSING",
+        status: result.status || "completed",
+        debug_route: "test-sms",
+        ts: Date.now()
+      };
+
+      console.log("Sending response:", responseBody);
+      res.json(responseBody);
     } catch (e: any) {
       console.error("Test SMS Error:", e);
       res.status(500).json({ error: e.message });
