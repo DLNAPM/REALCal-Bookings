@@ -52,11 +52,11 @@ export interface Booking {
   checkIn: string;
   checkOut: string;
   status: 'pending' | 'confirmed' | 'cancelled';
-  totalPrice: number;
+  totalPrice: number; // in cents
   guests: number;
   accessCode?: string;
   bookingRef?: string;
-  cancellationFee?: number;
+  cancellationFee?: number; // in cents
   deletedByGuest?: boolean;
   selectedBedroom?: any;
   createdAt: any;

@@ -112,7 +112,7 @@ export const AdminDashboard: React.FC = () => {
 
   const exportCSV = () => {
     const header = "Booking ID,Property ID,User ID,Check In,Check Out,Status,Total Price\n";
-    const rows = bookings.map(b => `${b.id},${b.propertyId || ''},${b.userId},${b.checkIn},${b.checkOut},${b.status},${b.totalPrice}`).join("\n");
+    const rows = bookings.map(b => `${b.id},${b.propertyId || ''},${b.userId},${b.checkIn},${b.checkOut},${b.status},${(b.totalPrice / 100).toFixed(2)}`).join("\n");
     const blob = new Blob([header + rows], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -556,7 +556,7 @@ export const AdminDashboard: React.FC = () => {
            checkIn: new Date(checkIn).toISOString().split('T')[0],
            checkOut: new Date(checkOut).toISOString().split('T')[0],
            status: 'confirmed',
-           totalPrice: Number(totalAmountStr),
+           totalPrice: Math.round(Number(totalAmountStr) * 100),
            guests: 1,
            createdAt: serverTimestamp(),
            updatedAt: serverTimestamp()
@@ -583,7 +583,7 @@ export const AdminDashboard: React.FC = () => {
                    bookingDetails: {
                       checkIn: payload.checkIn,
                       checkOut: payload.checkOut,
-                      totalAmount: Math.round(payload.totalPrice * 100),
+                      totalAmount: payload.totalPrice,
                       propertyName: propertyName,
                       guestName: guestName
                    }
@@ -659,7 +659,7 @@ export const AdminDashboard: React.FC = () => {
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div className="bg-white p-4 rounded-2xl shadow-sm border border-indigo-100">
                        <p className="text-xs text-slate-500 font-medium uppercase tracking-tight flex items-center gap-1"><TrendingUp size={14}/> Total Revenue</p>
-                       <p className="text-xl font-bold text-slate-900 mt-1">${(totalRevenue).toFixed(2)}</p>
+                       <p className="text-xl font-bold text-slate-900 mt-1">${(totalRevenue / 100).toFixed(2)}</p>
                     </div>
                     <div className="bg-white p-4 rounded-2xl shadow-sm border border-indigo-100">
                        <p className="text-xs text-slate-500 font-medium uppercase tracking-tight flex items-center gap-1"><Users size={14}/> Total Users</p>

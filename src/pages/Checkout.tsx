@@ -57,7 +57,7 @@ const processBooking = async (
       checkIn: bookingDetails.checkIn.split('T')[0],
       checkOut: bookingDetails.checkOut.split('T')[0],
       status: isTestMode ? 'confirmed' : 'pending', // Auto-confirm test bookings
-      totalPrice: bookingDetails.priceDetails.grandTotal,
+      totalPrice: Math.round(bookingDetails.priceDetails.grandTotal * 100),
       guests: 1, // simplified for demo
       bookingRef,
       selectedBedroom,
