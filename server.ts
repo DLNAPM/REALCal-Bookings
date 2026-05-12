@@ -229,20 +229,21 @@ async function startServer() {
   });
 
   app.post("/api/test-sms", async (req, res) => {
-    console.log("POST /api/test-sms reached");
+    console.log("POST /api/test-sms reached. Headers:", JSON.stringify(req.headers));
     try {
       const { to, message } = req.body;
-      console.log(`Payload: to=${to}, message=${message}`);
+      console.log(`Payload received: to=${to}, message=${message}`);
 
       const twilioSid = process.env.TWILIO_ACCOUNT_SID;
       const twilioToken = process.env.TWILIO_AUTH_TOKEN;
       const from = process.env.TWILIO_PHONE_NUMBER;
 
       if (!twilioSid || !twilioToken || !from || twilioSid === 'AC_test_...') {
-        console.warn("Missing Twilio credentials");
-        return res.status(400).json({ error: "Twilio credentials not configured in secrets." });
+        console.warn("Credentials missing or placeholder");
+        return res.status(400).send(JSON.stringify({ error: "Twilio credentials not configured in secrets." }));
       }
 
+      console.log("Importing Twilio...");
       let twilioClient: any = null;
       try {
         const twilioExport = (await import('twilio')).default;
@@ -254,23 +255,23 @@ async function startServer() {
            twilioClient = (clientFunc as any)(twilioSid, twilioToken);
         }
       } catch (initErr: any) {
-        console.error("Twilio init failed:", initErr);
-        return res.status(500).json({ error: "Twilio init failed: " + initErr.message });
+        console.error("Twilio init failed exception:", initErr);
+        return res.status(500).send(JSON.stringify({ error: "Twilio init failed: " + initErr.message }));
       }
 
       if (!twilioClient) {
-        console.error("Twilio client null");
-        return res.status(500).json({ error: "Twilio client not initialized." });
+        console.error("Twilio client result is nully");
+        return res.status(500).send(JSON.stringify({ error: "Twilio client not initialized." }));
       }
       
-      console.log("Twilio client OK, sending...");
+      console.log("Twilio client OK, calling messages.create...");
       const result = await twilioClient.messages.create({
         body: message || "Test message from REALCal Bookings",
         from: from,
         to: to
       });
 
-      console.log("Twilio send result received");
+      console.log("Twilio send result received. Status:", result.status);
       
       let sid = result.sid;
       if (!sid && result.data) sid = result.data.sid;
@@ -278,15 +279,17 @@ async function startServer() {
       const responseBody = { 
         success: true, 
         messageId: sid ? String(sid) : "SID_NOT_FOUND",
-        status: result.status || "sent_or_queued",
-        ts: Date.now()
+        status: String(result.status || "sent_or_queued"),
+        ts: Date.now(),
+        echo_to: to
       };
 
-      console.log("Final response body:", responseBody);
-      res.status(200).json(responseBody);
+      console.log("Final response body ready:", JSON.stringify(responseBody));
+      res.setHeader('Content-Type', 'application/json');
+      res.status(200).send(JSON.stringify(responseBody));
     } catch (e: any) {
-      console.error("Test SMS Route Exception:", e);
-      res.status(500).json({ error: e.message || "Unknown server error" });
+      console.error("Test SMS Route Exception caught:", e);
+      res.status(500).send(JSON.stringify({ error: e.message || "Unknown server error" }));
     }
   });
 

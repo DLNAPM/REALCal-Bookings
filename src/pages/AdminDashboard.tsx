@@ -626,32 +626,44 @@ export const AdminDashboard: React.FC = () => {
     if (!testSmsTarget) return;
     setSendingTestSms(true);
     try {
+      console.log("Sending Test SMS to", testSmsTarget);
       const res = await fetch("/api/test-sms", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ to: formatPhoneE164(testSmsTarget), message: testSmsMessage })
       });
       
+      console.log("Response status:", res.status);
       const text = await res.text();
-      console.log("Raw SMS Response:", text);
+      console.log("Raw SMS Response Body:", text);
       let data;
       try {
         data = text ? JSON.parse(text) : {};
       } catch (parseErr) {
         console.error("Failed to parse SMS response:", text);
-        alert("Parse Error. Raw text: " + text);
+        alert("Parse Error. Raw text: " + text + "\nStatus: " + res.status);
         throw new Error("Server returned non-JSON response");
       }
 
       if (res.ok) {
-        alert("Debug - Raw Text: " + text + "\nData: " + JSON.stringify(data));
+        alert("Debug - Status: " + res.status + "\nRaw Text: " + text + "\nData: " + JSON.stringify(data));
       } else {
         alert("SMS Failed (Status " + res.status + "). Body: " + text);
       }
     } catch (err: any) {
-      alert("Error: " + err.message);
+      alert("Fetch Error: " + err.message);
     } finally {
       setSendingTestSms(false);
+    }
+  };
+
+  const handlePing = async () => {
+    try {
+      const res = await fetch("/api/ping");
+      const text = await res.text();
+      alert("Ping Status: " + res.status + "\nResponse: " + text);
+    } catch (err: any) {
+      alert("Ping failed: " + err.message);
     }
   };
 
@@ -844,7 +856,10 @@ export const AdminDashboard: React.FC = () => {
           </div>
 
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm mt-8 border-indigo-200 border-2 shadow-indigo-50">
-             <h2 className="text-xl font-bold mb-6 flex items-center gap-2 text-indigo-900"><MessageSquare className="text-indigo-600" size={20}/> Test Twilio SMS</h2>
+             <h2 className="text-xl font-bold mb-6 flex items-center gap-2 text-indigo-900">
+                <MessageSquare className="text-indigo-600" size={20}/> Test Twilio SMS
+                <button onClick={handlePing} className="ml-auto text-xs bg-slate-200 hover:bg-slate-300 px-2 py-1 rounded transition-colors text-slate-700">Ping API</button>
+             </h2>
              <form onSubmit={handleTestSms} className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end bg-indigo-50/50 p-6 rounded-2xl border border-indigo-100">
                 <div className="md:col-span-1">
                    <label className="text-xs font-bold text-indigo-400 uppercase tracking-tight mb-1.5 block italic">Destination Number (E.164)</label>
