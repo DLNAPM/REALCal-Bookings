@@ -528,11 +528,13 @@ export const MyBookings: React.FC = () => {
                         </div>
                         <div className="p-6 bg-slate-50">
                             <Calendar 
+                                key={editingBooking.id}
                                 propertyId={editingBooking.propertyId} 
                                 property={editingBooking.property || undefined}
                                 isEditMode={true}
                                 initialCheckIn={editingBooking.checkIn}
                                 initialCheckOut={editingBooking.checkOut}
+                                initialSelectedRoom={editingBooking.selectedBedroom}
                                 onSaveEdit={handleSaveEdit}
                                 onCancelEdit={() => setEditingBooking(null)}
                             />

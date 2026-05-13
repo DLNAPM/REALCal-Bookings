@@ -15,16 +15,17 @@ export const Calendar: React.FC<{
     isEditMode?: boolean,
     initialCheckIn?: string,
     initialCheckOut?: string,
+    initialSelectedRoom?: any,
     onSaveEdit?: (checkIn: string, checkOut: string, priceDetails: any) => void,
     onCancelEdit?: () => void
-}> = ({ propertyId, property, isEditMode, initialCheckIn, initialCheckOut, onSaveEdit, onCancelEdit }) => {
+}> = ({ propertyId, property, isEditMode, initialCheckIn, initialCheckOut, initialSelectedRoom, onSaveEdit, onCancelEdit }) => {
   const { user } = useAuth();
   const [currentMonth, setCurrentMonth] = useState(initialCheckIn ? startOfDay(new Date(initialCheckIn)) : startOfDay(new Date()));
   const [checkIn, setCheckIn] = useState<Date | null>(initialCheckIn ? new Date(initialCheckIn) : null);
   const [checkOut, setCheckOut] = useState<Date | null>(initialCheckOut ? new Date(initialCheckOut) : null);
   const [hoverDate, setHoverDate] = useState<Date | null>(null);
-  const [rentalMode, setRentalMode] = useState<'entire' | 'room'>('entire');
-  const [selectedRoom, setSelectedRoom] = useState<any>(null);
+  const [rentalMode, setRentalMode] = useState<'entire' | 'room'>(initialSelectedRoom ? 'room' : 'entire');
+  const [selectedRoom, setSelectedRoom] = useState<any>(initialSelectedRoom || null);
   
   const [pricingRules, setPricingRules] = useState<PricingRule[]>([]);
   const [blackoutDates, setBlackoutDates] = useState<BlackoutDate[]>([]);
@@ -148,37 +149,101 @@ export const Calendar: React.FC<{
   const handleDateClick = (day: Date) => {
     if (isUnavailable(day) || isBefore(day, startOfDay(new Date()))) return;
 
-    if (!checkIn || (checkIn && checkOut)) {
-      setCheckIn(day);
-      setCheckOut(null);
-    } else {
-      if (isBefore(day, checkIn)) {
+    const checkMinNights = (start: Date, end: Date): boolean => {
+      const interval = eachDayOfInterval({ start, end });
+      const nights = interval.length - 1;
+      if (nights < 1) return false;
+      
+      let minRequired = globalSettings?.minDaysDefault || 1;
+      const hasWeekend = interval.some(d => getDay(d) === 5 || getDay(d) === 6);
+      if (hasWeekend) {
+          minRequired = globalSettings?.minDaysWeekend || 1;
+      }
+      return nights >= minRequired;
+    };
+
+    const hasConflictBetween = (start: Date, end: Date): boolean => {
+      const interval = eachDayOfInterval({ start, end });
+      return interval.slice(0, -1).some(d => isUnavailable(d));
+    };
+
+    // If no selection OR clicking a boundary OR starting a fresh range
+    if (!checkIn || !checkOut || isSameDay(day, checkIn) || isSameDay(day, checkOut)) {
+      if (checkIn && checkOut && (isSameDay(day, checkIn) || isSameDay(day, checkOut))) {
+        // Toggling a boundary: clear it to start new selection from here
+        setCheckIn(day);
+        setCheckOut(null);
+      } else if (!checkIn) {
+        setCheckIn(day);
+        setCheckOut(null);
+      } else if (isSameDay(day, checkIn)) {
+        setCheckIn(null);
+        setCheckOut(null);
+      } else if (isBefore(day, checkIn)) {
         setCheckIn(day);
       } else {
-        // Enforce no unavailability in between
-        const interval = eachDayOfInterval({ start: checkIn, end: day });
-        // NOTE: we check start to end-1 for unavailability because end (checkout) can be the start of another booking
-        const hasConflict = interval.slice(0, -1).some(d => isUnavailable(d));
-        if (hasConflict) {
+        // Forming a range from Check-in
+        if (hasConflictBetween(checkIn, day)) {
           setCheckIn(day);
           setCheckOut(null);
         } else {
-          // Check Minimum Booking Days constraint
-          const nights = interval.length - 1; // interval includes check out day too
-          if (nights < 1) return; // Cannot check out same day
-          
-          let minRequired = globalSettings?.minDaysDefault || 1;
-          const hasWeekend = interval.some(d => getDay(d) === 5 || getDay(d) === 6);
-          if (hasWeekend) {
-              minRequired = globalSettings?.minDaysWeekend || 1;
-          }
-          
-          if (nights < minRequired) {
-              alert(`Your dates include a requirement of at least ${minRequired} nights. Please extend your checkout date.`);
-              return;
-          }
+           // check min nights
+           const interval = eachDayOfInterval({ start: checkIn, end: day });
+           const nights = interval.length - 1;
+           let minRequired = globalSettings?.minDaysDefault || 1;
+           if (interval.some(d => getDay(d) === 5 || getDay(d) === 6)) minRequired = globalSettings?.minDaysWeekend || 1;
            
+           if (nights < minRequired) {
+             alert(`Your dates include a requirement of at least ${minRequired} nights. Please extend your checkout date.`);
+             return;
+           }
+           setCheckOut(day);
+        }
+      }
+      return;
+    }
+
+    // RANGE IS ALREADY SET (checkIn && checkOut && not same day as boundary)
+    // We arrive here if the user clicked a date different from existing checkIn/checkOut
+    if (isBefore(day, checkIn)) {
+      // 1. Expand range BEFORE
+      if (hasConflictBetween(day, checkIn)) {
+        // Reset if conflict
+        setCheckIn(day);
+        setCheckOut(null);
+      } else {
+        setCheckIn(day);
+      }
+    } else if (day > checkOut) {
+      // 2. Expand range AFTER
+      if (hasConflictBetween(checkOut, day)) {
+        setCheckIn(day);
+        setCheckOut(null);
+      } else {
+        setCheckOut(day);
+      }
+    } else {
+      // 3. Clicked BETWEEN checkIn and checkOut
+      // Determine which end to move to the clicked day
+      const distIn = Math.abs(day.getTime() - checkIn.getTime());
+      const distOut = Math.abs(day.getTime() - checkOut.getTime());
+      
+      if (distIn < distOut) {
+        // Closer to Check-in, Move checkIn forward (shorten from start)
+        if (checkMinNights(day, checkOut)) {
+          setCheckIn(day);
+        } else {
+          // If shortening violates min nights, just start over from here
+          setCheckIn(day);
+          setCheckOut(null);
+        }
+      } else {
+        // Closer to Check-out, Move checkOut back (shorten from end)
+        if (checkMinNights(checkIn, day)) {
           setCheckOut(day);
+        } else {
+          setCheckIn(day);
+          setCheckOut(null);
         }
       }
     }
