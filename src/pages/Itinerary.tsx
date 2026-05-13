@@ -15,7 +15,8 @@ import {
   Home,
   User,
   Phone,
-  CreditCard
+  CreditCard,
+  ExternalLink
 } from 'lucide-react';
 import { LegalFooter } from '../components/LegalFooter';
 
@@ -113,9 +114,16 @@ export const Itinerary: React.FC = () => {
               <div>
                 <p className="text-indigo-400 font-bold uppercase tracking-widest text-sm mb-2 print:text-indigo-600">Travel Itinerary</p>
                 <h1 className="text-4xl font-bold tracking-tight mb-1">{property.name}</h1>
-                <p className="text-slate-400 text-lg flex items-center gap-2 print:text-slate-500">
-                  <MapPin size={18} /> {property.location || 'Vacation Rental'}
-                </p>
+                <a 
+                  href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(property.location || '')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-slate-400 text-lg flex items-center gap-2 hover:text-indigo-400 transition-colors group print:text-slate-500"
+                >
+                  <MapPin size={18} /> 
+                  <span className="underline decoration-slate-400/30 group-hover:decoration-indigo-400/50">{property.location || 'Vacation Rental'}</span>
+                  <ExternalLink size={14} className="opacity-50 group-hover:opacity-100 print:hidden" />
+                </a>
               </div>
               <div className="bg-white/10 px-6 py-4 rounded-2xl border border-white/10 text-right print:bg-slate-50 print:border-slate-200 print:text-left md:print:text-right">
                 <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1 print:text-slate-500">Booking Reference</p>
