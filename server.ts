@@ -1,9 +1,10 @@
 import express from "express";
-import { createServer as createViteServer } from "vite";
+import { type ViteDevServer } from "vite";
 import { fileURLToPath } from "url";
 import path from "path";
 import Stripe from "stripe";
 import * as dotenv from "dotenv";
+import fs from "fs";
 
 // Load environment variables from .env file if present
 dotenv.config();
@@ -11,17 +12,22 @@ dotenv.config();
 let __filename: string;
 let __dirname: string;
 
+// ESM / CJS compatibility
 try {
-  __filename = fileURLToPath(import.meta.url);
-  __dirname = path.dirname(__filename);
+  // @ts-ignore
+  if (typeof __filename !== 'undefined') {
+    // @ts-ignore
+    __filename = __filename;
+    // @ts-ignore
+    __dirname = __dirname;
+  } else {
+    __filename = fileURLToPath(import.meta.url);
+    __dirname = path.dirname(__filename);
+  }
 } catch (e) {
-  // @ts-ignore
-  __filename = typeof __filename !== 'undefined' ? __filename : '';
-  // @ts-ignore
-  __dirname = typeof __dirname !== 'undefined' ? __dirname : '';
+  __filename = "";
+  __dirname = process.cwd();
 }
-
-import fs from "fs";
 
 async function startServer() {
   const app = express();
@@ -251,6 +257,7 @@ async function startServer() {
   // --- VITE / STATIC / FALLBACK ---
 
   if (isProd) {
+    console.log(`[Server] Serving static files from: ${distPath}`);
     app.use(express.static(distPath));
     
     app.get("/opt-in", (req, res) => {
@@ -260,7 +267,9 @@ async function startServer() {
     });
   } else {
     // In Dev Mode
-    const vite = await createViteServer({
+    console.log("[Server] Mounting Vite middleware for development");
+    const { createServer } = await import("vite");
+    const vite = await createServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
@@ -286,10 +295,14 @@ async function startServer() {
   app.listen(Number(PORT), "0.0.0.0", () => {
     console.log(`Server running on http://0.0.0.0:${PORT}`);
     // Log routes for debugging
-    const routes = app._router.stack
-      .filter((r: any) => r.route)
-      .map((r: any) => `${Object.keys(r.route.methods).join(',').toUpperCase()} ${r.route.path}`);
-    console.log("[Server] Registered Routes:", routes);
+    try {
+      const routes = app._router.stack
+        .filter((r: any) => r.route)
+        .map((r: any) => `${Object.keys(r.route.methods).join(',').toUpperCase()} ${r.route.path}`);
+      console.log("[Server] Registered Routes:", routes);
+    } catch (e) {
+      console.log("[Server] Could not list routes");
+    }
   });
 }
 
