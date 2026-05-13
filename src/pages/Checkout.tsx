@@ -251,35 +251,47 @@ export const Checkout: React.FC = () => {
       })
     })
     .then(async res => {
+      const contentType = res.headers.get("content-type");
+      let data: any = {};
+      
       try {
-        const text = await res.text();
-        if (!text) {
-           setClientSecret('MOCK_TEST_MODE');
-           setStripeConfigError("No response from server.");
-           return;
+        if (contentType && contentType.includes("application/json")) {
+          data = await res.json();
+        } else {
+          const text = await res.text();
+          console.warn("Expected JSON from server but got:", text);
+          if (!res.ok) {
+            setStripeConfigError(`Server Error: ${res.status} ${res.statusText}`);
+            setClientSecret('MOCK_TEST_MODE');
+            return;
+          }
         }
-        const data = JSON.parse(text);
-        if (!res.ok) {
-           console.error("Stripe Error:", data?.error);
-           setClientSecret('MOCK_TEST_MODE');
-           setStripeConfigError(data.error || "Server error occurred");
-           return;
-        }
-        setClientSecret(data.clientSecret || 'MOCK_TEST_MODE');
-        
-        if (!hasPublishableKey) {
-          setStripeConfigError("VITE_STRIPE_PUBLISHABLE_KEY is missing on the client.");
-        }
-      } catch (err) {
-        console.error("Payment intent JSON parse error:", err);
+      } catch (e) {
+        console.error("Error parsing response:", e);
+      }
+
+      if (!res.ok) {
+        console.error("Stripe API Error (Local Server):", data?.error || "Unknown Error");
         setClientSecret('MOCK_TEST_MODE');
-        setStripeConfigError("Failed to parse server response.");
+        setStripeConfigError(data.error || `Server responded with ${res.status}`);
+        return;
+      }
+
+      if (data.clientSecret) {
+        setClientSecret(data.clientSecret);
+      } else {
+        setClientSecret('MOCK_TEST_MODE');
+        setStripeConfigError("Server did not return a clientSecret.");
+      }
+      
+      if (!hasPublishableKey) {
+        setStripeConfigError("VITE_STRIPE_PUBLISHABLE_KEY is missing on the client. Please add it to your Secrets.");
       }
     })
     .catch((err) => {
        console.error("Payment intent fetch error:", err);
        setClientSecret('MOCK_TEST_MODE');
-       setStripeConfigError("Network error connecting to payment service.");
+       setStripeConfigError("Network error: Could not reach the payment server.");
     });
   }, [priceDetails, hasPublishableKey]);
 

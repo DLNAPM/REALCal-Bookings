@@ -45,6 +45,12 @@ async function startServer() {
     next();
   });
 
+  // Check Secrets
+  const stripeKey = process.env.STRIPE_SECRET_KEY;
+  const stripePublishable = process.env.VITE_STRIPE_PUBLISHABLE_KEY;
+  console.log(`[Server] Stripe Secret Key Present: ${!!stripeKey && stripeKey !== "sk_test_..."}`);
+  console.log(`[Server] Stripe Publishable Key Present: ${!!stripePublishable && stripePublishable !== "pk_test_..."}`);
+
   // --- API ROUTES ---
   app.get("/api/ping", (req, res) => {
     console.log("[API] Ping hit");
