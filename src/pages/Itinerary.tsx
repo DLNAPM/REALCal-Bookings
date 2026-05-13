@@ -157,29 +157,31 @@ export const Itinerary: React.FC = () => {
                     <div className="flex flex-col md:flex-row justify-between items-center gap-8">
                          <div className="flex-1 text-center md:text-left">
                             <h3 className="text-2xl font-bold mb-2">Welcome Home</h3>
-                            <p className="text-indigo-100 print:text-slate-600">Use the following digital access code for the main entry and your assigned room.</p>
+                            <p className="text-indigo-100 print:text-slate-600">Use the following digital access code for the property main entry.</p>
                          </div>
                          <div className="bg-white/20 px-8 py-6 rounded-2xl border border-white/20 text-center min-w-[200px] print:bg-indigo-50 print:border-indigo-100">
-                            <p className="text-indigo-200 text-xs font-bold uppercase tracking-[0.2em] mb-2 print:text-indigo-400">Door Lock Code</p>
+                            <p className="text-indigo-200 text-xs font-bold uppercase tracking-[0.2em] mb-2 print:text-indigo-400">Main Entry Code</p>
                             <p className="text-5xl font-mono font-bold tracking-[0.2em]">{booking.accessCode || '----'}</p>
                          </div>
                     </div>
                 </div>
                 
                 {booking.selectedBedroom && (
-                  <div className="mt-6 bg-slate-50 rounded-3xl p-8 border border-slate-100 flex items-center justify-between print:border-slate-200">
+                  <div className="mt-6 bg-slate-50 rounded-3xl p-8 border border-slate-100 flex flex-col md:flex-row items-center justify-between gap-6 print:border-slate-200">
                     <div className="flex items-center gap-4">
                       <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-sm text-indigo-600">
                          <Home size={28} />
                       </div>
                       <div>
-                        <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-0.5">Assigned Room</p>
+                        <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-0.5">Assigned Private Room</p>
                         <p className="text-xl font-bold text-slate-800">Room {booking.selectedBedroom.roomNumber}</p>
+                        <p className="text-slate-500 text-sm">{booking.selectedBedroom.type}</p>
                       </div>
                     </div>
-                    <div className="text-right">
-                       <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-0.5">Room Type</p>
-                       <p className="text-lg font-medium text-slate-600">{booking.selectedBedroom.type}</p>
+                    
+                    <div className="bg-white px-6 py-4 rounded-2xl border border-slate-200 text-center md:text-right min-w-[150px]">
+                       <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Room Lock Code</p>
+                       <p className="text-2xl font-mono font-bold text-indigo-600">{booking.selectedBedroom.roomLockNumber || 'N/A'}</p>
                     </div>
                   </div>
                 )}
