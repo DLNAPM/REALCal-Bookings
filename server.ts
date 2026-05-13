@@ -194,6 +194,29 @@ async function startServer() {
     }
   });
 
+  app.post("/api/refund-payment", async (req, res) => {
+    try {
+      const { paymentIntentId, amount } = req.body;
+      const key = process.env.STRIPE_SECRET_KEY;
+      if (!key || key === "sk_test_...") {
+        return res.status(400).json({ error: "STRIPE_SECRET_KEY is not configured." });
+      }
+      const stripe = new Stripe(key);
+      
+      // Issue a refund for the specified amount (in cents)
+      const refund = await stripe.refunds.create({
+        payment_intent: paymentIntentId,
+        amount: amount,
+      });
+      
+      console.log(`[Server] Refund issued: ${refund.id} for PI: ${paymentIntentId} amount: ${amount}`);
+      res.json({ success: true, refundId: refund.id });
+    } catch (e: any) {
+      console.error("Refund error:", e.message);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   app.post("/api/notify-managers", async (req, res) => {
     try {
       const { managers, bookingDetails } = req.body;

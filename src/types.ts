@@ -53,6 +53,7 @@ export interface Booking {
   checkOut: string;
   status: 'pending' | 'confirmed' | 'cancelled';
   totalPrice: number; // in cents
+  paymentIntentId?: string;
   guests: number;
   accessCode?: string;
   bookingRef?: string;

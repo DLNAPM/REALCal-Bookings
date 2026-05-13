@@ -67,7 +67,8 @@ const processBooking = async (
   setError: (err: string) => void,
   setProcessing: (b: boolean) => void,
   isTestMode: boolean = false,
-  selectedBedroom: any = null
+  selectedBedroom: any = null,
+  paymentIntentId?: string
 ) => {
   const bookingId = uuidv4();
   const e164Phone = formatPhoneE164(guestPhone);
@@ -106,10 +107,11 @@ const processBooking = async (
       checkOut: bookingDetails.checkOut.split('T')[0],
       status: isTestMode ? 'confirmed' : 'pending', // Auto-confirm test bookings
       totalPrice: Math.round(bookingDetails.priceDetails.grandTotal * 100),
-      guests: 1, // simplified for demo
+      paymentIntentId, // Save stripe payment intent ID for future modifications/refunds
       bookingRef,
       selectedBedroom,
       guestPhone: e164Phone, // Save formatted phone
+      guests: 1, // simplified for demo
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     };
@@ -196,7 +198,7 @@ const CheckoutForm: React.FC<{ clientSecret: string, bookingDetails: any, guestE
     if (!stripe || !elements || !user) return;
     setProcessing(true);
 
-    const { error: submitError } = await stripe.confirmPayment({
+    const { error: submitError, paymentIntent } = await stripe.confirmPayment({
       elements,
       redirect: "if_required"
     });
@@ -206,7 +208,7 @@ const CheckoutForm: React.FC<{ clientSecret: string, bookingDetails: any, guestE
       setProcessing(false);
     } else {
       // Payment successful, generate lock code and write Booking to firestore
-      await processBooking(bookingDetails, user, guestEmail, guestPhone, navigate, setError, setProcessing, isTestProperty, selectedBedroom);
+      await processBooking(bookingDetails, user, guestEmail, guestPhone, navigate, setError, setProcessing, isTestProperty, selectedBedroom, paymentIntent?.id);
     }
   };
 

@@ -4,11 +4,91 @@ import { db } from '../lib/firebase';
 import { collection, query, where, getDocs, doc, updateDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { Booking, Property } from '../types';
 import { useNavigate, Link } from 'react-router-dom';
-import { ChevronLeft, Calendar as CalendarIcon, XCircle, Home, MapPin, Edit3, X, Trash2, Printer } from 'lucide-react';
+import { ChevronLeft, Calendar as CalendarIcon, XCircle, Home, MapPin, Edit3, X, Trash2, Printer, CreditCard, Loader2 } from 'lucide-react';
 import { parseISO, differenceInHours } from 'date-fns';
 import { Calendar } from '../components/Calendar';
+import { loadStripe } from '@stripe/stripe-js';
+import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 
 import { LegalFooter } from '../components/LegalFooter';
+
+// Stripe initialization for modifications
+const stripePromiseBase = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '';
+let dynamicStripePromise: Promise<any> | null = null;
+const getStripe = async () => {
+  if (dynamicStripePromise) return dynamicStripePromise;
+  let key = stripePromiseBase;
+  try {
+    const res = await fetch('/api/config');
+    if (res.ok) {
+      const config = await res.json();
+      if (config.stripePublishableKey) key = config.stripePublishableKey;
+    }
+  } catch (e) {}
+  if (!key || key === 'pk_test_placeholder') return null;
+  dynamicStripePromise = loadStripe(key);
+  return dynamicStripePromise;
+};
+
+const ModificationPaymentForm: React.FC<{ 
+  clientSecret: string, 
+  onSuccess: () => void, 
+  onCancel: () => void,
+  amount: number
+}> = ({ clientSecret, onSuccess, onCancel, amount }) => {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [error, setError] = useState<string | null>(null);
+  const [processing, setProcessing] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!stripe || !elements) return;
+    setProcessing(true);
+
+    const { error: submitError } = await stripe.confirmPayment({
+      elements,
+      redirect: "if_required"
+    });
+
+    if (submitError) {
+      setError(submitError.message || 'Payment failed');
+      setProcessing(false);
+    } else {
+      onSuccess();
+    }
+  };
+
+  return (
+    <div className="bg-white p-6 rounded-2xl shadow-xl max-w-md w-full">
+      <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+        <CreditCard className="text-indigo-600" />
+        Pay Difference: ${(amount / 100).toFixed(2)}
+      </h3>
+      <p className="text-sm text-slate-500 mb-6 italic">To confirm your new dates, please pay the difference for the extended stay or higher rate.</p>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <PaymentElement />
+        {error && <div className="text-red-500 text-xs font-medium">{error}</div>}
+        <div className="flex gap-3 pt-4 font-black uppercase text-[10px] tracking-widest">
+           <button 
+             type="button" 
+             onClick={onCancel}
+             className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 py-3 rounded-xl transition-colors italic"
+           >
+             Cancel Changes
+           </button>
+           <button 
+             type="submit" 
+             disabled={!stripe || processing}
+             className="flex-[2] bg-indigo-600 hover:bg-indigo-500 text-white py-3 rounded-xl disabled:bg-slate-400 transition-colors shadow-sm flex items-center justify-center gap-2"
+           >
+             {processing ? <Loader2 className="animate-spin" size={16} /> : 'Complete Payment'}
+           </button>
+        </div>
+      </form>
+    </div>
+  );
+};
 
 export const MyBookings: React.FC = () => {
     const { user, loading } = useAuth();
@@ -17,8 +97,14 @@ export const MyBookings: React.FC = () => {
     const [filter, setFilter] = useState<'active' | 'cancelled'>('active');
     const [fetching, setFetching] = useState(true);
     const [editingBooking, setEditingBooking] = useState<(Booking & { propertyName?: string; propertyImage?: string; property?: Property | null }) | null>(null);
+    const [modificationPayment, setModificationPayment] = useState<{ clientSecret: string; amount: number; checkIn: string; checkOut: string; priceDetails: any } | null>(null);
+    const [stripePromise, setStripePromise] = useState<any>(null);
 
     const [globalSettings, setGlobalSettings] = useState<any>(null);
+
+    useEffect(() => {
+        getStripe().then(setStripePromise);
+    }, []);
 
     useEffect(() => {
         if (!user) {
@@ -136,8 +222,69 @@ export const MyBookings: React.FC = () => {
 
     const handleSaveEdit = async (checkIn: string, checkOut: string, priceDetails: any) => {
         if (!editingBooking || !user) return;
+        const newTotal = Math.round(priceDetails.grandTotal * 100);
+        const oldTotal = editingBooking.totalPrice;
+        const diff = newTotal - oldTotal;
+
+        if (diff < 0 && editingBooking.paymentIntentId) {
+            // Initiate Refund
+            const confirmRefund = window.confirm(`Your new booking total is $${(newTotal / 100).toFixed(2)}, which is $${(Math.abs(diff) / 100).toFixed(2)} less than your original payment.\n\nWe will issue a refund of $${(Math.abs(diff) / 100).toFixed(2)} to your original payment method.\n\nProceed with changes?`);
+            if (!confirmRefund) return;
+
+            try {
+                const refundRes = await fetch('/api/refund-payment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        paymentIntentId: editingBooking.paymentIntentId,
+                        amount: Math.abs(diff)
+                    })
+                });
+
+                if (!refundRes.ok) {
+                    const errData = await refundRes.json();
+                    throw new Error(errData.error || "Refund failed");
+                }
+                
+                console.log("[MyBookings] Refund successful");
+            } catch (e: any) {
+                console.error("[MyBookings] Refund error:", e);
+                alert(`We couldn't automatically issue a refund: ${e.message}. Please contact support to complete your modification.`);
+                return;
+            }
+        } else if (diff > 0) {
+            // Initiate Charge
+            try {
+                const intentRes = await fetch('/api/create-payment-intent', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ amount: diff })
+                });
+
+                if (!intentRes.ok) throw new Error("Failed to create modification payment intent");
+                const { clientSecret } = await intentRes.json();
+                
+                setModificationPayment({
+                    clientSecret,
+                    amount: diff,
+                    checkIn,
+                    checkOut,
+                    priceDetails
+                });
+                return; // Wait for payment form
+            } catch (e: any) {
+                alert(`Error initializing additional payment: ${e.message}`);
+                return;
+            }
+        }
+
+        // Proceed to update Firestore if diff == 0 or refund was handled
+        await finalizeBookingUpdate(checkIn, checkOut, newTotal);
+    };
+
+    const finalizeBookingUpdate = async (checkIn: string, checkOut: string, newTotal: number) => {
+        if (!editingBooking || !user) return;
         try {
-            const newTotal = Math.round(priceDetails.grandTotal * 100);
             const cleanCheckIn = checkIn.split('T')[0];
             const cleanCheckOut = checkOut.split('T')[0];
             await updateDoc(doc(db, 'bookings', editingBooking.id), {
@@ -191,6 +338,7 @@ export const MyBookings: React.FC = () => {
             
             alert("Booking dates successfully updated! Notifications have been sent.");
             setEditingBooking(null);
+            setModificationPayment(null);
         } catch (err: any) {
             alert(`Failed to update booking: ${err.message}`);
         }
@@ -369,7 +517,7 @@ export const MyBookings: React.FC = () => {
                 )}
             </main>
 
-            {editingBooking && (
+            {editingBooking && !modificationPayment && (
                 <div className="fixed inset-0 bg-slate-900/50 z-50 overflow-y-auto flex items-start justify-center pt-20 pb-20 px-4">
                     <div className="bg-white rounded-3xl overflow-hidden w-full max-w-6xl shadow-2xl">
                         <div className="flex justify-between items-center p-6 border-b border-slate-100">
@@ -390,6 +538,19 @@ export const MyBookings: React.FC = () => {
                             />
                         </div>
                     </div>
+                </div>
+            )}
+
+            {modificationPayment && (
+                <div className="fixed inset-0 bg-slate-900/60 z-[60] flex items-center justify-center p-4">
+                    <Elements stripe={stripePromise} options={{ clientSecret: modificationPayment.clientSecret }}>
+                        <ModificationPaymentForm 
+                            clientSecret={modificationPayment.clientSecret}
+                            amount={modificationPayment.amount}
+                            onSuccess={() => finalizeBookingUpdate(modificationPayment.checkIn, modificationPayment.checkOut, Math.round(modificationPayment.priceDetails.grandTotal * 100))}
+                            onCancel={() => setModificationPayment(null)}
+                        />
+                    </Elements>
                 </div>
             )}
             <LegalFooter />
