@@ -387,35 +387,27 @@ export const Checkout: React.FC = () => {
                  </div>
              ) : null}
 
-             {clientSecret === 'MOCK_TEST_MODE' ? (
-                <div className="p-6 bg-amber-50 border border-amber-200 rounded-2xl md:mt-8">
-                   <p className="text-amber-800 font-bold mb-2 text-sm">Stripe Testing Mode Active</p>
-                    <p className="text-amber-700 text-sm mb-4">
-                       {stripeConfigError || "Stripe is not fully configured."}
-                       <span className="block mt-2 font-semibold">You can bypass payment to test the flow.</span>
-                    </p>
-                   <div className="flex flex-col gap-3">
-                     <button 
-                       disabled={processing}
-                       onClick={async () => {
-                           setProcessing(true);
-                           await processBooking({ propertyId, checkIn, checkOut, priceDetails }, user, guestEmail, guestPhone, navigate, setError, setProcessing, !!property?.isTestProperty, selectedBedroom);
-                       }}
-                       className="w-full bg-amber-600 hover:bg-amber-500 text-white py-4 rounded-xl font-bold transition-colors shadow-sm disabled:opacity-50"
-                     >
-                       {processing ? 'Processing...' : 'Bypass Payment & Confirm'}
-                     </button>
-                     {error && <div className="text-red-500 text-sm mt-2">{error}</div>}
-                   </div>
-                </div>
-             ) : clientSecret ? (
+             {clientSecret && clientSecret !== 'MOCK_TEST_MODE' ? (
                 <Elements stripe={stripePromise} options={{ clientSecret }}>
                   <CheckoutForm clientSecret={clientSecret} bookingDetails={{ propertyId, checkIn, checkOut, priceDetails }} guestEmail={guestEmail} guestPhone={guestPhone} isTestProperty={isTestProperty} selectedBedroom={selectedBedroom} />
                 </Elements>
              ) : (
-                <div className="animate-pulse flex flex-col space-y-4">
-                   <div className="h-10 bg-slate-100 border border-slate-200 rounded-xl"></div>
-                   <div className="h-48 bg-slate-100 border border-slate-200 rounded-xl"></div>
+                <div className="p-8 bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl text-center">
+                   {stripeConfigError ? (
+                      <div className="space-y-3">
+                        <p className="text-rose-600 font-bold">Stripe Configuration Required</p>
+                        <p className="text-slate-500 text-sm leading-relaxed">
+                          {stripeConfigError}
+                          <br />
+                          Please add <code className="bg-slate-100 px-1 rounded">STRIPE_SECRET_KEY</code> and <code className="bg-slate-100 px-1 rounded">VITE_STRIPE_PUBLISHABLE_KEY</code> to your secrets to enable payments.
+                        </p>
+                      </div>
+                   ) : (
+                      <div className="animate-pulse flex flex-col items-center space-y-4">
+                        <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                        <p className="text-slate-500 font-medium text-sm">Initializing secure checkout...</p>
+                      </div>
+                   )}
                 </div>
              )}
 
