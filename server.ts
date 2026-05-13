@@ -61,6 +61,23 @@ async function startServer() {
   console.log(`[Server] --------------------------`);
 
   // --- API ROUTES ---
+  app.get("/api/config", (req, res) => {
+    console.log("[Server] /api/config hit");
+    const publicEnv: Record<string, string> = {};
+    Object.keys(process.env).forEach(key => {
+      if (key.startsWith('VITE_')) {
+        publicEnv[key] = process.env[key] || '';
+      }
+    });
+
+    res.json({
+      ...publicEnv,
+      stripePublishableKey: process.env.VITE_STRIPE_PUBLISHABLE_KEY || null,
+      environment: process.env.NODE_ENV || 'development',
+      hasStripeSecret: !!process.env.STRIPE_SECRET_KEY
+    });
+  });
+
   app.get("/api/ping", (req, res) => {
     console.log("[API] Ping hit");
     res.json({ 
@@ -73,23 +90,6 @@ async function startServer() {
 
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok", uptime: process.uptime() });
-  });
-
-  app.get("/api/config", (req, res) => {
-    // Return non-sensitive configuration to the client
-    // This allows Render.com environment variables changed after build to be picked up
-    const publicEnv: Record<string, string> = {};
-    Object.keys(process.env).forEach(key => {
-      if (key.startsWith('VITE_')) {
-        publicEnv[key] = process.env[key] || '';
-      }
-    });
-
-    res.json({
-      ...publicEnv,
-      stripePublishableKey: process.env.VITE_STRIPE_PUBLISHABLE_KEY || null,
-      environment: process.env.NODE_ENV || 'development'
-    });
   });
 
   app.post("/api/test-sms", async (req, res) => {
@@ -285,6 +285,11 @@ async function startServer() {
 
   app.listen(Number(PORT), "0.0.0.0", () => {
     console.log(`Server running on http://0.0.0.0:${PORT}`);
+    // Log routes for debugging
+    const routes = app._router.stack
+      .filter((r: any) => r.route)
+      .map((r: any) => `${Object.keys(r.route.methods).join(',').toUpperCase()} ${r.route.path}`);
+    console.log("[Server] Registered Routes:", routes);
   });
 }
 

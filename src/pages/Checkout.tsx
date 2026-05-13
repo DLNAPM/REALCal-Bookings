@@ -299,9 +299,9 @@ export const Checkout: React.FC = () => {
           data = await res.json();
         } else {
           const text = await res.text();
-          console.warn("Expected JSON from server but got:", text);
+          console.error(`[Checkout] Expected JSON from server but got ${contentType || 'no content-type'}. Body snippet: ${text.substring(0, 100)}`);
           if (!res.ok) {
-            setStripeConfigError(`Server Error: ${res.status} ${res.statusText}`);
+            setStripeConfigError(`Server Error: ${res.status}. Please ensure the server is running and /api/config is registered.`);
             setClientSecret('MOCK_TEST_MODE');
             return;
           }
