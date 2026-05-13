@@ -18,19 +18,25 @@ const getStripe = async () => {
   
   let key = stripePromiseBase;
   
-  // Try to fetch from server for runtime dynamic config (Render.com etc)
-  try {
-    const res = await fetch('/api/config');
-    if (res.ok) {
-      const config = await res.json();
-      if (config.stripePublishableKey) {
-        key = config.stripePublishableKey;
-        console.log("[Checkout] Using dynamic Stripe key from server");
+    // Try to fetch from server for runtime dynamic config (Render.com etc)
+    try {
+      console.log("[Checkout] Fetching /api/config...");
+      const res = await fetch('/api/config');
+      if (res.ok) {
+        const config = await res.json();
+        if (config.stripePublishableKey) {
+          key = config.stripePublishableKey;
+          console.log("[Checkout] Using dynamic Stripe key from server:", key.substring(0, 10) + "...");
+        }
+      } else {
+        console.error(`[Checkout] /api/config failed with status ${res.status}. Response:`, await res.text().catch(() => "no-body"));
+        // Check server-debug if config fails
+        const debugRes = await fetch('/server-debug').catch(() => null);
+        if (debugRes) console.log(`[Checkout] /server-debug status: ${debugRes.status}`);
       }
+    } catch (e) {
+      console.warn("[Checkout] Failed to fetch dynamic config:", e);
     }
-  } catch (e) {
-    console.warn("[Checkout] Failed to fetch dynamic config, falling back to build-time key");
-  }
   
   if (!key || key === 'pk_test_placeholder') {
     return null;

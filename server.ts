@@ -49,8 +49,9 @@ async function startServer() {
 
   // API Logging
   app.use((req, res, next) => {
+    console.log(`[Server] ${new Date().toISOString()} - ${req.method} ${req.url}`);
     if (req.path.startsWith('/api')) {
-      console.log(`[API Request] ${new Date().toISOString()} - ${req.method} ${req.path}`);
+      console.log(`[API Request] Found API path: ${req.path}`);
     }
     next();
   });
@@ -66,13 +67,29 @@ async function startServer() {
   console.log(`[Server] VITE_STRIPE_PUBLISHABLE_KEY: ${stripePublishable ? 'Present' : 'MISSING'}`);
   console.log(`[Server] --------------------------`);
 
-  // --- API ROUTES ---
+  app.get("/server-debug", (req, res) => {
+    res.json({
+      message: "Server is alive",
+      env: {
+        NODE_ENV: process.env.NODE_ENV,
+        PORT: process.env.PORT,
+        PWD: process.cwd()
+      },
+      routes: app._router.stack
+        .filter((r: any) => r.route)
+        .map((r: any) => `${Object.keys(r.route.methods).join(',').toUpperCase()} ${r.route.path}`)
+    });
+  });
+
   app.get("/api/config", (req, res) => {
-    console.log("[Server] /api/config hit");
+    console.log("[Server] HIT: /api/config");
     const publicEnv: Record<string, string> = {};
     Object.keys(process.env).forEach(key => {
-      if (key.startsWith('VITE_')) {
-        publicEnv[key] = process.env[key] || '';
+      if (key.startsWith('VITE_') || key === 'STRIPE_SECRET_KEY') {
+        // We don't return the secret key, just the publishable one
+        if (key.startsWith('VITE_')) {
+          publicEnv[key] = process.env[key] || '';
+        }
       }
     });
 
@@ -80,7 +97,8 @@ async function startServer() {
       ...publicEnv,
       stripePublishableKey: process.env.VITE_STRIPE_PUBLISHABLE_KEY || null,
       environment: process.env.NODE_ENV || 'development',
-      hasStripeSecret: !!process.env.STRIPE_SECRET_KEY
+      hasStripeSecret: !!process.env.STRIPE_SECRET_KEY,
+      timestamp: Date.now()
     });
   });
 

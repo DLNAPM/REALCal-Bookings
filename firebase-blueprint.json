@@ -20,16 +20,20 @@
       "type": "object",
       "properties": {
         "userId": { "type": "string" },
+        "propertyId": { "type": "string" },
         "checkIn": { "type": "string", "format": "date" },
         "checkOut": { "type": "string", "format": "date" },
         "status": { "type": "string", "enum": ["pending", "confirmed", "cancelled"] },
         "totalPrice": { "type": "number" },
         "guests": { "type": "number" },
+        "bookingRef": { "type": "string" },
+        "guestPhone": { "type": "string" },
+        "selectedBedroom": { "type": "object" },
         "accessCode": { "type": "string" },
         "createdAt": { "type": "string" },
         "updatedAt": { "type": "string" }
       },
-      "required": ["userId", "checkIn", "checkOut", "status", "totalPrice", "guests", "createdAt", "updatedAt"]
+      "required": ["userId", "propertyId", "checkIn", "checkOut", "status", "totalPrice", "guests", "createdAt", "updatedAt"]
     },
     "pricing_rule": {
       "title": "Pricing Rule",

@@ -76,7 +76,7 @@ service cloud.firestore {
 
     // Bookings Collection
     function isValidBooking(data) {
-      return data.keys().hasAll(['userId', 'propertyId', 'checkIn', 'checkOut', 'status', 'totalPrice', 'guests', 'createdAt', 'updatedAt']) && data.keys().size() >= 9 && data.keys().size() <= 12 &&
+      return data.keys().hasAll(['userId', 'propertyId', 'checkIn', 'checkOut', 'status', 'totalPrice', 'guests', 'createdAt', 'updatedAt']) && data.keys().size() >= 9 && data.keys().size() <= 15 &&
         data.userId is string && data.userId.size() <= 128 && (data.userId == request.auth.uid || isAdmin()) &&
         data.propertyId is string && data.propertyId.size() <= 128 &&
         data.checkIn is string && data.checkIn.size() <= 32 &&
@@ -86,6 +86,8 @@ service cloud.firestore {
         data.guests is number &&
         (data.keys().hasAll(['accessCode']) ? data.accessCode is string && data.accessCode.size() <= 64 : true) &&
         (data.keys().hasAll(['bookingRef']) ? data.bookingRef is string && data.bookingRef.size() <= 32 : true) &&
+        (data.keys().hasAll(['guestPhone']) ? data.guestPhone is string && data.guestPhone.size() <= 32 : true) &&
+        (data.keys().hasAll(['selectedBedroom']) ? (data.selectedBedroom is map || data.selectedBedroom == null) : true) &&
         (data.keys().hasAll(['cancellationFee']) ? data.cancellationFee is number : true) &&
         data.createdAt is timestamp &&
         data.updatedAt is timestamp;
