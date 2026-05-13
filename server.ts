@@ -3,6 +3,10 @@ import { createServer as createViteServer } from "vite";
 import { fileURLToPath } from "url";
 import path from "path";
 import Stripe from "stripe";
+import * as dotenv from "dotenv";
+
+// Load environment variables from .env file if present
+dotenv.config();
 
 let __filename: string;
 let __dirname: string;
@@ -48,8 +52,13 @@ async function startServer() {
   // Check Secrets
   const stripeKey = process.env.STRIPE_SECRET_KEY;
   const stripePublishable = process.env.VITE_STRIPE_PUBLISHABLE_KEY;
-  console.log(`[Server] Stripe Secret Key Present: ${!!stripeKey && stripeKey !== "sk_test_..."}`);
-  console.log(`[Server] Stripe Publishable Key Present: ${!!stripePublishable && stripePublishable !== "pk_test_..."}`);
+  
+  // Debug logging - explicitly checking for presence without leaking keys
+  console.log(`[Server] --- Environment Check ---`);
+  console.log(`[Server] NODE_ENV: ${process.env.NODE_ENV}`);
+  console.log(`[Server] STRIPE_SECRET_KEY: ${stripeKey ? (stripeKey.startsWith('sk_test') ? 'Present (Test Key)' : 'Present (Live Key?)') : 'MISSING'}`);
+  console.log(`[Server] VITE_STRIPE_PUBLISHABLE_KEY: ${stripePublishable ? 'Present' : 'MISSING'}`);
+  console.log(`[Server] --------------------------`);
 
   // --- API ROUTES ---
   app.get("/api/ping", (req, res) => {
@@ -64,6 +73,23 @@ async function startServer() {
 
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok", uptime: process.uptime() });
+  });
+
+  app.get("/api/config", (req, res) => {
+    // Return non-sensitive configuration to the client
+    // This allows Render.com environment variables changed after build to be picked up
+    const publicEnv: Record<string, string> = {};
+    Object.keys(process.env).forEach(key => {
+      if (key.startsWith('VITE_')) {
+        publicEnv[key] = process.env[key] || '';
+      }
+    });
+
+    res.json({
+      ...publicEnv,
+      stripePublishableKey: process.env.VITE_STRIPE_PUBLISHABLE_KEY || null,
+      environment: process.env.NODE_ENV || 'development'
+    });
   });
 
   app.post("/api/test-sms", async (req, res) => {

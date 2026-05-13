@@ -10,7 +10,35 @@ import { v4 as uuidv4 } from 'uuid'; // I need to install uuid
 
 import { Property } from '../types';
 
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_test_placeholder');
+const stripePromiseBase = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '';
+let dynamicStripePromise: Promise<any> | null = null;
+
+const getStripe = async () => {
+  if (dynamicStripePromise) return dynamicStripePromise;
+  
+  let key = stripePromiseBase;
+  
+  // Try to fetch from server for runtime dynamic config (Render.com etc)
+  try {
+    const res = await fetch('/api/config');
+    if (res.ok) {
+      const config = await res.json();
+      if (config.stripePublishableKey) {
+        key = config.stripePublishableKey;
+        console.log("[Checkout] Using dynamic Stripe key from server");
+      }
+    }
+  } catch (e) {
+    console.warn("[Checkout] Failed to fetch dynamic config, falling back to build-time key");
+  }
+  
+  if (!key || key === 'pk_test_placeholder') {
+    return null;
+  }
+  
+  dynamicStripePromise = loadStripe(key);
+  return dynamicStripePromise;
+};
 
 const formatPhoneE164 = (phone: string) => {
   // Remove all non-numeric characters except +
@@ -209,10 +237,22 @@ export const Checkout: React.FC = () => {
   const [property, setProperty] = useState<Property | null>(null);
   const isTestProperty = !!property?.isTestProperty;
   
-  const hasPublishableKey = !!import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY && import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY !== 'pk_test_placeholder';
+  const [stripePromise, setStripePromise] = useState<any>(null);
+  const [hasPublishableKey, setHasPublishableKey] = useState(false);
 
   const [selectedBedroom, setSelectedBedroom] = useState<any>(location.state?.selectedBedroom || null);
   const navigate = useNavigate();
+  
+  useEffect(() => {
+    getStripe().then(sp => {
+      if (sp) {
+        setStripePromise(sp);
+        setHasPublishableKey(true);
+      } else {
+        setHasPublishableKey(false);
+      }
+    });
+  }, []);
   
   useEffect(() => {
     if (user?.email && !guestEmail) {
