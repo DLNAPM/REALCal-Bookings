@@ -15,6 +15,7 @@ import { MyBookings } from './pages/MyBookings';
 import { OptIn } from './pages/OptIn';
 import { PrivacyPolicy } from './pages/PrivacyPolicy';
 import { TermsOfService } from './pages/TermsOfService';
+import { Itinerary } from './pages/Itinerary';
 import { HelpModal } from './components/HelpModal';
 
 export default function App() {
@@ -26,6 +27,7 @@ export default function App() {
            <Route path="/property/:id" element={<PropertyDetail />} />
            <Route path="/checkout" element={<Checkout />} />
            <Route path="/confirmation" element={<Confirmation />} />
+           <Route path="/itinerary/:id" element={<Itinerary />} />
            <Route path="/admin" element={<AdminDashboard />} />
            <Route path="/my-bookings" element={<MyBookings />} />
            <Route path="/opt-in" element={<OptIn />} />

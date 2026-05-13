@@ -1,6 +1,6 @@
 import React from 'react';
 import { useLocation, Link, Navigate } from 'react-router-dom';
-import { CheckCircle, Key } from 'lucide-react';
+import { CheckCircle, Key, Printer } from 'lucide-react';
 import { LegalFooter } from '../components/LegalFooter';
 
 export const Confirmation: React.FC = () => {
@@ -43,6 +43,13 @@ export const Confirmation: React.FC = () => {
                 )}
 
                 <p className="text-sm text-slate-500 mb-6">We've sent a receipt and full instructions to your email.</p>
+
+                <Link 
+                  to={`/itinerary/${bookingId}`}
+                  className="w-full flex items-center justify-center gap-2 py-4 bg-emerald-600 text-white font-bold rounded-2xl hover:bg-emerald-500 transition-colors shadow-sm mb-4"
+                >
+                    <Printer size={20} /> View / Print Itinerary
+                </Link>
 
                 {notificationResults && notificationResults.length > 0 && (
                     <div className="text-left bg-blue-50 border border-blue-100 p-4 rounded-2xl mb-8">

@@ -4,7 +4,7 @@ import { db } from '../lib/firebase';
 import { collection, query, where, getDocs, doc, updateDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { Booking, Property } from '../types';
 import { useNavigate, Link } from 'react-router-dom';
-import { ChevronLeft, Calendar as CalendarIcon, XCircle, Home, MapPin, Edit3, X, Trash2 } from 'lucide-react';
+import { ChevronLeft, Calendar as CalendarIcon, XCircle, Home, MapPin, Edit3, X, Trash2, Printer } from 'lucide-react';
 import { parseISO, differenceInHours } from 'date-fns';
 import { Calendar } from '../components/Calendar';
 
@@ -325,31 +325,41 @@ export const MyBookings: React.FC = () => {
                                             </div>
                                         )}
 
-                                        <div className="mt-auto flex gap-3 pt-6 border-t border-slate-100">
-                                            {canCancel ? (
-                                                <>
-                                                    <button 
-                                                        onClick={() => setEditingBooking(booking)}
-                                                        className="flex-1 bg-white border-2 border-indigo-100 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-200 font-bold py-3 rounded-xl transition-colors flex justify-center items-center gap-2"
-                                                    >
-                                                        <Edit3 size={18} /> Edit Dates
-                                                    </button>
-                                                    <button 
-                                                        onClick={() => handleCancel(booking)}
-                                                        className="flex-1 bg-white border-2 border-rose-100 text-rose-600 hover:bg-rose-50 hover:border-rose-200 font-bold py-3 rounded-xl transition-colors flex justify-center items-center gap-2"
-                                                    >
-                                                        <XCircle size={18} /> Cancel
-                                                    </button>
-                                                </>
-                                            ) : booking.status !== 'cancelled' ? (
-                                                <div className="text-sm font-bold text-amber-600 bg-amber-50 px-4 py-3 rounded-xl border border-amber-100 flex-1 text-center">
-                                                    Check-in complete or underway
-                                                </div>
-                                            ) : (
-                                                <div className="text-sm font-bold text-slate-500 bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 flex-1 text-center">
-                                                    Reservation Cancelled
-                                                </div>
+                                        <div className="mt-auto flex flex-col gap-3 pt-6 border-t border-slate-100">
+                                            {booking.status !== 'cancelled' && (
+                                                <Link 
+                                                    to={`/itinerary/${booking.id}`}
+                                                    className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl transition-colors flex justify-center items-center gap-2 hover:bg-indigo-500 shadow-sm"
+                                                >
+                                                    <Printer size={18} /> View Itinerary
+                                                </Link>
                                             )}
+                                            <div className="flex gap-3">
+                                                {canCancel ? (
+                                                    <>
+                                                        <button 
+                                                            onClick={() => setEditingBooking(booking)}
+                                                            className="flex-1 bg-white border-2 border-indigo-100 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-200 font-bold py-3 rounded-xl transition-colors flex justify-center items-center gap-2"
+                                                        >
+                                                            <Edit3 size={18} /> Edit Dates
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => handleCancel(booking)}
+                                                            className="flex-1 bg-white border-2 border-rose-100 text-rose-600 hover:bg-rose-50 hover:border-rose-200 font-bold py-3 rounded-xl transition-colors flex justify-center items-center gap-2"
+                                                        >
+                                                            <XCircle size={18} /> Cancel
+                                                        </button>
+                                                    </>
+                                                ) : booking.status !== 'cancelled' ? (
+                                                    <div className="text-sm font-bold text-amber-600 bg-amber-50 px-4 py-3 rounded-xl border border-amber-100 flex-1 text-center">
+                                                        Check-in complete or underway
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-sm font-bold text-slate-500 bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 flex-1 text-center">
+                                                        Reservation Cancelled
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
