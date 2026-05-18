@@ -79,16 +79,8 @@ export const OptIn: React.FC = () => {
       setIsPreviewAction(true);
       if (accepted) {
         setShowSuccess(true);
-        setTimeout(() => {
-          setShowSuccess(false);
-          setIsPreviewAction(false);
-        }, 3500);
       } else {
         setShowDeclineMessage(true);
-        setTimeout(() => {
-          setShowDeclineMessage(false);
-          setIsPreviewAction(false);
-        }, 6000);
       }
       return;
     }
@@ -106,16 +98,8 @@ export const OptIn: React.FC = () => {
       
       if (finalPreference) {
         setShowSuccess(true);
-        // Automatically navigate after 3.5 seconds
-        setTimeout(() => {
-          navigate('/');
-        }, 3500);
       } else {
         setShowDeclineMessage(true);
-        // Automatically navigate after 6 seconds
-        setTimeout(() => {
-          navigate('/');
-        }, 6000);
       }
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, userPath);
@@ -299,7 +283,7 @@ export const OptIn: React.FC = () => {
                 {isPreviewAction ? 'Close Preview' : 'Browse Properties'}
               </button>
               
-              <p className="mt-6 text-sm text-slate-400 italic">{isPreviewAction ? 'You are viewing a demonstration' : 'Redirecting you shortly...'}</p>
+              <p className="mt-6 text-sm text-slate-400 italic">{isPreviewAction ? 'You are viewing a demonstration' : ''}</p>
             </motion.div>
           </motion.div>
         )}
@@ -350,7 +334,7 @@ export const OptIn: React.FC = () => {
                 {isPreviewAction ? 'Close Preview' : 'Continue to Browse'}
               </button>
               
-              <p className="mt-6 text-sm text-slate-400 italic">{isPreviewAction ? 'Demonstration mode active' : 'Redirecting to properties...'}</p>
+              <p className="mt-6 text-sm text-slate-400 italic">{isPreviewAction ? 'Demonstration mode active' : ''}</p>
             </motion.div>
           </motion.div>
         )}
