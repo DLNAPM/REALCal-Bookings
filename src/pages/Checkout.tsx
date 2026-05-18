@@ -122,6 +122,26 @@ const processBooking = async (
 
     if (db) {
       await setDoc(doc(db, 'bookings', bookingId), payload);
+
+      // Auto-add Blackout for the day after checkout for maintenance/cleaning
+      try {
+        const checkOutDate = new Date(bookingDetails.checkOut);
+        const dayAfterDate = new Date(checkOutDate);
+        dayAfterDate.setDate(dayAfterDate.getDate() + 1);
+        const blackoutDateString = dayAfterDate.toISOString().split('T')[0];
+        
+        await setDoc(doc(db, 'blackout_dates', `maint-${bookingId}`), {
+          propertyId: bookingDetails.propertyId,
+          date: blackoutDateString,
+          targetType: selectedBedroom ? 'room' : 'property',
+          roomNumber: selectedBedroom?.roomNumber || null,
+          reason: `Maintenance/Cleaning for Booking ${bookingRef}`,
+          createdAt: serverTimestamp()
+        });
+        console.log(`[Checkout] Auto-blackout created for ${blackoutDateString}`);
+      } catch (blackoutErr) {
+        console.warn("Failed to create auto-blackout", blackoutErr);
+      }
     }
     
     let notificationResults: string[] = [];

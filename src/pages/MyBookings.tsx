@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
-import { collection, query, where, getDocs, doc, updateDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, getDoc, serverTimestamp, deleteDoc, setDoc } from 'firebase/firestore';
 import { Booking, Property } from '../types';
 import { useNavigate, Link } from 'react-router-dom';
 import { ChevronLeft, Calendar as CalendarIcon, XCircle, Home, MapPin, Edit3, X, Trash2, Printer, CreditCard, Loader2 } from 'lucide-react';
@@ -198,6 +198,14 @@ export const MyBookings: React.FC = () => {
                 cancellationFee: cancellationFee,
                 updatedAt: serverTimestamp()
             });
+
+            // Remove associated maintenance blackout
+            try {
+                await deleteDoc(doc(db, 'blackout_dates', `maint-${booking.id}`));
+                console.log(`[MyBookings] Maintenance blackout removed for booking ${booking.id}`);
+            } catch (blackoutErr) {
+                console.warn("Failed to remove maintenance blackout on cancellation", blackoutErr);
+            }
             
             // Refresh list locally
             setBookings(prev => prev.map(b => b.id === booking.id ? { ...b, status: 'cancelled', cancellationFee } : b));
@@ -293,6 +301,26 @@ export const MyBookings: React.FC = () => {
                 totalPrice: newTotal,
                 updatedAt: serverTimestamp()
             });
+
+            // Update associated maintenance blackout
+            try {
+                const checkOutDate = new Date(cleanCheckOut + 'T12:00:00'); // Use noon to avoid TZ issues
+                const dayAfterDate = new Date(checkOutDate);
+                dayAfterDate.setDate(dayAfterDate.getDate() + 1);
+                const blackoutDateString = dayAfterDate.toISOString().split('T')[0];
+                
+                await setDoc(doc(db, 'blackout_dates', `maint-${editingBooking.id}`), {
+                    propertyId: editingBooking.propertyId,
+                    date: blackoutDateString,
+                    targetType: editingBooking.selectedBedroom ? 'room' : 'property',
+                    roomNumber: editingBooking.selectedBedroom?.roomNumber || null,
+                    reason: `Maintenance/Cleaning for Booking ${editingBooking.bookingRef}`,
+                    createdAt: serverTimestamp()
+                });
+                console.log(`[MyBookings] Maintenance blackout updated for ${blackoutDateString}`);
+            } catch (blackoutErr) {
+                console.warn("Failed to update maintenance blackout on edit", blackoutErr);
+            }
             
             // Notify Managers and User
             try {

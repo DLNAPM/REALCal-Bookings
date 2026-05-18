@@ -582,6 +582,26 @@ export const AdminDashboard: React.FC = () => {
         // Save Booking
         await setDoc(doc(db, 'bookings', bookingId), payload);
 
+        // Auto-add Blackout for the day after checkout for maintenance/cleaning
+        try {
+            const checkOutDate = new Date(checkOut + 'T12:00:00'); // Use noon to avoid TZ issues
+            const dayAfterDate = new Date(checkOutDate);
+            dayAfterDate.setDate(dayAfterDate.getDate() + 1);
+            const blackoutDateString = dayAfterDate.toISOString().split('T')[0];
+            
+            await setDoc(doc(db, 'blackout_dates', `maint-${bookingId}`), {
+                propertyId: formPropId,
+                date: blackoutDateString,
+                targetType: 'property', // Admin override usually for entire property
+                roomNumber: null,
+                reason: `Maintenance/Cleaning for Booking Override`,
+                createdAt: serverTimestamp()
+            });
+            console.log(`[Admin] Auto-blackout created for ${blackoutDateString}`);
+        } catch (blackoutErr) {
+            console.warn("Failed to create auto-blackout in admin", blackoutErr);
+        }
+
         // Notify Managers
         try {
            const managers = propertyManagers.filter(m => m.enabled);
