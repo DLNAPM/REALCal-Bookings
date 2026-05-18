@@ -42,7 +42,8 @@ export const TermsOfService: React.FC = () => {
                 By providing your phone number and completing your profile, you expressly consent to receive automated messaging (SMS or text messaging) from REALCal Bookings.
               </p>
               <ul className="list-disc pl-5 mt-4 text-slate-600 space-y-2">
-                <li><strong>Frequency:</strong> Message frequency is limited to one per property booked transaction (confirmation, check-in, check-out).</li>
+                <li><strong>Purpose:</strong> Messaging is used solely for REALCal reservation confirmations, reminders, and access code updates for your booking.</li>
+                <li><strong>Frequency:</strong> Message frequency varies based on transaction activity (confirmation, reminders, check-out).</li>
                 <li><strong>Fees:</strong> Standard message and data rates may apply depending on your mobile carrier plan.</li>
                 <li><strong>Opt-Out:</strong> Reply STOP to any message to opt-out at any time.</li>
                 <li><strong>Support:</strong> Reply HELP for assistance.</li>
