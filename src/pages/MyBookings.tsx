@@ -269,7 +269,16 @@ export const MyBookings: React.FC = () => {
                 const intentRes = await fetch('/api/create-payment-intent', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ amount: diff })
+                    body: JSON.stringify({ 
+                        amount: diff,
+                        propertyId: editingBooking.propertyId,
+                        checkIn,
+                        checkOut,
+                        metadata: {
+                            bookingId: editingBooking.id,
+                            type: 'modification_charge'
+                        }
+                    })
                 });
 
                 if (!intentRes.ok) throw new Error("Failed to create modification payment intent");

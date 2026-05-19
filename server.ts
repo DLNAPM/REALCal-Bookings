@@ -231,71 +231,80 @@ async function startServer() {
 
   app.post("/api/create-payment-intent", async (req, res) => {
     try {
-      const { propertyId, checkIn, checkOut, selectedBedrooms, selectedBedroom, currency = "usd", metadata } = req.body;
+      const { propertyId, checkIn, checkOut, selectedBedrooms, selectedBedroom, currency = "usd", metadata, amount } = req.body;
       const key = process.env.STRIPE_SECRET_KEY;
       if (!key || key === "sk_test_...") {
         return res.status(400).json({ error: "STRIPE_SECRET_KEY is not configured." });
       }
 
-      if (!propertyId || !checkIn || !checkOut) {
-        return res.status(400).json({ error: "Missing required booking details (propertyId, checkIn, checkOut)." });
-      }
+      let amountInCents: number;
 
-      // Handle legacy selectedBedroom or new selectedBedrooms array
-      const rooms = selectedBedrooms || (selectedBedroom ? [selectedBedroom] : []);
-      const rentalMode = rooms.length > 0 ? 'room' : 'entire';
-
-      // Late-initialization check for Firestore if it failed at startup
-      if (!db) {
-        console.log("[Server] db not initialized at startup, attempting late initialization...");
-        try {
-          const configPath = path.resolve(process.cwd(), "firebase-applet-config.json");
-          const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-          
-          if (fs.existsSync(configPath)) {
-            const firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-            if (admin.apps.length === 0) {
-              admin.initializeApp({ projectId: firebaseConfig.projectId });
-            }
-            db = getFirestore(admin.app(), firebaseConfig.firestoreDatabaseId || "(default)");
-          } else if (serviceAccountJson) {
-            if (admin.apps.length === 0) {
-              const sa = JSON.parse(serviceAccountJson);
-              admin.initializeApp({ credential: admin.credential.cert(sa) });
-            }
-            db = getFirestore(admin.app(), process.env.FIREBASE_DATABASE_ID || "(default)");
-          } else if (process.env.FIREBASE_PROJECT_ID) {
-            if (admin.apps.length === 0) {
-              admin.initializeApp({ projectId: process.env.FIREBASE_PROJECT_ID });
-            }
-            db = getFirestore(admin.app(), process.env.FIREBASE_DATABASE_ID || "(default)");
-          }
-          
-          if (db) console.log("[Server] Late Firestore initialization successful.");
-        } catch (e) {
-          console.error("[Server] Late Firestore initialization failed:", e);
+      if (amount && (typeof amount === 'number') && amount > 0) {
+        // Direct amount provided (likely a modification/additional charge)
+        amountInCents = Math.round(amount);
+        console.log(`[Server] Using provided amount for PaymentIntent: ${amountInCents} cents`);
+      } else {
+        // Standard full booking calculation
+        if (!propertyId || !checkIn || !checkOut) {
+          return res.status(400).json({ error: "Missing required booking details (propertyId, checkIn, checkOut) and no custom amount provided." });
         }
+
+        // Handle legacy selectedBedroom or new selectedBedrooms array
+        const rooms = selectedBedrooms || (selectedBedroom ? [selectedBedroom] : []);
+        const rentalMode = rooms.length > 0 ? 'room' : 'entire';
+
+        // Late-initialization check for Firestore if it failed at startup
+        if (!db) {
+          console.log("[Server] db not initialized at startup, attempting late initialization...");
+          try {
+            const configPath = path.resolve(process.cwd(), "firebase-applet-config.json");
+            const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+            
+            if (fs.existsSync(configPath)) {
+              const firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+              if (admin.apps.length === 0) {
+                admin.initializeApp({ projectId: firebaseConfig.projectId });
+              }
+              db = getFirestore(admin.app(), firebaseConfig.firestoreDatabaseId || "(default)");
+            } else if (serviceAccountJson) {
+              if (admin.apps.length === 0) {
+                const sa = JSON.parse(serviceAccountJson);
+                admin.initializeApp({ credential: admin.credential.cert(sa) });
+              }
+              db = getFirestore(admin.app(), process.env.FIREBASE_DATABASE_ID || "(default)");
+            } else if (process.env.FIREBASE_PROJECT_ID) {
+              if (admin.apps.length === 0) {
+                admin.initializeApp({ projectId: process.env.FIREBASE_PROJECT_ID });
+              }
+              db = getFirestore(admin.app(), process.env.FIREBASE_DATABASE_ID || "(default)");
+            }
+            
+            if (db) console.log("[Server] Late Firestore initialization successful.");
+          } catch (e) {
+            console.error("[Server] Late Firestore initialization failed:", e);
+          }
+        }
+
+        if (!db) {
+          return res.status(500).json({ 
+            error: "Database (Firestore) is not initialized on the server.",
+            details: "This app requires a Firebase project to be set up. Please run 'Firebase Setup' in the app settings or check if firebase-applet-config.json exists."
+          });
+        }
+
+        // 1. Fetch pricing rules and global settings from Firestore
+        const rulesSnap = await db.collection('pricing_rules').where('propertyId', '==', propertyId).get();
+        const pricingRules = rulesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        
+        const settingsSnap = await db.collection('global_settings').doc('settings').get();
+        const globalSettings = settingsSnap.exists ? settingsSnap.data() : null;
+
+        // 2. Calculate correct amount
+        const priceDetails = calculatePriceDetails(checkIn, checkOut, pricingRules as any, globalSettings, rooms, rentalMode);
+        amountInCents = Math.round(priceDetails.grandTotal * 100);
       }
 
-      if (!db) {
-        return res.status(500).json({ 
-          error: "Database (Firestore) is not initialized on the server.",
-          details: "This app requires a Firebase project to be set up. Please run 'Firebase Setup' in the app settings or check if firebase-applet-config.json exists."
-        });
-      }
-
-      // 1. Fetch pricing rules and global settings from Firestore
-      const rulesSnap = await db.collection('pricing_rules').where('propertyId', '==', propertyId).get();
-      const pricingRules = rulesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-      
-      const settingsSnap = await db.collection('global_settings').doc('settings').get();
-      const globalSettings = settingsSnap.exists ? settingsSnap.data() : null;
-
-      // 2. Calculate correct amount
-      const priceDetails = calculatePriceDetails(checkIn, checkOut, pricingRules as any, globalSettings, rooms, rentalMode);
-      const amountInCents = Math.round(priceDetails.grandTotal * 100);
-
-      console.log(`[Server] PaymentIntent creation: Property ${propertyId}, Amount ${amountInCents} cents, Rooms: ${rooms.length}`);
+      console.log(`[Server] PaymentIntent creation: Property ${propertyId || 'Unknown'}, Amount ${amountInCents} cents`);
 
       const stripe = new Stripe(key);
       const paymentIntent = await stripe.paymentIntents.create({
@@ -306,8 +315,7 @@ async function startServer() {
           propertyId,
           checkIn,
           checkOut,
-          rentalMode,
-          roomNumbers: rooms.map((r: any) => r.roomNumber).join(', ') || 'N/A'
+          isModificationCharge: amount ? 'true' : 'false'
         },
         automatic_payment_methods: {
           enabled: true,
