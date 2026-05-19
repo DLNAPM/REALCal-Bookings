@@ -320,8 +320,8 @@ export const Calendar: React.FC<{
        }
        navigate('/checkout', { state: { 
          propertyId,
-         checkIn: checkIn.toISOString(), 
-         checkOut: checkOut.toISOString(), 
+         checkIn: format(checkIn, 'yyyy-MM-dd'), 
+         checkOut: format(checkOut, 'yyyy-MM-dd'), 
          priceDetails,
          selectedBedrooms: selectedRooms,
          rentalMode
@@ -529,7 +529,7 @@ export const Calendar: React.FC<{
             <button 
               onClick={() => {
                   if (isEditMode && onSaveEdit && checkIn && checkOut && priceDetails) {
-                      onSaveEdit(checkIn.toISOString(), checkOut.toISOString(), priceDetails);
+                      onSaveEdit(format(checkIn, 'yyyy-MM-dd'), format(checkOut, 'yyyy-MM-dd'), priceDetails);
                   } else {
                       handleBook();
                   }

@@ -40,6 +40,10 @@ export const AdminDashboard: React.FC = () => {
   const [editingManagerId, setEditingManagerId] = useState<string | null>(null);
   const [editingBedrooms, setEditingBedrooms] = useState<{ roomNumber: string; roomLockNumber: string; type: 'Master Bed' | 'Guest Bedroom'; sqFt: number; fee: number }[]>([]);
   
+  // Manual booking states
+  const [manualBookingPropId, setManualBookingPropId] = useState<string>('');
+  const [manualBookingRooms, setManualBookingRooms] = useState<string[]>([]);
+
   const [globalSettings, setGlobalSettings] = useState<any>(null);
   
   // Image uploader state
@@ -123,8 +127,11 @@ export const AdminDashboard: React.FC = () => {
   const totalCancellations = bookings.filter(b => b.status === 'cancelled').length;
 
   const exportCSV = () => {
-    const header = "Booking ID,Property ID,User ID,Check In,Check Out,Status,Total Price\n";
-    const rows = bookings.map(b => `${b.id},${b.propertyId || ''},${b.userId},${b.checkIn},${b.checkOut},${b.status},${(b.totalPrice / 100).toFixed(2)}`).join("\n");
+    const header = "Booking ID,Property ID,User ID,Check In,Check Out,Status,Total Price,Rooms\n";
+    const rows = bookings.map(b => {
+      const rooms = b.selectedBedrooms ? b.selectedBedrooms.map(r => r.roomNumber).join(";") : (b.selectedBedroom?.roomNumber || "Entire Property");
+      return `${b.id},${b.propertyId || ''},${b.userId},${b.checkIn},${b.checkOut},${b.status},${(b.totalPrice / 100).toFixed(2)},${rooms}`;
+    }).join("\n");
     const blob = new Blob([header + rows], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -564,15 +571,19 @@ export const AdminDashboard: React.FC = () => {
            }
         }
 
+        const prop = properties.find(p => p.id === formPropId);
+        const selectedBedroomObjects = (prop?.bedrooms || []).filter(b => manualBookingRooms.includes(b.roomNumber));
+
         const payload: any = {
            userId: payloadUserId,
            propertyId: formPropId,
-           checkIn: new Date(checkIn).toISOString().split('T')[0],
-           checkOut: new Date(checkOut).toISOString().split('T')[0],
+           checkIn,
+           checkOut,
            status: 'confirmed',
            totalPrice: Math.round(Number(totalAmountStr) * 100),
            guestPhone: guestPhone,
            guests: 1,
+           selectedBedrooms: selectedBedroomObjects.length > 0 ? selectedBedroomObjects : null,
            createdAt: serverTimestamp(),
            updatedAt: serverTimestamp()
         };
@@ -589,14 +600,31 @@ export const AdminDashboard: React.FC = () => {
             dayAfterDate.setDate(dayAfterDate.getDate() + 1);
             const blackoutDateString = dayAfterDate.toISOString().split('T')[0];
             
-            await setDoc(doc(db, 'blackout_dates', `maint-${bookingId}`), {
-                propertyId: formPropId,
-                date: blackoutDateString,
-                targetType: 'property', // Admin override usually for entire property
-                roomNumber: null,
-                reason: `Maintenance/Cleaning for Booking Override`,
-                createdAt: serverTimestamp()
-            });
+            if (manualBookingRooms.length > 0) {
+                // Create blackouts for each selected room
+                const batch = writeBatch(db);
+                manualBookingRooms.forEach(roomNum => {
+                    batch.set(doc(db, 'blackout_dates', `maint-${bookingId}-${roomNum}`), {
+                        propertyId: formPropId,
+                        date: blackoutDateString,
+                        targetType: 'room',
+                        roomNumber: roomNum,
+                        reason: `Maintenance/Cleaning for Booking Override (Room ${roomNum})`,
+                        createdAt: serverTimestamp()
+                    });
+                });
+                await batch.commit();
+            } else {
+                // Create blackout for entire property
+                await setDoc(doc(db, 'blackout_dates', `maint-${bookingId}`), {
+                    propertyId: formPropId,
+                    date: blackoutDateString,
+                    targetType: 'property', // Admin override usually for entire property
+                    roomNumber: null,
+                    reason: `Maintenance/Cleaning for Booking Override`,
+                    createdAt: serverTimestamp()
+                });
+            }
             console.log(`[Admin] Auto-blackout created for ${blackoutDateString}`);
         } catch (blackoutErr) {
             console.warn("Failed to create auto-blackout in admin", blackoutErr);
@@ -633,9 +661,52 @@ export const AdminDashboard: React.FC = () => {
 
         alert("Manual booking created successfully!");
         (e.target as HTMLFormElement).reset();
+        setManualBookingPropId('');
+        setManualBookingRooms([]);
 
     } catch (err: any) { alert(err.message); }
   }
+
+  const handleAdminCancelBooking = async (bookingId: string) => {
+    if (!db || !window.confirm("Are you sure you want to cancel this booking?")) return;
+    try {
+      const booking = bookings.find(b => b.id === bookingId);
+      if (!booking) return;
+
+      await updateDoc(doc(db, 'bookings', bookingId), {
+        status: 'cancelled',
+        updatedAt: serverTimestamp()
+      });
+
+      // Remove associated maintenance blackout
+      try {
+        const rooms = booking.selectedBedrooms || (booking.selectedBedroom ? [booking.selectedBedroom] : []);
+        if (rooms.length > 0) {
+          for (const room of rooms) {
+            await deleteDoc(doc(db, 'blackout_dates', `maint-${bookingId}-${room.roomNumber}`));
+          }
+        } else {
+          await deleteDoc(doc(db, 'blackout_dates', `maint-${bookingId}`));
+        }
+      } catch (err) {
+        console.warn("Failed to remove blackout", err);
+      }
+
+      alert("Booking cancelled.");
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleAdminDeleteBooking = async (bookingId: string) => {
+    if (!db || !window.confirm("Permanently delete this booking record? (Unrecoverable)")) return;
+    try {
+      await deleteDoc(doc(db, 'bookings', bookingId));
+      alert("Booking deleted.");
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
 
   const [testSmsTarget, setTestSmsTarget] = useState("");
   const [testSmsMessage, setTestSmsMessage] = useState("Testing Twilio SMS from REALCal Bookings!");
@@ -850,11 +921,49 @@ export const AdminDashboard: React.FC = () => {
              <form onSubmit={handleAdminCreateBooking} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 items-end bg-slate-50 p-6 rounded-2xl border border-slate-300 border-dashed">
                 <div className="lg:col-span-1">
                    <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Property</label>
-                   <select name="propertyId" required className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 required bg-white shadow-sm text-sm">
+                   <select 
+                     name="propertyId" 
+                     required 
+                     value={manualBookingPropId}
+                     onChange={(e) => {
+                       setManualBookingPropId(e.target.value);
+                       setManualBookingRooms([]);
+                     }}
+                     className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 required bg-white shadow-sm text-sm"
+                   >
                       <option value="">Select...</option>
                       {properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                    </select>
                 </div>
+                {manualBookingPropId && properties.find(p => p.id === manualBookingPropId)?.allowIndividualRoomRental && (
+                   <div className="lg:col-span-2">
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Select Rooms</label>
+                      <div className="flex flex-wrap gap-2 mt-1">
+                         {properties.find(p => p.id === manualBookingPropId)?.bedrooms?.map(room => (
+                            <label key={room.roomNumber} className={cn(
+                               "cursor-pointer px-3 py-1.5 rounded-lg border text-xs font-bold transition-all",
+                               manualBookingRooms.includes(room.roomNumber) 
+                                 ? "bg-indigo-600 border-indigo-600 text-white" 
+                                 : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
+                            )}>
+                               <input 
+                                 type="checkbox" 
+                                 className="hidden" 
+                                 checked={manualBookingRooms.includes(room.roomNumber)}
+                                 onChange={() => {
+                                   setManualBookingRooms(prev => 
+                                     prev.includes(room.roomNumber) 
+                                       ? prev.filter(r => r !== room.roomNumber) 
+                                       : [...prev, room.roomNumber]
+                                   );
+                                 }}
+                               />
+                               {room.roomNumber} ({room.type})
+                            </label>
+                         ))}
+                      </div>
+                   </div>
+                )}
                 <div className="lg:col-span-1">
                    <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Check In</label>
                    <input name="checkIn" type="date" required className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm" />
@@ -982,6 +1091,78 @@ export const AdminDashboard: React.FC = () => {
                     ))}
                  </div>
               </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm mt-8">
+             <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-bold flex items-center gap-2"><CalendarIcon className="text-indigo-600" size={20}/> Booking Management</h2>
+                <div className="flex gap-2 text-xs">
+                   <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded-md font-bold uppercase">{bookings.filter(b => b.status === 'confirmed').length} Confirmed</span>
+                   <span className="bg-red-100 text-red-700 px-2 py-1 rounded-md font-bold uppercase">{bookings.filter(b => b.status === 'cancelled').length} Cancelled</span>
+                </div>
+             </div>
+             <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                   <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-y border-slate-100">
+                      <tr>
+                         <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest">Guest</th>
+                         <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest">Property / Rooms</th>
+                         <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest">Dates</th>
+                         <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest">Status</th>
+                         <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-right">Actions</th>
+                      </tr>
+                   </thead>
+                   <tbody className="divide-y divide-slate-100">
+                      {[...bookings].sort((a, b) => new Date(b.checkIn).getTime() - new Date(a.checkIn).getTime()).map((b) => {
+                         const prop = properties.find(p => p.id === b.propertyId);
+                         const userObj = users.find(u => u.uid === b.userId);
+                         const rooms = b.selectedBedrooms ? b.selectedBedrooms.map(r => r.roomNumber).join(", ") : (b.selectedBedroom?.roomNumber || "Full Property");
+                         
+                         return (
+                            <tr key={b.id} className="hover:bg-slate-50 transition-colors">
+                               <td className="px-4 py-4">
+                                  <p className="font-semibold text-slate-800">{userObj?.displayName || 'Unknown Guest'}</p>
+                                  <p className="text-xs text-slate-500">{userObj?.email || b.guestPhone || ''}</p>
+                               </td>
+                               <td className="px-4 py-4">
+                                  <p className="font-medium text-slate-700">{prop?.name || 'Unknown Property'}</p>
+                                  <p className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded font-bold inline-block mt-1">Rooms: {rooms}</p>
+                               </td>
+                               <td className="px-4 py-4 text-slate-600 text-xs">
+                                  <p>{b.checkIn} to</p>
+                                  <p>{b.checkOut}</p>
+                               </td>
+                               <td className="px-4 py-4">
+                                  <span className={cn(
+                                    "px-2 py-1 rounded-md text-[10px] font-bold uppercase",
+                                    b.status === 'confirmed' ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700 shadow-sm"
+                                  )}>
+                                     {b.status}
+                                  </span>
+                               </td>
+                               <td className="px-4 py-4 text-right space-x-2">
+                                  {b.status === 'confirmed' && (
+                                     <button 
+                                       onClick={() => handleAdminCancelBooking(b.id)}
+                                       className="text-[10px] font-bold text-amber-600 hover:text-amber-700"
+                                     >
+                                        Cancel
+                                     </button>
+                                  )}
+                                  <button 
+                                    onClick={() => handleAdminDeleteBooking(b.id)}
+                                    className="text-slate-300 hover:text-red-500 transition-colors"
+                                  >
+                                     <Trash2 size={16}/>
+                                  </button>
+                               </td>
+                            </tr>
+                         );
+                      })}
+                   </tbody>
+                </table>
+                {bookings.length === 0 && <p className="text-center py-8 text-slate-400 text-sm italic">No bookings found.</p>}
+             </div>
           </div>
 
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm mt-8">

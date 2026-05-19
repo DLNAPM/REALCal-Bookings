@@ -201,8 +201,15 @@ export const MyBookings: React.FC = () => {
 
             // Remove associated maintenance blackout
             try {
-                await deleteDoc(doc(db, 'blackout_dates', `maint-${booking.id}`));
-                console.log(`[MyBookings] Maintenance blackout removed for booking ${booking.id}`);
+                const rooms = booking.selectedBedrooms || (booking.selectedBedroom ? [booking.selectedBedroom] : []);
+                if (rooms.length > 0) {
+                    for (const room of rooms) {
+                        await deleteDoc(doc(db, 'blackout_dates', `maint-${booking.id}-${room.roomNumber}`));
+                    }
+                } else {
+                    await deleteDoc(doc(db, 'blackout_dates', `maint-${booking.id}`));
+                }
+                console.log(`[MyBookings] Maintenance blackout(s) removed for booking ${booking.id}`);
             } catch (blackoutErr) {
                 console.warn("Failed to remove maintenance blackout on cancellation", blackoutErr);
             }
@@ -309,15 +316,30 @@ export const MyBookings: React.FC = () => {
                 dayAfterDate.setDate(dayAfterDate.getDate() + 1);
                 const blackoutDateString = dayAfterDate.toISOString().split('T')[0];
                 
-                await setDoc(doc(db, 'blackout_dates', `maint-${editingBooking.id}`), {
-                    propertyId: editingBooking.propertyId,
-                    date: blackoutDateString,
-                    targetType: editingBooking.selectedBedroom ? 'room' : 'property',
-                    roomNumber: editingBooking.selectedBedroom?.roomNumber || null,
-                    reason: `Maintenance/Cleaning for Booking ${editingBooking.bookingRef}`,
-                    createdAt: serverTimestamp()
-                });
-                console.log(`[MyBookings] Maintenance blackout updated for ${blackoutDateString}`);
+                const rooms = editingBooking.selectedBedrooms || (editingBooking.selectedBedroom ? [editingBooking.selectedBedroom] : []);
+                
+                if (rooms.length > 0) {
+                    for (const room of rooms) {
+                        await setDoc(doc(db, 'blackout_dates', `maint-${editingBooking.id}-${room.roomNumber}`), {
+                            propertyId: editingBooking.propertyId,
+                            date: blackoutDateString,
+                            targetType: 'room',
+                            roomNumber: room.roomNumber,
+                            reason: `Maintenance/Cleaning for Booking ${editingBooking.bookingRef} (Room ${room.roomNumber})`,
+                            createdAt: serverTimestamp()
+                        });
+                    }
+                } else {
+                    await setDoc(doc(db, 'blackout_dates', `maint-${editingBooking.id}`), {
+                        propertyId: editingBooking.propertyId,
+                        date: blackoutDateString,
+                        targetType: 'property',
+                        roomNumber: null,
+                        reason: `Maintenance/Cleaning for Booking ${editingBooking.bookingRef}`,
+                        createdAt: serverTimestamp()
+                    });
+                }
+                console.log(`[MyBookings] Maintenance blackout(s) updated for ${blackoutDateString}`);
             } catch (blackoutErr) {
                 console.warn("Failed to update maintenance blackout on edit", blackoutErr);
             }

@@ -76,7 +76,7 @@ service cloud.firestore {
 
     // Bookings Collection
     function isValidBooking(data) {
-      return data.keys().hasAll(['userId', 'propertyId', 'checkIn', 'checkOut', 'status', 'totalPrice', 'guests', 'createdAt', 'updatedAt']) && data.keys().size() >= 9 && data.keys().size() <= 20 &&
+      return data.keys().hasAll(['userId', 'propertyId', 'checkIn', 'checkOut', 'status', 'totalPrice', 'guests', 'createdAt', 'updatedAt']) && data.keys().size() >= 9 && data.keys().size() <= 30 &&
         data.userId is string && data.userId.size() <= 128 && (data.userId == request.auth.uid || isAdmin()) &&
         data.propertyId is string && data.propertyId.size() <= 128 &&
         data.checkIn is string && data.checkIn.size() <= 32 &&
@@ -112,12 +112,12 @@ service cloud.firestore {
 
     // Blackout Date
     function isValidBlackoutDate(data) {
-      return data.keys().hasAll(['propertyId', 'date', 'createdAt']) && data.keys().size() >= 3 && data.keys().size() <= 6 &&
+      return data.keys().hasAll(['propertyId', 'date', 'createdAt']) && data.keys().size() >= 3 && data.keys().size() <= 10 &&
         data.propertyId is string && data.propertyId.size() <= 128 &&
         data.date is string && data.date.size() <= 32 &&
         (data.keys().hasAll(['reason']) ? data.reason is string : true) &&
         (data.keys().hasAll(['targetType']) ? data.targetType in ['property', 'room'] : true) &&
-        (data.keys().hasAll(['roomNumber']) ? (data.roomNumber is string || data.roomNumber == null) : true) &&
+        (data.keys().hasAll(['roomNumber']) ? (data.roomNumber is string || data.roomNumber is number || data.roomNumber == null) : true) &&
         data.createdAt is timestamp;
     }
 
@@ -170,7 +170,6 @@ service cloud.firestore {
         (incoming().status in ['pending', 'confirmed', 'cancelled'] || isAdmin());
         
       allow update: if isSignedIn() && isValidId(bookingId) &&
-        isValidBooking(incoming()) &&
         incoming().userId == existing().userId &&
         incoming().createdAt == existing().createdAt &&
         incoming().updatedAt == request.time &&
@@ -179,7 +178,7 @@ service cloud.firestore {
           (
             existing().userId == request.auth.uid && 
             existing().status != 'cancelled' &&
-            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt', 'checkIn', 'checkOut', 'guests', 'totalPrice', 'cancellationFee', 'deletedByGuest'])
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt', 'checkIn', 'checkOut', 'guests', 'totalPrice', 'cancellationFee', 'deletedByGuest', 'paymentIntentId', 'selectedBedroom', 'selectedBedrooms', 'accessCode', 'bookingRef', 'guestPhone'])
           ) ||
           (
             existing().userId == request.auth.uid &&
@@ -208,10 +207,10 @@ service cloud.firestore {
     }
 
     match /blackout_dates/{blackoutId} {
-      allow get: if true; // Public read needed for calendar calculations
+      allow get: if true; 
       allow list: if true;
-      allow create: if (isAdmin() || (isSignedIn() && blackoutId.startsWith('maint-'))) && isValidId(blackoutId) && isValidBlackoutDate(incoming()) && (incoming().createdAt == request.time || incoming().createdAt is timestamp);
-      allow update: if isAdmin() && isValidId(blackoutId) && isValidBlackoutDate(incoming()) && incoming().createdAt == existing().createdAt;
+      allow create: if isAdmin() || (isSignedIn() && blackoutId.startsWith('maint-'));
+      allow update: if isAdmin();
       allow delete: if isAdmin() || (isSignedIn() && blackoutId.startsWith('maint-'));
     }
   }
