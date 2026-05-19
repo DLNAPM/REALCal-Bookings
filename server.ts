@@ -231,7 +231,7 @@ async function startServer() {
 
   app.post("/api/create-payment-intent", async (req, res) => {
     try {
-      const { propertyId, checkIn, checkOut, selectedBedroom, currency = "usd", metadata } = req.body;
+      const { propertyId, checkIn, checkOut, selectedBedrooms, selectedBedroom, currency = "usd", metadata } = req.body;
       const key = process.env.STRIPE_SECRET_KEY;
       if (!key || key === "sk_test_...") {
         return res.status(400).json({ error: "STRIPE_SECRET_KEY is not configured." });
@@ -240,6 +240,10 @@ async function startServer() {
       if (!propertyId || !checkIn || !checkOut) {
         return res.status(400).json({ error: "Missing required booking details (propertyId, checkIn, checkOut)." });
       }
+
+      // Handle legacy selectedBedroom or new selectedBedrooms array
+      const rooms = selectedBedrooms || (selectedBedroom ? [selectedBedroom] : []);
+      const rentalMode = rooms.length > 0 ? 'room' : 'entire';
 
       // Late-initialization check for Firestore if it failed at startup
       if (!db) {
@@ -288,11 +292,10 @@ async function startServer() {
       const globalSettings = settingsSnap.exists ? settingsSnap.data() : null;
 
       // 2. Calculate correct amount
-      const rentalMode = selectedBedroom ? 'room' : 'entire';
-      const priceDetails = calculatePriceDetails(checkIn, checkOut, pricingRules as any, globalSettings, selectedBedroom, rentalMode);
+      const priceDetails = calculatePriceDetails(checkIn, checkOut, pricingRules as any, globalSettings, rooms, rentalMode);
       const amountInCents = Math.round(priceDetails.grandTotal * 100);
 
-      console.log(`[Server] PaymentIntent creation: Property ${propertyId}, Amount ${amountInCents} cents`);
+      console.log(`[Server] PaymentIntent creation: Property ${propertyId}, Amount ${amountInCents} cents, Rooms: ${rooms.length}`);
 
       const stripe = new Stripe(key);
       const paymentIntent = await stripe.paymentIntents.create({
@@ -304,7 +307,7 @@ async function startServer() {
           checkIn,
           checkOut,
           rentalMode,
-          roomNumber: selectedBedroom?.roomNumber || 'N/A'
+          roomNumbers: rooms.map((r: any) => r.roomNumber).join(', ') || 'N/A'
         },
         automatic_payment_methods: {
           enabled: true,
@@ -343,12 +346,18 @@ async function startServer() {
   app.post("/api/notify-managers", async (req, res) => {
     try {
       const { managers, bookingDetails } = req.body;
-      const { checkIn, checkOut, propertyName, totalAmount, guestName, guestEmail, guestPhone, isUpdate, accessCode } = bookingDetails;
+      const { checkIn, checkOut, propertyName, totalAmount, guestName, guestEmail, guestPhone, isUpdate, accessCode, selectedBedrooms } = bookingDetails;
       
       const eventType = isUpdate ? 'Booking Update' : 'New Booking';
-      const textMsg = `${eventType} for ${propertyName}!\nGuest: ${guestName}\nDates: ${new Date(checkIn).toLocaleDateString()} to ${new Date(checkOut).toLocaleDateString()}`;
+      let roomsInfo = "";
+      if (selectedBedrooms && selectedBedrooms.length > 0) {
+        roomsInfo = "\nRooms: " + selectedBedrooms.map((r: any) => `Room ${r.roomNumber} (${r.type})`).join(', ');
+      }
+      
+      const textMsg = `${eventType} for ${propertyName}!${roomsInfo}\nGuest: ${guestName}\nDates: ${new Date(checkIn).toLocaleDateString()} to ${new Date(checkOut).toLocaleDateString()}`;
       
       const results = [];
+      // ... (existing Twilio/Resend setup)
       
       let resend = null;
       if (process.env.RESEND_API_KEY) {
@@ -394,22 +403,48 @@ async function startServer() {
       // Guest confirmations
       const guestSubject = isUpdate ? `Booking Update: ${propertyName}` : `Booking Confirmed: ${propertyName}`;
       const guestDisplayName = guestName || 'Guest';
-      let guestText = `Hi ${guestDisplayName},\n\nYour booking for ${propertyName} from ${new Date(checkIn).toLocaleDateString()} to ${new Date(checkOut).toLocaleDateString()} is ${isUpdate ? 'updated' : 'confirmed'}.`;
-      if (accessCode) guestText += `\nYour access code is: ${accessCode}`;
-      guestText += `\n\nThank you!`;
+      
+      // Email Content (Single Email for multiple rooms)
+      let emailText = `Hi ${guestDisplayName},\n\nYour booking for ${propertyName} from ${new Date(checkIn).toLocaleDateString()} to ${new Date(checkOut).toLocaleDateString()} is ${isUpdate ? 'updated' : 'confirmed'}.`;
+      
+      if (selectedBedrooms && selectedBedrooms.length > 0) {
+        emailText += `\n\nRoom Details:`;
+        selectedBedrooms.forEach((r: any) => {
+           emailText += `\n- ${r.type} Room ${r.roomNumber}`;
+           if (r.roomLockNumber) emailText += ` (Lock #: ${r.roomLockNumber})`;
+        });
+      }
+      
+      if (accessCode) emailText += `\n\nYour master access code is: ${accessCode}`;
+      emailText += `\n\nThank you!`;
 
       if (resend && guestEmail) {
         try {
-          await resend.emails.send({ from: 'bookings@realcal.demo', to: guestEmail, subject: guestSubject, text: guestText });
-          results.push(`Guest email sent`);
+          await resend.emails.send({ from: 'bookings@realcal.demo', to: guestEmail, subject: guestSubject, text: emailText });
+          results.push(`Guest confirmation email sent`);
         } catch (e) { results.push(`Guest email failed`); }
       }
 
+      // SMS Notifications (Multiple if multiple rooms with locks)
       if (twilioClient && guestPhone && tFrom) {
         try {
-          await twilioClient.messages.create({ body: guestText, from: tFrom, to: guestPhone });
-          results.push(`Guest SMS sent`);
-        } catch (e) { results.push(`Guest SMS failed`); }
+            if (selectedBedrooms && selectedBedrooms.length > 0) {
+                // Send an SMS for each room that has a Lock number
+                for (const room of selectedBedrooms) {
+                    if (room.roomLockNumber) {
+                        let roomSmsText = `Hi ${guestDisplayName}, access for ${propertyName} - ${room.type} Room ${room.roomNumber} is confirmed.\nAccess Code: ${accessCode || '123456'}\nLock #: ${room.roomLockNumber}`;
+                        await twilioClient.messages.create({ body: roomSmsText, from: tFrom, to: guestPhone });
+                        results.push(`Guest SMS sent for Room ${room.roomNumber}`);
+                    }
+                }
+            } else {
+                // Default SMS for entire property
+                let defaultSmsText = `Hi ${guestDisplayName},\nYour booking for ${propertyName} from ${new Date(checkIn).toLocaleDateString()} to ${new Date(checkOut).toLocaleDateString()} is ${isUpdate ? 'updated' : 'confirmed'}.`;
+                if (accessCode) defaultSmsText += `\nAccess code: ${accessCode}`;
+                await twilioClient.messages.create({ body: defaultSmsText, from: tFrom, to: guestPhone });
+                results.push(`Guest confirmation SMS sent`);
+            }
+        } catch (e) { results.push(`Guest SMS failed: ${e.message}`); }
       }
 
       res.json({ success: true, results });

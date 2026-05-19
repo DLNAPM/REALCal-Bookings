@@ -26,7 +26,9 @@ export const Calendar: React.FC<{
   const [checkOut, setCheckOut] = useState<Date | null>(initialCheckOut ? new Date(initialCheckOut) : null);
   const [hoverDate, setHoverDate] = useState<Date | null>(null);
   const [rentalMode, setRentalMode] = useState<'entire' | 'room'>(initialSelectedRoom ? 'room' : 'entire');
-  const [selectedRoom, setSelectedRoom] = useState<any>(initialSelectedRoom || null);
+  const [selectedRooms, setSelectedRooms] = useState<any[]>(
+    initialSelectedRoom ? (Array.isArray(initialSelectedRoom) ? initialSelectedRoom : [initialSelectedRoom]) : []
+  );
   
   const [pricingRules, setPricingRules] = useState<PricingRule[]>([]);
   const [blackoutDates, setBlackoutDates] = useState<BlackoutDate[]>([]);
@@ -72,7 +74,7 @@ export const Calendar: React.FC<{
         setCheckIn(null);
       }
     }
-  }, [rentalMode, selectedRoom, bookings, blackoutDates]);
+  }, [rentalMode, selectedRooms, bookings, blackoutDates]);
 
   const isUnavailable = (date: Date) => {
     // 1. Manual Blackouts
@@ -83,9 +85,15 @@ export const Calendar: React.FC<{
         // Entire property is blocked if there's ANY blackout (property-wide or any room)
         return true;
       } else {
-        // Room mode: blocked if entire property is blacked out OR this specific room is blacked out
+        // Room mode: blocked if entire property is blacked out OR any of our selected rooms are blacked out
         if (!b.targetType || b.targetType === 'property') return true;
-        return selectedRoom && b.roomNumber === selectedRoom.roomNumber;
+        // If no rooms selected yet, we technically don't block based on room blackouts here, 
+        // but often we want to see if any room is available.
+        // If rooms ARE selected, block if any selected room is blacked out.
+        if (selectedRooms.length > 0) {
+           return selectedRooms.some(room => b.roomNumber === room.roomNumber);
+        }
+        return false;
       }
     });
 
@@ -106,15 +114,28 @@ export const Calendar: React.FC<{
         // If booking entire property, ANY existing booking (entire or room) blocks it
         return true;
       } else {
-        // Room mode: blocked if entire property is booked OR this specific room is booked
-        if (!b.selectedBedroom) return true; // Entire property booking blocks all rooms
-        return selectedRoom && b.selectedBedroom.roomNumber === selectedRoom.roomNumber;
+        // Room mode: blocked if entire property is booked OR any of our selected rooms are booked
+        if (!b.selectedBedroom && !b.selectedBedrooms) return true; // Entire property booking blocks all rooms
+        
+        if (selectedRooms.length > 0) {
+            return selectedRooms.some(room => {
+                // Check legacy selectedBedroom
+                if (b.selectedBedroom && b.selectedBedroom.roomNumber === room.roomNumber) return true;
+                // Check new selectedBedrooms array
+                if (b.selectedBedrooms && b.selectedBedrooms.some((rb: any) => rb.roomNumber === room.roomNumber)) return true;
+                return false;
+            });
+        }
+        return false;
       }
     });
   };
 
   const getRate = (date: Date): number => {
-    return getNightlyRate(date, pricingRules, selectedRoom, rentalMode);
+    if (rentalMode === 'room' && selectedRooms.length > 0) {
+        return selectedRooms.reduce((acc, room) => acc + getNightlyRate(date, pricingRules, room, 'room'), 0);
+    }
+    return getNightlyRate(date, pricingRules, null, 'entire');
   };
 
   const handleDateClick = (day: Date) => {
@@ -222,7 +243,7 @@ export const Calendar: React.FC<{
 
   const calculatePrice = () => {
     if (!checkIn || !checkOut) return null;
-    return calculatePriceDetails(checkIn.toISOString(), checkOut.toISOString(), pricingRules, globalSettings, selectedRoom, rentalMode);
+    return calculatePriceDetails(checkIn.toISOString(), checkOut.toISOString(), pricingRules, globalSettings, selectedRooms, rentalMode);
   };
 
   const priceDetails = calculatePrice();
@@ -279,12 +300,17 @@ export const Calendar: React.FC<{
 
   const handleBook = () => {
     if (checkIn && checkOut && priceDetails) {
+       if (rentalMode === 'room' && selectedRooms.length === 0) {
+           alert("Please select at least one room.");
+           return;
+       }
        navigate('/checkout', { state: { 
          propertyId,
          checkIn: checkIn.toISOString(), 
          checkOut: checkOut.toISOString(), 
          priceDetails,
-         selectedBedroom: selectedRoom
+         selectedBedrooms: selectedRooms,
+         rentalMode
        }});
     }
   };
@@ -295,21 +321,37 @@ export const Calendar: React.FC<{
       <div className="lg:col-span-8 bg-white rounded-3xl border border-slate-200 shadow-sm p-6 flex flex-col">
         {property?.allowIndividualRoomRental && (
             <div className="flex gap-4 p-1 bg-slate-100 rounded-2xl mb-6">
-               <button onClick={() => {setRentalMode('entire'); setSelectedRoom(null);}} className={cn("flex-1 px-4 py-2 rounded-xl font-bold text-sm", rentalMode === 'entire' ? "bg-white shadow-sm text-indigo-600" : "text-slate-500")}>Entire Property</button>
-               <button onClick={() => setRentalMode('room')} className={cn("flex-1 px-4 py-2 rounded-xl font-bold text-sm", rentalMode === 'room' ? "bg-white shadow-sm text-indigo-600" : "text-slate-500")}>Specific Room</button>
+               <button onClick={() => {setRentalMode('entire'); setSelectedRooms([]);}} className={cn("flex-1 px-4 py-2 rounded-xl font-bold text-sm", rentalMode === 'entire' ? "bg-white shadow-sm text-indigo-600" : "text-slate-500")}>Entire Property</button>
+               <button onClick={() => setRentalMode('room')} className={cn("flex-1 px-4 py-2 rounded-xl font-bold text-sm", rentalMode === 'room' ? "bg-white shadow-sm text-indigo-600" : "text-slate-500")}>Select Rooms</button>
             </div>
         )}
         {rentalMode === 'room' && (
-            <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
-                {property?.bedrooms?.map(room => (
-                    <button key={room.roomNumber} onClick={() => setSelectedRoom(room)} className={cn("px-4 py-2 rounded-xl text-sm font-bold border flex flex-col items-start gap-0.5", selectedRoom?.roomNumber === room.roomNumber ? "bg-indigo-600 text-white border-indigo-600" : "bg-white border-slate-200 text-slate-700")}>
-                        <div className="flex justify-between w-full gap-4">
-                            <span>{room.type} {room.roomNumber}</span>
-                            <span className="font-mono">${room.fee}</span>
-                        </div>
-                        {room.sqFt > 0 && <span className={cn("text-[10px] font-medium uppercase tracking-wider", selectedRoom?.roomNumber === room.roomNumber ? "text-indigo-200" : "text-slate-400")}>{room.sqFt} sq ft</span>}
-                    </button>
-                ))}
+            <div className="flex flex-wrap gap-2 mb-6">
+                {property?.bedrooms?.map(room => {
+                    const isSelected = selectedRooms.some(r => r.roomNumber === room.roomNumber);
+                    return (
+                        <button 
+                            key={room.roomNumber} 
+                            onClick={() => {
+                                setSelectedRooms(prev => 
+                                    isSelected 
+                                        ? prev.filter(r => r.roomNumber !== room.roomNumber)
+                                        : [...prev, room]
+                                );
+                            }} 
+                            className={cn(
+                                "px-4 py-2 rounded-xl text-sm font-bold border flex flex-col items-start gap-0.5 transition-all", 
+                                isSelected ? "bg-indigo-600 text-white border-indigo-600" : "bg-white border-slate-200 text-slate-700 hover:border-indigo-300"
+                            )}
+                        >
+                            <div className="flex justify-between w-full gap-4">
+                                <span>{room.type} {room.roomNumber}</span>
+                                <span className="font-mono">${room.fee}</span>
+                            </div>
+                            {room.sqFt > 0 && <span className={cn("text-[10px] font-medium uppercase tracking-wider", isSelected ? "text-indigo-200" : "text-slate-400")}>{room.sqFt} sq ft</span>}
+                        </button>
+                    );
+                })}
             </div>
         )}
         <div className="flex justify-between items-center mb-6">
@@ -363,7 +405,11 @@ export const Calendar: React.FC<{
                 
                 <div className="border-t border-slate-800 mt-2 pt-2 space-y-2">
                   <div className="flex justify-between items-center">
-                    <span className="text-slate-400">{rentalMode === 'room' && selectedRoom ? `Room ${selectedRoom.roomNumber} (${selectedRoom.type})` : `Entire Property`} Subtotal</span>
+                    <span className="text-slate-400">
+                        {rentalMode === 'room' && selectedRooms.length > 0 
+                            ? `${selectedRooms.length} Room${selectedRooms.length > 1 ? 's' : ''} Selected` 
+                            : `Entire Property`} Subtotal
+                    </span>
                     <span className="font-mono">${(priceDetails.baseTotal + priceDetails.discount).toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between items-center">
@@ -389,7 +435,7 @@ export const Calendar: React.FC<{
                   <div className="text-xs font-bold text-slate-500 uppercase tracking-widest">Rental Selection</div>
                   <div className="grid grid-cols-1 gap-2">
                       <button 
-                         onClick={() => { setRentalMode('entire'); setSelectedRoom(null); }}
+                         onClick={() => { setRentalMode('entire'); setSelectedRooms([]); }}
                          className={cn(
                              "flex justify-between items-center text-sm p-3 rounded-xl border transition-all text-left",
                              rentalMode === 'entire' 
@@ -402,34 +448,44 @@ export const Calendar: React.FC<{
                              <div className="text-[10px] opacity-70 uppercase tracking-tighter">Full access</div>
                          </div>
                          <div className="text-right">
-                             <div className="font-mono font-bold">${getRate(new Date()).toFixed(0)}/nt</div>
+                             <div className="font-mono font-bold">${getNightlyRate(new Date(), pricingRules, null, 'entire').toFixed(0)}/nt</div>
                              <div className="text-[10px] opacity-50">Property Rate</div>
                          </div>
                       </button>
 
-                      {property.bedrooms?.map(room => (
-                         <button 
-                            key={room.roomNumber} 
-                            onClick={() => { setRentalMode('room'); setSelectedRoom(room); }}
-                            className={cn(
-                                "flex justify-between items-center text-sm p-3 rounded-xl border transition-all text-left",
-                                (rentalMode === 'room' && selectedRoom?.roomNumber === room.roomNumber) 
-                                    ? "bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-900/20" 
-                                    : "bg-slate-800/50 border-slate-700 text-slate-400 hover:bg-slate-800 hover:border-slate-600"
-                            )}
-                         >
-                            <div>
-                                <div className="font-bold">{room.type} {room.roomNumber}</div>
-                                <div className="text-[10px] opacity-70 uppercase tracking-tighter italic">
-                                    Individual Room {room.sqFt > 0 && `• ${room.sqFt} sq ft`}
-                                </div>
-                            </div>
-                            <div className="text-right">
-                                <span className="font-mono font-bold">${room.fee}/nt</span>
-                                <div className="text-[10px] opacity-50">Room Rate</div>
-                            </div>
-                         </button>
-                      ))}
+                      {property.bedrooms?.map(room => {
+                         const isSelected = selectedRooms.some(r => r.roomNumber === room.roomNumber);
+                         return (
+                          <button 
+                             key={room.roomNumber} 
+                             onClick={() => { 
+                                setRentalMode('room'); 
+                                setSelectedRooms(prev => 
+                                    isSelected 
+                                        ? prev.filter(r => r.roomNumber !== room.roomNumber)
+                                        : [...prev, room]
+                                );
+                             }}
+                             className={cn(
+                                 "flex justify-between items-center text-sm p-3 rounded-xl border transition-all text-left",
+                                 (rentalMode === 'room' && isSelected) 
+                                     ? "bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-900/20" 
+                                     : "bg-slate-800/50 border-slate-700 text-slate-400 hover:bg-slate-800 hover:border-slate-600"
+                             )}
+                          >
+                             <div>
+                                 <div className="font-bold">{room.type} {room.roomNumber}</div>
+                                 <div className="text-[10px] opacity-70 uppercase tracking-tighter italic">
+                                     Individual Room {room.sqFt > 0 && `• ${room.sqFt} sq ft`}
+                                 </div>
+                             </div>
+                             <div className="text-right">
+                                 <span className="font-mono font-bold">${room.fee}/nt</span>
+                                 <div className="text-[10px] opacity-50">Room Rate</div>
+                             </div>
+                          </button>
+                         );
+                      })}
                   </div>
                </div>
             )}

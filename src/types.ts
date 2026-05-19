@@ -60,6 +60,7 @@ export interface Booking {
   cancellationFee?: number; // in cents
   deletedByGuest?: boolean;
   selectedBedroom?: any;
+  selectedBedrooms?: any[];
   createdAt: any;
   updatedAt: any;
 }

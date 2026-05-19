@@ -8,6 +8,7 @@ import { doc, setDoc, serverTimestamp, getDocs, getDoc, query, collection, updat
 import { db } from '../lib/firebase';
 import { v4 as uuidv4 } from 'uuid'; 
 import { calculatePriceDetails, PricingRule } from '../lib/pricing';
+import { cn } from '../lib/utils';
 
 import { Property } from '../types';
 
@@ -68,7 +69,7 @@ const processBooking = async (
   setError: (err: string) => void,
   setProcessing: (b: boolean) => void,
   isTestMode: boolean = false,
-  selectedBedroom: any = null,
+  selectedBedrooms: any[] = [],
   paymentIntentId?: string,
   paymentIntentAmount?: number
 ) => {
@@ -111,12 +112,17 @@ const processBooking = async (
       totalPrice: paymentIntentAmount || Math.round(bookingDetails.priceDetails.grandTotal * 100),
       paymentIntentId, // Save stripe payment intent ID for future modifications/refunds
       bookingRef,
-      selectedBedroom,
+      selectedBedrooms, // Save multiple rooms
       guestPhone: e164Phone, // Save formatted phone
       guests: 1, // simplified for demo
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     };
+    
+    // For backward compatibility / display
+    if (selectedBedrooms.length > 0) {
+        payload.selectedBedroom = selectedBedrooms[0];
+    }
 
     if (accessCode) {
        payload.accessCode = accessCode;
@@ -132,15 +138,31 @@ const processBooking = async (
         dayAfterDate.setDate(dayAfterDate.getDate() + 1);
         const blackoutDateString = dayAfterDate.toISOString().split('T')[0];
         
-        await setDoc(doc(db, 'blackout_dates', `maint-${bookingId}`), {
-          propertyId: bookingDetails.propertyId,
-          date: blackoutDateString,
-          targetType: selectedBedroom ? 'room' : 'property',
-          roomNumber: selectedBedroom?.roomNumber || null,
-          reason: `Maintenance/Cleaning for Booking ${bookingRef}`,
-          createdAt: serverTimestamp()
-        });
-        console.log(`[Checkout] Auto-blackout created for ${blackoutDateString}`);
+        if (selectedBedrooms.length > 0) {
+            // Blackout each room
+            for (const room of selectedBedrooms) {
+                const blackoutId = `maint-${bookingId}-${room.roomNumber}`;
+                await setDoc(doc(db, 'blackout_dates', blackoutId), {
+                  propertyId: bookingDetails.propertyId,
+                  date: blackoutDateString,
+                  targetType: 'room',
+                  roomNumber: room.roomNumber,
+                  reason: `Maintenance/Cleaning for Booking ${bookingRef} (Room ${room.roomNumber})`,
+                  createdAt: serverTimestamp()
+                });
+            }
+        } else {
+            // Blackout entire property
+            await setDoc(doc(db, 'blackout_dates', `maint-${bookingId}`), {
+              propertyId: bookingDetails.propertyId,
+              date: blackoutDateString,
+              targetType: 'property',
+              roomNumber: null,
+              reason: `Maintenance/Cleaning for Booking ${bookingRef}`,
+              createdAt: serverTimestamp()
+            });
+        }
+        console.log(`[Checkout] Auto-blackout(s) created for ${blackoutDateString}`);
       } catch (blackoutErr) {
         console.warn("Failed to create auto-blackout", blackoutErr);
       }
@@ -179,7 +201,8 @@ const processBooking = async (
                   guestEmail: guestEmail,
                   guestPhone: e164Phone,
                   accessCode: accessCode,
-                  isTestProperty: isTestProperty
+                  isTestProperty: isTestProperty,
+                  selectedBedrooms: selectedBedrooms // Pass multiple rooms
                }
             })
           });
@@ -199,7 +222,7 @@ const processBooking = async (
        console.error("Manager notification failed, but booking succeeded", notifyErr);
     }
 
-    navigate('/confirmation', { state: { bookingId, accessCode, notificationResults, bookingRef, selectedBedroom }});
+    navigate('/confirmation', { state: { bookingId, accessCode, notificationResults, bookingRef, selectedBedrooms }});
   } catch (e: any) {
      console.error("Booking error:", e);
      setError(`Booking failed: ${e.message}`);
@@ -207,7 +230,7 @@ const processBooking = async (
   }
 };
 
-const CheckoutForm: React.FC<{ clientSecret: string, bookingDetails: any, guestEmail: string, guestPhone: string, isTestProperty: boolean, selectedBedroom: any }> = ({ clientSecret, bookingDetails, guestEmail, guestPhone, isTestProperty, selectedBedroom }) => {
+const CheckoutForm: React.FC<{ clientSecret: string, bookingDetails: any, guestEmail: string, guestPhone: string, isTestProperty: boolean, selectedBedrooms: any[] }> = ({ clientSecret, bookingDetails, guestEmail, guestPhone, isTestProperty, selectedBedrooms }) => {
   const stripe = useStripe();
   const elements = useElements();
   const [error, setError] = useState<string | null>(null);
@@ -230,7 +253,7 @@ const CheckoutForm: React.FC<{ clientSecret: string, bookingDetails: any, guestE
       setProcessing(false);
     } else {
       // Payment successful, generate lock code and write Booking to firestore
-      await processBooking(bookingDetails, user, guestEmail, guestPhone, navigate, setError, setProcessing, isTestProperty, selectedBedroom, paymentIntent?.id, paymentIntent?.amount);
+      await processBooking(bookingDetails, user, guestEmail, guestPhone, navigate, setError, setProcessing, isTestProperty, selectedBedrooms, paymentIntent?.id, paymentIntent?.amount);
     }
   };
 
@@ -274,7 +297,7 @@ export const Checkout: React.FC = () => {
   const [stripePromise, setStripePromise] = useState<any>(null);
   const [hasPublishableKey, setHasPublishableKey] = useState(false);
 
-  const [selectedBedroom, setSelectedBedroom] = useState<any>(location.state?.selectedBedroom || null);
+  const [selectedBedrooms, setSelectedBedrooms] = useState<any[]>(location.state?.selectedBedrooms || []);
   const navigate = useNavigate();
   
   useEffect(() => {
@@ -316,11 +339,11 @@ export const Checkout: React.FC = () => {
 
   useEffect(() => {
      if (checkIn && checkOut && pricingRules.length > 0) {
-        const rentalMode = selectedBedroom ? 'room' : 'entire';
-        const newDetails = calculatePriceDetails(checkIn, checkOut, pricingRules, globalSettings, selectedBedroom, rentalMode);
+        const rentalMode = selectedBedrooms.length > 0 ? 'room' : 'entire';
+        const newDetails = calculatePriceDetails(checkIn, checkOut, pricingRules, globalSettings, selectedBedrooms, rentalMode);
         setLocalPriceDetails(newDetails);
      }
-  }, [selectedBedroom, pricingRules, globalSettings, checkIn, checkOut]);
+  }, [selectedBedrooms, pricingRules, globalSettings, checkIn, checkOut]);
 
   if (loading) return <div>Loading...</div>;
   if (!user) return <Navigate to="/" />;
@@ -344,7 +367,7 @@ export const Checkout: React.FC = () => {
         propertyId,
         checkIn,
         checkOut,
-        selectedBedroom
+        selectedBedrooms // Pass array
       })
     })
     .then(async res => {
@@ -390,7 +413,7 @@ export const Checkout: React.FC = () => {
        setClientSecret('MOCK_TEST_MODE');
        setStripeConfigError("Network error: Could not reach the payment server.");
     });
-  }, [propertyId, checkIn, checkOut, selectedBedroom, hasPublishableKey]);
+  }, [propertyId, checkIn, checkOut, selectedBedrooms, hasPublishableKey]);
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
@@ -447,11 +470,38 @@ export const Checkout: React.FC = () => {
              {/* Bedroom / SmartLock Section */}
              {property?.bedrooms && property.bedrooms.length > 0 && (
                  <div className="mb-6">
-                    <label className="block text-sm font-bold text-slate-700 mb-1">Select Room</label>
-                    <select value={selectedBedroom ? JSON.stringify(selectedBedroom) : ''} onChange={e => setSelectedBedroom(e.target.value ? JSON.parse(e.target.value) : null)} className="w-full border border-slate-300 rounded-xl p-3 bg-white shadow-sm">
-                        <option value="">Entire Property</option>
-                        {property.bedrooms.map((b, i) => <option key={i} value={JSON.stringify(b)}>{b.type} - Room {b.roomNumber}</option>)}
-                    </select>
+                    <label className="block text-sm font-bold text-slate-700 mb-2">Select Rooms</label>
+                    <div className="space-y-2">
+                        {property.bedrooms.map((b, i) => {
+                            const isSelected = selectedBedrooms.some(rb => rb.roomNumber === b.roomNumber);
+                            return (
+                                <label key={i} className={cn(
+                                    "flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all",
+                                    isSelected ? "bg-indigo-50 border-indigo-200" : "bg-white border-slate-200 hover:border-indigo-100"
+                                )}>
+                                    <div className="flex items-center gap-3">
+                                        <input 
+                                            type="checkbox" 
+                                            className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                            checked={isSelected}
+                                            onChange={() => {
+                                                setSelectedBedrooms(prev => 
+                                                    isSelected 
+                                                        ? prev.filter(rb => rb.roomNumber !== b.roomNumber)
+                                                        : [...prev, b]
+                                                );
+                                            }}
+                                        />
+                                        <div>
+                                            <div className="font-bold text-sm text-slate-800">{b.type} - Room {b.roomNumber}</div>
+                                            <div className="text-[10px] text-slate-500 font-medium">{b.sqFt} sq ft • Lock: {b.roomLockNumber}</div>
+                                        </div>
+                                    </div>
+                                    <div className="font-mono font-bold text-indigo-600">${b.fee}</div>
+                                </label>
+                            );
+                        })}
+                    </div>
                  </div>
              )}
              
@@ -498,7 +548,7 @@ export const Checkout: React.FC = () => {
 
              {clientSecret && clientSecret !== 'MOCK_TEST_MODE' ? (
                 <Elements stripe={stripePromise} options={{ clientSecret }}>
-                  <CheckoutForm clientSecret={clientSecret} bookingDetails={{ propertyId, checkIn, checkOut, priceDetails: localPriceDetails }} guestEmail={guestEmail} guestPhone={guestPhone} isTestProperty={isTestProperty} selectedBedroom={selectedBedroom} />
+                  <CheckoutForm clientSecret={clientSecret} bookingDetails={{ propertyId, checkIn, checkOut, priceDetails: localPriceDetails }} guestEmail={guestEmail} guestPhone={guestPhone} isTestProperty={isTestProperty} selectedBedrooms={selectedBedrooms} />
                 </Elements>
              ) : (
                 <div className="p-8 bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl text-center">
