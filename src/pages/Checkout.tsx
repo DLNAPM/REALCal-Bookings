@@ -4,9 +4,10 @@ import { useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
-import { doc, setDoc, serverTimestamp, getDocs, getDoc, query, collection, updateDoc } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, getDocs, getDoc, query, collection, updateDoc, where } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { v4 as uuidv4 } from 'uuid'; // I need to install uuid
+import { v4 as uuidv4 } from 'uuid'; 
+import { calculatePriceDetails, PricingRule } from '../lib/pricing';
 
 import { Property } from '../types';
 
@@ -68,7 +69,8 @@ const processBooking = async (
   setProcessing: (b: boolean) => void,
   isTestMode: boolean = false,
   selectedBedroom: any = null,
-  paymentIntentId?: string
+  paymentIntentId?: string,
+  paymentIntentAmount?: number
 ) => {
   const bookingId = uuidv4();
   const e164Phone = formatPhoneE164(guestPhone);
@@ -106,7 +108,7 @@ const processBooking = async (
       checkIn: bookingDetails.checkIn.split('T')[0],
       checkOut: bookingDetails.checkOut.split('T')[0],
       status: isTestMode ? 'confirmed' : 'pending', // Auto-confirm test bookings
-      totalPrice: Math.round(bookingDetails.priceDetails.grandTotal * 100),
+      totalPrice: paymentIntentAmount || Math.round(bookingDetails.priceDetails.grandTotal * 100),
       paymentIntentId, // Save stripe payment intent ID for future modifications/refunds
       bookingRef,
       selectedBedroom,
@@ -228,7 +230,7 @@ const CheckoutForm: React.FC<{ clientSecret: string, bookingDetails: any, guestE
       setProcessing(false);
     } else {
       // Payment successful, generate lock code and write Booking to firestore
-      await processBooking(bookingDetails, user, guestEmail, guestPhone, navigate, setError, setProcessing, isTestProperty, selectedBedroom, paymentIntent?.id);
+      await processBooking(bookingDetails, user, guestEmail, guestPhone, navigate, setError, setProcessing, isTestProperty, selectedBedroom, paymentIntent?.id, paymentIntent?.amount);
     }
   };
 
@@ -263,6 +265,10 @@ export const Checkout: React.FC = () => {
   const [guestEmail, setGuestEmail] = useState('');
   const [guestPhone, setGuestPhone] = useState('');
   const [property, setProperty] = useState<Property | null>(null);
+  const [pricingRules, setPricingRules] = useState<PricingRule[]>([]);
+  const [globalSettings, setGlobalSettings] = useState<any>(null);
+  const [localPriceDetails, setLocalPriceDetails] = useState<any>(priceDetails);
+
   const isTestProperty = !!property?.isTestProperty;
   
   const [stripePromise, setStripePromise] = useState<any>(null);
@@ -296,8 +302,25 @@ export const Checkout: React.FC = () => {
                 setProperty(propData);
             }
         });
+
+        // Fetch rules for local recalc
+        getDocs(query(collection(db, 'pricing_rules'), where('propertyId', '==', propertyId))).then(snap => {
+           setPricingRules(snap.docs.map(d => ({ id: d.id, ...d.data() } as PricingRule)));
+        });
+
+        getDoc(doc(db, 'global_settings', 'settings')).then(snap => {
+           if(snap.exists()) setGlobalSettings(snap.data());
+        });
     }
   }, [propertyId]);
+
+  useEffect(() => {
+     if (checkIn && checkOut && pricingRules.length > 0) {
+        const rentalMode = selectedBedroom ? 'room' : 'entire';
+        const newDetails = calculatePriceDetails(checkIn, checkOut, pricingRules, globalSettings, selectedBedroom, rentalMode);
+        setLocalPriceDetails(newDetails);
+     }
+  }, [selectedBedroom, pricingRules, globalSettings, checkIn, checkOut]);
 
   if (loading) return <div>Loading...</div>;
   if (!user) return <Navigate to="/" />;
@@ -309,13 +332,19 @@ export const Checkout: React.FC = () => {
   if (!propertyId || !checkIn || !checkOut || !priceDetails) return <Navigate to="/" />;
 
   useEffect(() => {
+    if (!propertyId || !checkIn || !checkOut) return;
+    
     setStripeConfigError(null);
+    setClientSecret('');
     
     fetch('/api/create-payment-intent', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        amount: Math.round(priceDetails.grandTotal * 100), // convert to cents
+        propertyId,
+        checkIn,
+        checkOut,
+        selectedBedroom
       })
     })
     .then(async res => {
@@ -361,7 +390,7 @@ export const Checkout: React.FC = () => {
        setClientSecret('MOCK_TEST_MODE');
        setStripeConfigError("Network error: Could not reach the payment server.");
     });
-  }, [priceDetails, hasPublishableKey]);
+  }, [propertyId, checkIn, checkOut, selectedBedroom, hasPublishableKey]);
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
@@ -383,26 +412,26 @@ export const Checkout: React.FC = () => {
             
             <div className="space-y-3 border-t border-slate-800 pt-6 text-sm text-slate-400">
                <div className="flex justify-between">
-                  <span>Base Rate ({priceDetails.nights} nights)</span>
-                  <span className="font-mono text-white">${(priceDetails.baseTotal).toFixed(2)}</span>
+                  <span>Base Rate ({localPriceDetails.nights} nights)</span>
+                  <span className="font-mono text-white">${(localPriceDetails.baseTotal).toFixed(2)}</span>
                </div>
-               {priceDetails.discount > 0 && (
+               {localPriceDetails.discount > 0 && (
                    <div className="flex justify-between text-emerald-400">
                       <span>Discount</span>
-                      <span className="font-mono">-${(priceDetails.discount).toFixed(2)}</span>
+                      <span className="font-mono">-${(localPriceDetails.discount).toFixed(2)}</span>
                    </div>
                )}
                <div className="flex justify-between">
                   <span>Cleaning Fee</span>
-                  <span className="font-mono text-white">${(priceDetails.cleaningFee).toFixed(2)}</span>
+                  <span className="font-mono text-white">${(localPriceDetails.cleaningFee).toFixed(2)}</span>
                </div>
                <div className="flex justify-between">
                   <span>Occupancy Taxes</span>
-                  <span className="font-mono text-white">${(priceDetails.taxes).toFixed(2)}</span>
+                  <span className="font-mono text-white">${(localPriceDetails.taxes).toFixed(2)}</span>
                </div>
                <div className="flex justify-between items-end border-t border-slate-800 pt-6 mt-6">
                   <span>Total Due</span>
-                  <span className="font-mono text-3xl font-bold text-white">${(priceDetails.grandTotal).toFixed(2)}</span>
+                  <span className="font-mono text-3xl font-bold text-white">${(localPriceDetails.grandTotal).toFixed(2)}</span>
                </div>
             </div>
 
@@ -469,7 +498,7 @@ export const Checkout: React.FC = () => {
 
              {clientSecret && clientSecret !== 'MOCK_TEST_MODE' ? (
                 <Elements stripe={stripePromise} options={{ clientSecret }}>
-                  <CheckoutForm clientSecret={clientSecret} bookingDetails={{ propertyId, checkIn, checkOut, priceDetails }} guestEmail={guestEmail} guestPhone={guestPhone} isTestProperty={isTestProperty} selectedBedroom={selectedBedroom} />
+                  <CheckoutForm clientSecret={clientSecret} bookingDetails={{ propertyId, checkIn, checkOut, priceDetails: localPriceDetails }} guestEmail={guestEmail} guestPhone={guestPhone} isTestProperty={isTestProperty} selectedBedroom={selectedBedroom} />
                 </Elements>
              ) : (
                 <div className="p-8 bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl text-center">

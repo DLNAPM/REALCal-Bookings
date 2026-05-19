@@ -5,9 +5,27 @@ import path from "path";
 import Stripe from "stripe";
 import * as dotenv from "dotenv";
 import fs from "fs";
+import * as admin from "firebase-admin";
+import { calculatePriceDetails } from "./src/lib/pricing";
 
 // Load environment variables from .env file if present
 dotenv.config();
+
+// Initialize Firebase Admin
+let db: admin.firestore.Firestore;
+try {
+  const firebaseConfig = JSON.parse(fs.readFileSync("./firebase-applet-config.json", "utf-8"));
+  if (admin.apps.length === 0) {
+    admin.initializeApp({
+      projectId: firebaseConfig.projectId,
+    });
+  }
+  // @ts-ignore
+  db = admin.firestore(firebaseConfig.firestoreDatabaseId);
+  console.log(`[Server] Firebase Admin initialized for project: ${firebaseConfig.projectId}, DB: ${firebaseConfig.firestoreDatabaseId}`);
+} catch (e) {
+  console.error("[Server] Failed to initialize Firebase Admin:", e);
+}
 
 let __filename: string;
 let __dirname: string;
@@ -178,14 +196,45 @@ async function startServer() {
 
   app.post("/api/create-payment-intent", async (req, res) => {
     try {
-      const { amount, currency = "usd", metadata } = req.body;
+      const { propertyId, checkIn, checkOut, selectedBedroom, currency = "usd", metadata } = req.body;
       const key = process.env.STRIPE_SECRET_KEY;
       if (!key || key === "sk_test_...") {
         return res.status(400).json({ error: "STRIPE_SECRET_KEY is not configured." });
       }
+
+      if (!propertyId || !checkIn || !checkOut) {
+        return res.status(400).json({ error: "Missing required booking details (propertyId, checkIn, checkOut)." });
+      }
+
+      // 1. Fetch pricing rules and global settings from Firestore
+      const rulesSnap = await db.collection('pricing_rules').where('propertyId', '==', propertyId).get();
+      const pricingRules = rulesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      
+      const settingsSnap = await db.collection('global_settings').doc('settings').get();
+      const globalSettings = settingsSnap.exists ? settingsSnap.data() : null;
+
+      // 2. Calculate correct amount
+      const rentalMode = selectedBedroom ? 'room' : 'entire';
+      const priceDetails = calculatePriceDetails(checkIn, checkOut, pricingRules as any, globalSettings, selectedBedroom, rentalMode);
+      const amountInCents = Math.round(priceDetails.grandTotal * 100);
+
+      console.log(`[Server] PaymentIntent creation: Property ${propertyId}, Amount ${amountInCents} cents`);
+
       const stripe = new Stripe(key);
       const paymentIntent = await stripe.paymentIntents.create({
-        amount, currency, metadata,
+        amount: amountInCents,
+        currency,
+        metadata: {
+          ...metadata,
+          propertyId,
+          checkIn,
+          checkOut,
+          rentalMode,
+          roomNumber: selectedBedroom?.roomNumber || 'N/A'
+        },
+        automatic_payment_methods: {
+          enabled: true,
+        },
       });
       res.json({ clientSecret: paymentIntent.client_secret });
     } catch (e: any) {

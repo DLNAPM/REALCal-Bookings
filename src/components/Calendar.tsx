@@ -8,6 +8,7 @@ import { Property } from '../types';
 import { cn } from '../lib/utils';
 import { ChevronLeft, ChevronRight, Lock } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
+import { getNightlyRate, calculatePriceDetails } from '../lib/pricing';
 
 export const Calendar: React.FC<{ 
     propertyId: string, 
@@ -112,38 +113,8 @@ export const Calendar: React.FC<{
     });
   };
 
-  const getNightlyRate = (date: Date): number => {
-    // Collect rules that match our current target
-    const applicableRules = pricingRules.filter(r => {
-        if (rentalMode === 'room') {
-            return r.targetType === 'room' && r.roomNumber === selectedRoom?.roomNumber;
-        } else {
-            return !r.targetType || r.targetType === 'property';
-        }
-    });
-
-    // Initial base rate
-    let rate = 150; 
-    if (rentalMode === 'room' && selectedRoom) {
-        rate = selectedRoom.fee;
-    }
-
-    // Priority: custom -> holiday -> weekend -> default
-    const dateStr = format(date, 'yyyy-MM-dd');
-
-    const defaultRule = applicableRules.find(r => r.type === 'default');
-    if (defaultRule) rate = defaultRule.rate;
-
-    const weekendRule = applicableRules.find(r => r.type === 'weekend');
-    if (weekendRule && (getDay(date) === 5 || getDay(date) === 6)) rate = weekendRule.rate;
-
-    const holidayRule = applicableRules.find(r => r.type === 'holiday' && r.startDate && r.endDate && date >= new Date(r.startDate) && date <= new Date(r.endDate));
-    if (holidayRule) rate = holidayRule.rate;
-
-    const customRule = applicableRules.find(r => r.type === 'custom' && r.startDate && dateStr === r.startDate);
-    if (customRule) rate = customRule.rate;
-
-    return rate;
+  const getRate = (date: Date): number => {
+    return getNightlyRate(date, pricingRules, selectedRoom, rentalMode);
   };
 
   const handleDateClick = (day: Date) => {
@@ -251,32 +222,7 @@ export const Calendar: React.FC<{
 
   const calculatePrice = () => {
     if (!checkIn || !checkOut) return null;
-    const interval = eachDayOfInterval({ start: checkIn, end: addDays(checkOut, -1) });
-    let totalNightsRate = 0;
-    interval.forEach(day => {
-      totalNightsRate += getNightlyRate(day);
-    });
-    
-    let cleaningFee = 100;
-    let nights = interval.length;
-    let discount = 0;
-    
-    // 10% discount for 7+ days
-    if (nights >= 7) {
-      discount = totalNightsRate * 0.1;
-     totalNightsRate -= discount;
-    }
-    
-    let taxes = (totalNightsRate + cleaningFee) * 0.12;
-
-    return {
-      nights,
-      baseTotal: totalNightsRate,
-      cleaningFee,
-      discount,
-      taxes,
-      grandTotal: totalNightsRate + cleaningFee + taxes
-    };
+    return calculatePriceDetails(checkIn.toISOString(), checkOut.toISOString(), pricingRules, globalSettings, selectedRoom, rentalMode);
   };
 
   const priceDetails = calculatePrice();
@@ -318,7 +264,7 @@ export const Calendar: React.FC<{
             onMouseEnter={() => !isDisabled && setHoverDate(cloneDay)}
           >
             <span className="font-semibold text-lg">{formattedDate}</span>
-            {!isDisabled && <span className={cn("text-xs opacity-70", isSelected ? 'text-indigo-100' : 'text-slate-500')}>$\{(getNightlyRate(cloneDay))}</span>}
+            {!isDisabled && <span className={cn("text-xs opacity-70", isSelected ? 'text-indigo-100' : 'text-slate-500')}>${getRate(cloneDay)}</span>}
           </div>
         );
 
@@ -410,7 +356,7 @@ export const Calendar: React.FC<{
                    {eachDayOfInterval({ start: checkIn, end: addDays(checkOut, -1) }).map(day => (
                       <div key={day.toISOString()} className="flex justify-between items-center text-sm">
                          <span className="text-slate-400">{format(day, 'MMM d, yyyy')}</span>
-                         <span className="font-mono">${getNightlyRate(day).toFixed(2)}</span>
+                         <span className="font-mono">${getRate(day).toFixed(2)}</span>
                       </div>
                    ))}
                 </div>
@@ -456,7 +402,7 @@ export const Calendar: React.FC<{
                              <div className="text-[10px] opacity-70 uppercase tracking-tighter">Full access</div>
                          </div>
                          <div className="text-right">
-                             <div className="font-mono font-bold">${getNightlyRate(new Date()).toFixed(0)}/nt</div>
+                             <div className="font-mono font-bold">${getRate(new Date()).toFixed(0)}/nt</div>
                              <div className="text-[10px] opacity-50">Property Rate</div>
                          </div>
                       </button>
