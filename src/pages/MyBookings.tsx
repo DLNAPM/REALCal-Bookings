@@ -97,7 +97,7 @@ export const MyBookings: React.FC = () => {
     const [filter, setFilter] = useState<'active' | 'cancelled'>('active');
     const [fetching, setFetching] = useState(true);
     const [editingBooking, setEditingBooking] = useState<(Booking & { propertyName?: string; propertyImage?: string; property?: Property | null }) | null>(null);
-    const [modificationPayment, setModificationPayment] = useState<{ clientSecret: string; amount: number; checkIn: string; checkOut: string; priceDetails: any } | null>(null);
+    const [modificationPayment, setModificationPayment] = useState<{ clientSecret: string; amount: number; checkIn: string; checkOut: string; priceDetails: any; selectedBedrooms: any[]; rentalMode: 'entire' | 'room' } | null>(null);
     const [stripePromise, setStripePromise] = useState<any>(null);
 
     const [globalSettings, setGlobalSettings] = useState<any>(null);
@@ -235,14 +235,13 @@ export const MyBookings: React.FC = () => {
         }
     };
 
-    const handleSaveEdit = async (checkIn: string, checkOut: string, priceDetails: any) => {
+    const handleSaveEdit = async (checkIn: string, checkOut: string, priceDetails: any, selectedBedrooms: any[], rentalMode: 'entire' | 'room') => {
         if (!editingBooking || !user) return;
         const newTotal = Math.round(priceDetails.grandTotal * 100);
         const oldTotal = editingBooking.totalPrice;
         const diff = newTotal - oldTotal;
 
         if (diff < 0 && editingBooking.paymentIntentId) {
-            // Initiate Refund
             const confirmRefund = window.confirm(`Your new booking total is $${(newTotal / 100).toFixed(2)}, which is $${(Math.abs(diff) / 100).toFixed(2)} less than your original payment.\n\nWe will issue a refund of $${(Math.abs(diff) / 100).toFixed(2)} to your original payment method.\n\nProceed with changes?`);
             if (!confirmRefund) return;
 
@@ -260,15 +259,12 @@ export const MyBookings: React.FC = () => {
                     const errData = await refundRes.json();
                     throw new Error(errData.error || "Refund failed");
                 }
-                
-                console.log("[MyBookings] Refund successful");
             } catch (e: any) {
                 console.error("[MyBookings] Refund error:", e);
                 alert(`We couldn't automatically issue a refund: ${e.message}. Please contact support to complete your modification.`);
                 return;
             }
         } else if (diff > 0) {
-            // Initiate Charge
             try {
                 const intentRes = await fetch('/api/create-payment-intent', {
                     method: 'POST',
@@ -284,42 +280,59 @@ export const MyBookings: React.FC = () => {
                     amount: diff,
                     checkIn,
                     checkOut,
-                    priceDetails
+                    priceDetails,
+                    selectedBedrooms,
+                    rentalMode
                 });
-                return; // Wait for payment form
+                return;
             } catch (e: any) {
                 alert(`Error initializing additional payment: ${e.message}`);
                 return;
             }
         }
 
-        // Proceed to update Firestore if diff == 0 or refund was handled
-        await finalizeBookingUpdate(checkIn, checkOut, newTotal);
+        await finalizeBookingUpdate(checkIn, checkOut, newTotal, selectedBedrooms, rentalMode);
     };
 
-    const finalizeBookingUpdate = async (checkIn: string, checkOut: string, newTotal: number) => {
+    const finalizeBookingUpdate = async (checkIn: string, checkOut: string, newTotal: number, selectedBedrooms: any[], rentalMode: 'entire' | 'room') => {
         if (!editingBooking || !user) return;
         try {
             const cleanCheckIn = checkIn.split('T')[0];
             const cleanCheckOut = checkOut.split('T')[0];
+            
+            // 1. Cleanup old maintenance blackouts
+            try {
+                const oldRooms = editingBooking.selectedBedrooms || (editingBooking.selectedBedroom ? [editingBooking.selectedBedroom] : []);
+                if (oldRooms.length > 0) {
+                    for (const room of oldRooms) {
+                        await deleteDoc(doc(db, 'blackout_dates', `maint-${editingBooking.id}-${room.roomNumber}`));
+                    }
+                } else {
+                    await deleteDoc(doc(db, 'blackout_dates', `maint-${editingBooking.id}`));
+                }
+            } catch (err) {
+                console.warn("Minor: Failed to cleanup old blackouts", err);
+            }
+
+            // 2. Update Booking
             await updateDoc(doc(db, 'bookings', editingBooking.id), {
                 checkIn: cleanCheckIn,
                 checkOut: cleanCheckOut,
                 totalPrice: newTotal,
+                selectedBedrooms: selectedBedrooms.length > 0 ? selectedBedrooms : null,
+                selectedBedroom: null, // Wipe legacy field if exists
                 updatedAt: serverTimestamp()
             });
 
-            // Update associated maintenance blackout
+            // 3. Create new maintenance blackouts
             try {
-                const checkOutDate = new Date(cleanCheckOut + 'T12:00:00'); // Use noon to avoid TZ issues
+                const checkOutDate = new Date(cleanCheckOut + 'T12:00:00'); 
                 const dayAfterDate = new Date(checkOutDate);
                 dayAfterDate.setDate(dayAfterDate.getDate() + 1);
                 const blackoutDateString = dayAfterDate.toISOString().split('T')[0];
                 
-                const rooms = editingBooking.selectedBedrooms || (editingBooking.selectedBedroom ? [editingBooking.selectedBedroom] : []);
-                
-                if (rooms.length > 0) {
-                    for (const room of rooms) {
+                if (rentalMode === 'room' && selectedBedrooms.length > 0) {
+                    for (const room of selectedBedrooms) {
                         await setDoc(doc(db, 'blackout_dates', `maint-${editingBooking.id}-${room.roomNumber}`), {
                             propertyId: editingBooking.propertyId,
                             date: blackoutDateString,
@@ -339,22 +352,17 @@ export const MyBookings: React.FC = () => {
                         createdAt: serverTimestamp()
                     });
                 }
-                console.log(`[MyBookings] Maintenance blackout(s) updated for ${blackoutDateString}`);
             } catch (blackoutErr) {
-                console.warn("Failed to update maintenance blackout on edit", blackoutErr);
+                console.warn("Failed to create maintenance blackout on edit", blackoutErr);
             }
             
-            // Notify Managers and User
+            // 4. Notify Managers
             try {
-                let managers: any[] = [];
-                let isTestProperty = false;
-                const managersSnap = await getDocs(query(collection(db, 'property_managers')));
-                managers = managersSnap.docs.map(d => d.data()).filter(m => m.enabled);
+                const managersSnap = await getDocs(query(collection(db, 'property_managers'), where('enabled', '==', true)));
+                const managers = managersSnap.docs.map(d => d.data());
                 
                 const propSnap = await getDoc(doc(db, 'properties', editingBooking.propertyId));
-                if (propSnap.exists() && propSnap.data().isTestProperty) {
-                    isTestProperty = true;
-                }
+                const isTestProperty = propSnap.exists() && propSnap.data().isTestProperty;
 
                 await fetch('/api/notify-managers', {
                     method: 'POST',
@@ -378,15 +386,15 @@ export const MyBookings: React.FC = () => {
                 console.error("Failed to send update notification:", notifyErr);
             }
             
-            // Refresh list locally
             setBookings(prev => prev.map(b => b.id === editingBooking.id ? { 
                 ...b, 
                 checkIn: cleanCheckIn, 
                 checkOut: cleanCheckOut,
-                totalPrice: newTotal 
+                totalPrice: newTotal,
+                selectedBedrooms: selectedBedrooms.length > 0 ? selectedBedrooms : null
             } : b));
             
-            alert("Booking dates successfully updated! Notifications have been sent.");
+            alert("Booking successfully updated! Notifications have been sent.");
             setEditingBooking(null);
             setModificationPayment(null);
         } catch (err: any) {
@@ -602,6 +610,7 @@ export const MyBookings: React.FC = () => {
                                 propertyId={editingBooking.propertyId} 
                                 property={editingBooking.property || undefined}
                                 isEditMode={true}
+                                editingBookingId={editingBooking.id}
                                 initialCheckIn={editingBooking.checkIn}
                                 initialCheckOut={editingBooking.checkOut}
                                 initialSelectedRoom={editingBooking.selectedBedroom}
@@ -619,7 +628,13 @@ export const MyBookings: React.FC = () => {
                         <ModificationPaymentForm 
                             clientSecret={modificationPayment.clientSecret}
                             amount={modificationPayment.amount}
-                            onSuccess={() => finalizeBookingUpdate(modificationPayment.checkIn, modificationPayment.checkOut, Math.round(modificationPayment.priceDetails.grandTotal * 100))}
+                            onSuccess={() => finalizeBookingUpdate(
+                                modificationPayment.checkIn, 
+                                modificationPayment.checkOut, 
+                                Math.round(modificationPayment.priceDetails.grandTotal * 100),
+                                modificationPayment.selectedBedrooms,
+                                modificationPayment.rentalMode
+                            )}
                             onCancel={() => setModificationPayment(null)}
                         />
                     </Elements>

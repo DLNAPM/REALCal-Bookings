@@ -14,12 +14,13 @@ export const Calendar: React.FC<{
     propertyId: string, 
     property?: Property,
     isEditMode?: boolean,
+    editingBookingId?: string,
     initialCheckIn?: string,
     initialCheckOut?: string,
     initialSelectedRoom?: any,
-    onSaveEdit?: (checkIn: string, checkOut: string, priceDetails: any) => void,
+    onSaveEdit?: (checkIn: string, checkOut: string, priceDetails: any, selectedRooms: any[], rentalMode: 'entire' | 'room') => void,
     onCancelEdit?: () => void
-}> = ({ propertyId, property, isEditMode, initialCheckIn, initialCheckOut, initialSelectedRoom, onSaveEdit, onCancelEdit }) => {
+}> = ({ propertyId, property, isEditMode, editingBookingId, initialCheckIn, initialCheckOut, initialSelectedRoom, onSaveEdit, onCancelEdit }) => {
   const parseLocalDate = (dateStr: string) => {
     if (!dateStr) return null;
     const [year, month, day] = dateStr.split('T')[0].split('-').map(Number);
@@ -88,6 +89,9 @@ export const Calendar: React.FC<{
   const isUnavailable = (date: Date) => {
     // 1. Manual Blackouts
     const isDateBlackout = blackoutDates.some(b => {
+      // Ignore maintenance blackout for the booking being edited
+      if (editingBookingId && b.id && b.id.startsWith(`maint-${editingBookingId}`)) return false;
+
       const bDate = parseLocalDate(b.date);
       if (!bDate || !isSameDay(startOfDay(bDate), date)) return false;
       
@@ -112,6 +116,9 @@ export const Calendar: React.FC<{
     // 2. Booking Conflicts
     return bookings.some(b => {
       if (b.status === 'cancelled') return false;
+      // Ignore the booking being edited
+      if (editingBookingId && b.id === editingBookingId) return false;
+      
       const bStart = parseLocalDate(b.checkIn);
       const bEnd = parseLocalDate(b.checkOut);
       if (!bStart || !bEnd) return false;
@@ -529,7 +536,7 @@ export const Calendar: React.FC<{
             <button 
               onClick={() => {
                   if (isEditMode && onSaveEdit && checkIn && checkOut && priceDetails) {
-                      onSaveEdit(format(checkIn, 'yyyy-MM-dd'), format(checkOut, 'yyyy-MM-dd'), priceDetails);
+                      onSaveEdit(format(checkIn, 'yyyy-MM-dd'), format(checkOut, 'yyyy-MM-dd'), priceDetails, selectedRooms, rentalMode);
                   } else {
                       handleBook();
                   }
