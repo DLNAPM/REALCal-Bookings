@@ -209,9 +209,9 @@ service cloud.firestore {
     match /blackout_dates/{blackoutId} {
       allow get: if true; 
       allow list: if true;
-      allow create: if isAdmin() || (isSignedIn() && blackoutId.startsWith('maint-'));
+      allow create: if isSignedIn() && (isAdmin() || blackoutId.matches('maint-.*')) && isValidBlackoutDate(incoming());
       allow update: if isAdmin();
-      allow delete: if isAdmin() || (isSignedIn() && blackoutId.startsWith('maint-'));
+      allow delete: if isAdmin() || (isSignedIn() && blackoutId.matches('maint-.*'));
     }
   }
 }

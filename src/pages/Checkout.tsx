@@ -222,7 +222,7 @@ const processBooking = async (
        console.error("Manager notification failed, but booking succeeded", notifyErr);
     }
 
-    navigate('/confirmation', { state: { bookingId, accessCode, notificationResults, bookingRef, selectedBedrooms }});
+    navigate('/confirmation', { state: { bookingId, accessCode, notificationResults, bookingRef, selectedBedrooms, checkIn: bookingDetails.checkIn, checkOut: bookingDetails.checkOut }});
   } catch (e: any) {
      console.error("Booking error:", e);
      setError(`Booking failed: ${e.message}`);

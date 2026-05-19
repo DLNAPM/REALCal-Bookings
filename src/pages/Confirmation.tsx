@@ -5,8 +5,18 @@ import { LegalFooter } from '../components/LegalFooter';
 
 export const Confirmation: React.FC = () => {
     const location = useLocation();
-    const { bookingId, accessCode, notificationResults, bookingRef, selectedBedroom, selectedBedrooms } = location.state || {};
+    const { bookingId, accessCode, notificationResults, bookingRef, selectedBedroom, selectedBedrooms, checkIn, checkOut } = location.state || {};
     const rooms = selectedBedrooms || (selectedBedroom ? [selectedBedroom] : []);
+    
+    const formatDate = (dateStr: string) => {
+        if (!dateStr) return '';
+        try {
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+        } catch (e) {
+            return dateStr;
+        }
+    };
 
     if (!bookingId) return <Navigate to="/" />;
 
@@ -17,6 +27,19 @@ export const Confirmation: React.FC = () => {
                    <CheckCircle className="w-10 h-10 text-emerald-500" />
                 </div>
                 <h1 className="text-3xl font-bold mb-2 text-slate-800">Booking Confirmed!</h1>
+                {checkIn && checkOut && (
+                    <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 mb-6 flex justify-center gap-4 text-xs font-bold text-slate-500 uppercase tracking-tight">
+                        <div className="flex flex-col">
+                            <span className="text-[10px] text-slate-400">Check-in</span>
+                            <span className="text-slate-700">{formatDate(checkIn)}</span>
+                        </div>
+                        <div className="w-px h-8 bg-slate-200"></div>
+                        <div className="flex flex-col">
+                            <span className="text-[10px] text-slate-400">Check-out</span>
+                            <span className="text-slate-700">{formatDate(checkOut)}</span>
+                        </div>
+                    </div>
+                )}
                 <p className="text-slate-500 mb-8">Your reservation has been successfully booked.</p>
 
                 {rooms.length > 0 && (
