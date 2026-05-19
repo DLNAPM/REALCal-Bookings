@@ -27,17 +27,35 @@ try {
     const dbId = firebaseConfig.firestoreDatabaseId || "(default)";
     db = getFirestore(admin.app(), dbId);
     console.log(`[Server] Firebase Admin initialized using config file. Project: ${firebaseConfig.projectId}, DB: ${dbId}`);
-  } else if (process.env.FIREBASE_PROJECT_ID) {
-    // Fallback for non-AI-Studio environments (like Render.com) using environment variables
-    if (admin.apps.length === 0) {
-      admin.initializeApp({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-      });
-    }
-    db = getFirestore(admin.app(), process.env.FIREBASE_DATABASE_ID || "(default)");
-    console.log(`[Server] Firebase Admin initialized using environment variables. Project: ${process.env.FIREBASE_PROJECT_ID}`);
   } else {
-    console.warn(`[Server] No Firebase configuration found (config file or env vars). Firestore will be unavailable.`);
+    // Check for environment variables (Render.com / Deployment)
+    const projectId = process.env.FIREBASE_PROJECT_ID;
+    const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+    
+    if (projectId || serviceAccountJson) {
+      if (admin.apps.length === 0) {
+        if (serviceAccountJson) {
+          try {
+            const sa = JSON.parse(serviceAccountJson);
+            admin.initializeApp({
+              credential: admin.credential.cert(sa),
+              projectId: sa.project_id || projectId
+            });
+            console.log(`[Server] Firebase Admin initialized using Service Account JSON.`);
+          } catch (saErr) {
+            console.error("[Server] Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON:", saErr);
+            admin.initializeApp({ projectId });
+          }
+        } else {
+          admin.initializeApp({ projectId });
+          console.log(`[Server] Firebase Admin initialized using Project ID: ${projectId}. (Warning: May require credentials)`);
+        }
+      }
+      const dbId = process.env.FIREBASE_DATABASE_ID || "(default)";
+      db = getFirestore(admin.app(), dbId);
+    } else {
+      console.warn(`[Server] No Firebase configuration found. Use AI Studio setup or set FIREBASE_PROJECT_ID / FIREBASE_SERVICE_ACCOUNT_JSON.`);
+    }
   }
 } catch (e) {
   console.error("[Server] Critical failure during Firebase initialization:", e);
@@ -74,7 +92,7 @@ async function startServer() {
   console.log(`[Server] Root: ${rootDir}, Dist: ${distPath}`);
 
   // Base Middlewares
-  app.use(cors());
+  app.use('/api', cors()); // Only apply CORS to API routes to avoid collisions with static assets or infrastructure
   app.use(express.json());
   app.use((_req, res, next) => {
     res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
@@ -228,15 +246,28 @@ async function startServer() {
         console.log("[Server] db not initialized at startup, attempting late initialization...");
         try {
           const configPath = path.resolve(process.cwd(), "firebase-applet-config.json");
+          const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+          
           if (fs.existsSync(configPath)) {
             const firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
             if (admin.apps.length === 0) {
               admin.initializeApp({ projectId: firebaseConfig.projectId });
             }
-            const dbId = firebaseConfig.firestoreDatabaseId || "(default)";
-            db = getFirestore(admin.app(), dbId);
-            console.log(`[Server] Late Firestore initialization successful for ${dbId}`);
+            db = getFirestore(admin.app(), firebaseConfig.firestoreDatabaseId || "(default)");
+          } else if (serviceAccountJson) {
+            if (admin.apps.length === 0) {
+              const sa = JSON.parse(serviceAccountJson);
+              admin.initializeApp({ credential: admin.credential.cert(sa) });
+            }
+            db = getFirestore(admin.app(), process.env.FIREBASE_DATABASE_ID || "(default)");
+          } else if (process.env.FIREBASE_PROJECT_ID) {
+            if (admin.apps.length === 0) {
+              admin.initializeApp({ projectId: process.env.FIREBASE_PROJECT_ID });
+            }
+            db = getFirestore(admin.app(), process.env.FIREBASE_DATABASE_ID || "(default)");
           }
+          
+          if (db) console.log("[Server] Late Firestore initialization successful.");
         } catch (e) {
           console.error("[Server] Late Firestore initialization failed:", e);
         }
