@@ -5,7 +5,6 @@ import path from "path";
 import Stripe from "stripe";
 import * as dotenv from "dotenv";
 import fs from "fs";
-import cors from "cors";
 import * as admin from "firebase-admin";
 import { getFirestore } from "firebase-admin/firestore";
 import { calculatePriceDetails } from "./src/lib/pricing";
@@ -16,21 +15,36 @@ dotenv.config();
 // Initialize Firebase Admin
 let db: admin.firestore.Firestore;
 try {
-  const configRaw = fs.readFileSync("./firebase-applet-config.json", "utf-8");
-  const firebaseConfig = JSON.parse(configRaw);
+  const configPath = path.resolve(process.cwd(), "firebase-applet-config.json");
+  console.log(`[Server] Initializing Firebase Admin with config from: ${configPath}`);
   
-  if (admin.apps.length === 0) {
-    admin.initializeApp({
-      projectId: firebaseConfig.projectId,
-    });
+  if (fs.existsSync(configPath)) {
+    const configRaw = fs.readFileSync(configPath, "utf-8");
+    const firebaseConfig = JSON.parse(configRaw);
+    
+    // Safety check for project ID
+    if (!firebaseConfig.projectId) {
+      throw new Error("projectId is missing in firebase-applet-config.json");
+    }
+
+    if (admin.apps.length === 0) {
+      admin.initializeApp({
+        projectId: firebaseConfig.projectId,
+      });
+    }
+    
+    const app = admin.app();
+    const dbId = firebaseConfig.firestoreDatabaseId || "(default)";
+    
+    // Correct modular way to get firestore with specific database ID
+    db = getFirestore(app, dbId);
+    
+    console.log(`[Server] Firebase Admin initialized. Project: ${firebaseConfig.projectId}, DB: ${dbId}`);
+  } else {
+    console.warn(`[Server] firebase-applet-config.json NOT FOUND. Firestore will be unavailable.`);
   }
-  
-  const app = admin.app();
-  db = getFirestore(app, firebaseConfig.firestoreDatabaseId || "(default)");
-  
-  console.log(`[Server] Firebase Admin initialized for project: ${firebaseConfig.projectId}, DB: ${firebaseConfig.firestoreDatabaseId || "(default)"}`);
 } catch (e) {
-  console.error("[Server] Failed to initialize Firebase Admin:", e);
+  console.error("[Server] Critical failure during Firebase initialization:", e);
 }
 
 let __filename: string;
@@ -64,7 +78,6 @@ async function startServer() {
   console.log(`[Server] Root: ${rootDir}, Dist: ${distPath}`);
 
   // Base Middlewares
-  app.use(cors());
   app.use(express.json());
   app.use((_req, res, next) => {
     res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
