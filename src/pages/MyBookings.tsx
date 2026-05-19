@@ -490,14 +490,34 @@ export const MyBookings: React.FC = () => {
                                         )}
 
                                         {booking.accessCode && booking.status !== 'cancelled' && (
-                                            <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 mb-6 flex items-center gap-4">
-                                                <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-lg flex items-center justify-center shrink-0">
-                                                    <MapPin size={20} />
+                                            <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 mb-6 space-y-4">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-lg flex items-center justify-center shrink-0">
+                                                        <MapPin size={20} />
+                                                    </div>
+                                                    <div>
+                                                        <span className="block text-xs font-bold uppercase text-indigo-400 tracking-wider mb-0.5">Main Entry PIN</span>
+                                                        <span className="font-mono text-xl font-bold text-indigo-700 tracking-widest">{booking.accessCode}</span>
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <span className="block text-xs font-bold uppercase text-indigo-400 tracking-wider mb-0.5">York Access PIN</span>
-                                                    <span className="font-mono text-xl font-bold text-indigo-700 tracking-widest">{booking.accessCode}</span>
-                                                </div>
+
+                                                {(booking.selectedBedrooms || (booking.selectedBedroom ? [booking.selectedBedroom] : [])).length > 0 && (
+                                                    <div className="pt-2 border-t border-indigo-100 space-y-2">
+                                                        {(booking.selectedBedrooms || [booking.selectedBedroom]).map((room, idx) => (
+                                                            <div key={idx} className="flex justify-between items-center text-sm">
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-400"></div>
+                                                                    <span className="font-bold text-slate-700">Room {room.roomNumber}</span>
+                                                                    <span className="text-slate-400 text-[10px] uppercase font-medium">{room.type}</span>
+                                                                </div>
+                                                                <div className="text-right">
+                                                                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Room Lock</span>
+                                                                    <span className="font-mono font-bold text-indigo-600">{room.roomLockNumber}</span>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
 

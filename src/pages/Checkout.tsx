@@ -415,6 +415,12 @@ export const Checkout: React.FC = () => {
     });
   }, [propertyId, checkIn, checkOut, selectedBedrooms, hasPublishableKey]);
 
+  const parseLocalDate = (dateStr: string) => {
+    if (!dateStr) return new Date();
+    const [year, month, day] = dateStr.split('T')[0].split('-').map(Number);
+    return new Date(year, month - 1, day);
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       <div className="max-w-4xl mx-auto w-full p-6 py-12">
@@ -425,11 +431,11 @@ export const Checkout: React.FC = () => {
             <div className="space-y-4 mb-8">
                <div className="flex justify-between items-center text-slate-400">
                  <span>Check-in</span>
-                 <span className="text-white font-medium">{new Date(checkIn).toLocaleDateString()}</span>
+                 <span className="text-white font-medium">{parseLocalDate(checkIn).toLocaleDateString()}</span>
                </div>
                <div className="flex justify-between items-center text-slate-400">
                  <span>Check-out</span>
-                 <span className="text-white font-medium">{new Date(checkOut).toLocaleDateString()}</span>
+                 <span className="text-white font-medium">{parseLocalDate(checkOut).toLocaleDateString()}</span>
                </div>
             </div>
             

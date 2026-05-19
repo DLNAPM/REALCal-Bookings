@@ -5,7 +5,8 @@ import { LegalFooter } from '../components/LegalFooter';
 
 export const Confirmation: React.FC = () => {
     const location = useLocation();
-    const { bookingId, accessCode, notificationResults, bookingRef, selectedBedroom } = location.state || {};
+    const { bookingId, accessCode, notificationResults, bookingRef, selectedBedroom, selectedBedrooms } = location.state || {};
+    const rooms = selectedBedrooms || (selectedBedroom ? [selectedBedroom] : []);
 
     if (!bookingId) return <Navigate to="/" />;
 
@@ -18,11 +19,15 @@ export const Confirmation: React.FC = () => {
                 <h1 className="text-3xl font-bold mb-2 text-slate-800">Booking Confirmed!</h1>
                 <p className="text-slate-500 mb-8">Your reservation has been successfully booked.</p>
 
-                {selectedBedroom && (
-                    <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-xl mb-4 text-left">
-                       <p className="text-xs font-bold text-emerald-800 uppercase tracking-wide mb-1">Assigned Room</p>
-                       <p className="font-bold text-slate-800">Room {selectedBedroom.roomNumber}</p>
-                       <p className="text-sm text-slate-600">Lock: {selectedBedroom.roomLockNumber}</p>
+                {rooms.length > 0 && (
+                    <div className="space-y-2 mb-4">
+                        {rooms.map((room, idx) => (
+                            <div key={idx} className="bg-emerald-50 border border-emerald-100 p-4 rounded-xl text-left">
+                               <p className="text-xs font-bold text-emerald-800 uppercase tracking-wide mb-1">Assigned Room</p>
+                               <p className="font-bold text-slate-800">Room {room.roomNumber}</p>
+                               <p className="text-sm text-slate-600 font-medium">Room Lock: <span className="font-mono bg-white px-2 py-0.5 rounded border border-emerald-100 ml-1">{room.roomLockNumber}</span></p>
+                            </div>
+                        ))}
                     </div>
                 )}
                 

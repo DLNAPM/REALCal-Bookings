@@ -86,8 +86,17 @@ export const Itinerary: React.FC = () => {
     );
   }
 
-  const checkInDate = new Date(booking.checkIn);
-  const checkOutDate = new Date(booking.checkOut);
+  const parseLocalDate = (dateStr: string) => {
+    if (!dateStr) return new Date();
+    // Use the date part and parse as local date to avoid timezone shifts
+    const [year, month, day] = dateStr.split('T')[0].split('-').map(Number);
+    return new Date(year, month - 1, day);
+  };
+
+  const checkInDate = parseLocalDate(booking.checkIn);
+  const checkOutDate = parseLocalDate(booking.checkOut);
+
+  const rooms = booking.selectedBedrooms || (booking.selectedBedroom ? [booking.selectedBedroom] : []);
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900 pb-20 print:bg-white print:pb-0">
@@ -175,23 +184,27 @@ export const Itinerary: React.FC = () => {
                     </div>
                 </div>
                 
-                {booking.selectedBedroom && (
-                  <div className="mt-6 bg-slate-50 rounded-3xl p-8 border border-slate-100 flex flex-col md:flex-row items-center justify-between gap-6 print:border-slate-200">
-                    <div className="flex items-center gap-4">
-                      <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-sm text-indigo-600">
-                         <Home size={28} />
+                {rooms.length > 0 && (
+                  <div className="mt-8 space-y-4">
+                    <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Assigned Accommodation</p>
+                    {rooms.map((room, idx) => (
+                      <div key={idx} className="bg-slate-50 rounded-3xl p-6 border border-slate-100 flex flex-col md:flex-row items-center justify-between gap-6 print:border-slate-200">
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm text-indigo-600">
+                             <Home size={24} />
+                          </div>
+                          <div>
+                            <p className="text-xl font-bold text-slate-800">Room {room.roomNumber}</p>
+                            <p className="text-slate-500 text-sm italic">{room.type}</p>
+                          </div>
+                        </div>
+                        
+                        <div className="bg-white px-6 py-4 rounded-2xl border border-slate-200 text-center md:text-right min-w-[150px] shadow-sm">
+                           <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Room Lock (Key)</p>
+                           <p className="text-2xl font-mono font-bold text-indigo-600">{room.roomLockNumber || 'N/A'}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-0.5">Assigned Private Room</p>
-                        <p className="text-xl font-bold text-slate-800">Room {booking.selectedBedroom.roomNumber}</p>
-                        <p className="text-slate-500 text-sm">{booking.selectedBedroom.type}</p>
-                      </div>
-                    </div>
-                    
-                    <div className="bg-white px-6 py-4 rounded-2xl border border-slate-200 text-center md:text-right min-w-[150px]">
-                       <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Room Lock Code</p>
-                       <p className="text-2xl font-mono font-bold text-indigo-600">{booking.selectedBedroom.roomLockNumber || 'N/A'}</p>
-                    </div>
+                    ))}
                   </div>
                 )}
             </section>

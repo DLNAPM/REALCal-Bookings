@@ -20,10 +20,19 @@ export const Calendar: React.FC<{
     onSaveEdit?: (checkIn: string, checkOut: string, priceDetails: any) => void,
     onCancelEdit?: () => void
 }> = ({ propertyId, property, isEditMode, initialCheckIn, initialCheckOut, initialSelectedRoom, onSaveEdit, onCancelEdit }) => {
+  const parseLocalDate = (dateStr: string) => {
+    if (!dateStr) return null;
+    const [year, month, day] = dateStr.split('T')[0].split('-').map(Number);
+    return new Date(year, month - 1, day);
+  };
+
   const { user } = useAuth();
-  const [currentMonth, setCurrentMonth] = useState(initialCheckIn ? startOfDay(new Date(initialCheckIn)) : startOfDay(new Date()));
-  const [checkIn, setCheckIn] = useState<Date | null>(initialCheckIn ? new Date(initialCheckIn) : null);
-  const [checkOut, setCheckOut] = useState<Date | null>(initialCheckOut ? new Date(initialCheckOut) : null);
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    const initial = initialCheckIn ? parseLocalDate(initialCheckIn) : null;
+    return initial ? startOfDay(initial) : startOfDay(new Date());
+  });
+  const [checkIn, setCheckIn] = useState<Date | null>(initialCheckIn ? parseLocalDate(initialCheckIn) : null);
+  const [checkOut, setCheckOut] = useState<Date | null>(initialCheckOut ? parseLocalDate(initialCheckOut) : null);
   const [hoverDate, setHoverDate] = useState<Date | null>(null);
   const [rentalMode, setRentalMode] = useState<'entire' | 'room'>(initialSelectedRoom ? 'room' : 'entire');
   const [selectedRooms, setSelectedRooms] = useState<any[]>(
@@ -79,7 +88,8 @@ export const Calendar: React.FC<{
   const isUnavailable = (date: Date) => {
     // 1. Manual Blackouts
     const isDateBlackout = blackoutDates.some(b => {
-      if (!isSameDay(startOfDay(new Date(b.date)), date)) return false;
+      const bDate = parseLocalDate(b.date);
+      if (!bDate || !isSameDay(startOfDay(bDate), date)) return false;
       
       if (rentalMode === 'entire') {
         // Entire property is blocked if there's ANY blackout (property-wide or any room)
@@ -102,8 +112,12 @@ export const Calendar: React.FC<{
     // 2. Booking Conflicts
     return bookings.some(b => {
       if (b.status === 'cancelled') return false;
-      const start = startOfDay(new Date(b.checkIn));
-      const end = startOfDay(new Date(b.checkOut));
+      const bStart = parseLocalDate(b.checkIn);
+      const bEnd = parseLocalDate(b.checkOut);
+      if (!bStart || !bEnd) return false;
+      
+      const start = startOfDay(bStart);
+      const end = startOfDay(bEnd);
       
       // Date is within [checkIn, checkOut)
       const isOverlap = date >= start && date < end;
