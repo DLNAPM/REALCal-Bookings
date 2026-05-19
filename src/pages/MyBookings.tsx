@@ -188,11 +188,38 @@ export const MyBookings: React.FC = () => {
             const proceed = window.confirm(`You are cancelling within the ${freeCancelHoursBefore}-hour window for a ${tripDays}-day stay.\nA late cancellation fee of $${(cancellationFee / 100).toFixed(2)} applies.\n\nDo you want to proceed and accept the fee?`);
             if (!proceed) return;
         } else {
-            const proceed = window.confirm(`You are within the free cancellation window.\nNo fee will be charged to continuously cancel this booking.\n\nAre you sure you want to cancel?`);
+            const proceed = window.confirm(`You are within the free cancellation window.\nNo fee will be charged to cancel this booking.\n\nAre you sure you want to cancel?`);
             if (!proceed) return;
         }
 
         try {
+            // Handle Refund if payment exists
+            const refundAmount = booking.totalPrice - cancellationFee;
+            if (refundAmount > 0 && booking.paymentIntentId) {
+                try {
+                    const refundRes = await fetch('/api/refund-payment', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            paymentIntentId: booking.paymentIntentId,
+                            amount: refundAmount
+                        })
+                    });
+
+                    if (!refundRes.ok) {
+                        const errData = await refundRes.json();
+                        throw new Error(errData.error || "Refund failed");
+                    }
+                    console.log(`[MyBookings] Successfully refunded $${(refundAmount / 100).toFixed(2)} for cancellation`);
+                } catch (refundErr: any) {
+                    console.error("[MyBookings] Cancellation refund error:", refundErr);
+                    // We alert but still allow cancellation if they clicked yes to the fee? 
+                    // Actually, if the refund fails but they expect a refund, we should probably warn them.
+                    alert(`Refund failed: ${refundErr.message}. The booking was NOT yet cancelled. Please contact support if this persists.`);
+                    return;
+                }
+            }
+
             await updateDoc(doc(db, 'bookings', booking.id), {
                 status: 'cancelled',
                 cancellationFee: cancellationFee,
@@ -216,7 +243,11 @@ export const MyBookings: React.FC = () => {
             
             // Refresh list locally
             setBookings(prev => prev.map(b => b.id === booking.id ? { ...b, status: 'cancelled', cancellationFee } : b));
-            alert("Booking cancelled successfully.");
+            
+            const refundMsg = refundAmount > 0 && booking.paymentIntentId 
+                ? `\n\nA refund of $${(refundAmount / 100).toFixed(2)} has been issued to your original payment method.`
+                : "";
+            alert(`Booking cancelled successfully.${refundMsg}`);
         } catch (err: any) {
             alert(`Failed to cancel: ${err.message}`);
         }
