@@ -185,7 +185,13 @@ export const MyBookings: React.FC = () => {
         
         if (isLateCancellation) {
             cancellationFee = Math.round(booking.totalPrice * (lateCancelFeePercent / 100));
-            const proceed = window.confirm(`You are cancelling within the ${freeCancelHoursBefore}-hour window for a ${tripDays}-day stay.\nA late cancellation fee of $${(cancellationFee / 100).toFixed(2)} applies.\n\nDo you want to proceed and accept the fee?`);
+            
+            const feeString = `$${(cancellationFee / 100).toFixed(2)}`;
+            const message = `WARNING: You are cancelling within the ${freeCancelHoursBefore}-hour late cancellation period.\n\n` +
+                            `The Late Cancellation Fee for this booking would be: ${feeString}.\n\n` +
+                            `Are you absolutely sure you want to cancel this booking and accept the late cancellation fee of ${feeString}?`;
+            
+            const proceed = window.confirm(message);
             if (!proceed) return;
         } else {
             const proceed = window.confirm(`You are within the free cancellation window.\nNo fee will be charged to cancel this booking.\n\nAre you sure you want to cancel?`);
