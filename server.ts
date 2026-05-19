@@ -5,6 +5,7 @@ import path from "path";
 import Stripe from "stripe";
 import * as dotenv from "dotenv";
 import fs from "fs";
+import cors from "cors";
 import * as admin from "firebase-admin";
 import { getFirestore } from "firebase-admin/firestore";
 import { calculatePriceDetails } from "./src/lib/pricing";
@@ -16,32 +17,27 @@ dotenv.config();
 let db: admin.firestore.Firestore;
 try {
   const configPath = path.resolve(process.cwd(), "firebase-applet-config.json");
-  console.log(`[Server] Initializing Firebase Admin with config from: ${configPath}`);
+  console.log(`[Server] Initializing Firebase Admin...`);
   
   if (fs.existsSync(configPath)) {
-    const configRaw = fs.readFileSync(configPath, "utf-8");
-    const firebaseConfig = JSON.parse(configRaw);
-    
-    // Safety check for project ID
-    if (!firebaseConfig.projectId) {
-      throw new Error("projectId is missing in firebase-applet-config.json");
+    const firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+    if (admin.apps.length === 0) {
+      admin.initializeApp({ projectId: firebaseConfig.projectId });
     }
-
+    const dbId = firebaseConfig.firestoreDatabaseId || "(default)";
+    db = getFirestore(admin.app(), dbId);
+    console.log(`[Server] Firebase Admin initialized using config file. Project: ${firebaseConfig.projectId}, DB: ${dbId}`);
+  } else if (process.env.FIREBASE_PROJECT_ID) {
+    // Fallback for non-AI-Studio environments (like Render.com) using environment variables
     if (admin.apps.length === 0) {
       admin.initializeApp({
-        projectId: firebaseConfig.projectId,
+        projectId: process.env.FIREBASE_PROJECT_ID,
       });
     }
-    
-    const app = admin.app();
-    const dbId = firebaseConfig.firestoreDatabaseId || "(default)";
-    
-    // Correct modular way to get firestore with specific database ID
-    db = getFirestore(app, dbId);
-    
-    console.log(`[Server] Firebase Admin initialized. Project: ${firebaseConfig.projectId}, DB: ${dbId}`);
+    db = getFirestore(admin.app(), process.env.FIREBASE_DATABASE_ID || "(default)");
+    console.log(`[Server] Firebase Admin initialized using environment variables. Project: ${process.env.FIREBASE_PROJECT_ID}`);
   } else {
-    console.warn(`[Server] firebase-applet-config.json NOT FOUND. Firestore will be unavailable.`);
+    console.warn(`[Server] No Firebase configuration found (config file or env vars). Firestore will be unavailable.`);
   }
 } catch (e) {
   console.error("[Server] Critical failure during Firebase initialization:", e);
@@ -78,6 +74,7 @@ async function startServer() {
   console.log(`[Server] Root: ${rootDir}, Dist: ${distPath}`);
 
   // Base Middlewares
+  app.use(cors());
   app.use(express.json());
   app.use((_req, res, next) => {
     res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
@@ -226,8 +223,30 @@ async function startServer() {
         return res.status(400).json({ error: "Missing required booking details (propertyId, checkIn, checkOut)." });
       }
 
+      // Late-initialization check for Firestore if it failed at startup
       if (!db) {
-        return res.status(500).json({ error: "Database (Firestore) is not initialized on the server." });
+        console.log("[Server] db not initialized at startup, attempting late initialization...");
+        try {
+          const configPath = path.resolve(process.cwd(), "firebase-applet-config.json");
+          if (fs.existsSync(configPath)) {
+            const firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+            if (admin.apps.length === 0) {
+              admin.initializeApp({ projectId: firebaseConfig.projectId });
+            }
+            const dbId = firebaseConfig.firestoreDatabaseId || "(default)";
+            db = getFirestore(admin.app(), dbId);
+            console.log(`[Server] Late Firestore initialization successful for ${dbId}`);
+          }
+        } catch (e) {
+          console.error("[Server] Late Firestore initialization failed:", e);
+        }
+      }
+
+      if (!db) {
+        return res.status(500).json({ 
+          error: "Database (Firestore) is not initialized on the server.",
+          details: "This app requires a Firebase project to be set up. Please run 'Firebase Setup' in the app settings or check if firebase-applet-config.json exists."
+        });
       }
 
       // 1. Fetch pricing rules and global settings from Firestore
