@@ -58,6 +58,18 @@ export const Confirmation: React.FC = () => {
                    <span className="uppercase tracking-widest font-bold text-slate-400">Booking Ref:</span>
                    <span className="text-sm font-bold text-indigo-600">{bookingRef || bookingId}</span>
                 </div>
+
+                <div className="text-left bg-indigo-50 border border-indigo-100 p-5 rounded-2xl mb-6">
+                    <h3 className="text-sm font-bold text-indigo-800 mb-2 uppercase tracking-wide">Manage Your Stay</h3>
+                    <p className="text-xs text-indigo-700 leading-relaxed mb-3">
+                        Need to change your dates or cancel? You can manage your reservation directly through your **My Bookings** dashboard. 
+                    </p>
+                    <ul className="text-[10px] text-indigo-600 space-y-1 font-medium list-disc list-inside opacity-90 italic">
+                        <li>Free cancellation up to 48 hours before check-in.</li>
+                        <li>Easily add extra days to your stay.</li>
+                        <li>Automatic refunds for shortened stays.</li>
+                    </ul>
+                </div>
                 
                 {accessCode && (
                   <div className="bg-indigo-600 text-white p-6 rounded-2xl mb-8 shadow-inner shadow-indigo-700 relative overflow-hidden">

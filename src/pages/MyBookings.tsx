@@ -4,7 +4,7 @@ import { db } from '../lib/firebase';
 import { collection, query, where, getDocs, doc, updateDoc, getDoc, serverTimestamp, deleteDoc, setDoc } from 'firebase/firestore';
 import { Booking, Property } from '../types';
 import { useNavigate, Link } from 'react-router-dom';
-import { ChevronLeft, Calendar as CalendarIcon, XCircle, Home, MapPin, Edit3, X, Trash2, Printer, CreditCard, Loader2 } from 'lucide-react';
+import { ChevronLeft, Calendar as CalendarIcon, XCircle, Home, MapPin, Edit3, X, Trash2, Printer, CreditCard, Loader2, AlertCircle } from 'lucide-react';
 import { parseISO, differenceInHours } from 'date-fns';
 import { Calendar } from '../components/Calendar';
 import { loadStripe } from '@stripe/stripe-js';
@@ -546,6 +546,18 @@ export const MyBookings: React.FC = () => {
                                                 <span className="font-medium text-slate-800">{booking.checkOut.split('T')[0]}</span>
                                             </div>
                                         </div>
+
+                                        {booking.status !== 'cancelled' && (
+                                            <div className="mb-6 p-4 bg-white border border-slate-100 rounded-2xl shadow-sm italic">
+                                                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                                                    <AlertCircle size={12} className="text-indigo-500" /> Flexible Booking Policies
+                                                </h4>
+                                                <ul className="text-xs text-slate-500 space-y-1.5">
+                                                    <li>• <strong>Edit Dates:</strong> Extend stays or reschedule. Price differences are settled instantly.</li>
+                                                    <li>• <strong>Cancel: {freeCancelHoursBefore}h window.</strong> Free cancellation until {freeCancelHoursBefore} hours before arrival.</li>
+                                                </ul>
+                                            </div>
+                                        )}
 
                                         {isLate && canCancel && (
                                            <div className="mb-4 bg-amber-50 border border-amber-200 text-amber-700 p-3 rounded-xl text-xs font-medium">

@@ -225,12 +225,39 @@ export const Itinerary: React.FC = () => {
                     <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full font-bold uppercase tracking-wider text-[10px]">Paid & Confirmed</span>
                   </div>
                 </div>
-                <div className="mt-8 pt-8 border-t border-slate-200">
-                   <p className="text-xs text-slate-400 leading-relaxed">
-                     A digital receipt has been sent to your registered email. This itinerary serves as your check-in document. Please have your digital access code ready upon arrival at the property. For any questions, please contact management through the dashboard.
-                   </p>
-                </div>
               </div>
+            </section>
+
+            {/* Policies Section */}
+            <section className="print:hidden">
+                <h2 className="text-xl font-bold mb-6 flex items-center gap-2 text-slate-800">
+                    <AlertCircle className="text-indigo-600" /> Policies & Modifications
+                </h2>
+                <div className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div>
+                            <h3 className="font-bold text-slate-900 mb-2 underline decoration-indigo-200 decoration-2 underline-offset-4">Changing Your Dates</h3>
+                            <p className="text-sm text-slate-500 leading-relaxed">
+                                You can extend your stay or change your dates directly from your dashboard. 
+                                Additional charges for extra days or partial refunds for shortened stays will be processed automatically 
+                                according to the current seasonal rates.
+                            </p>
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-slate-900 mb-2 underline decoration-rose-200 decoration-2 underline-offset-4">Cancellation Policy</h3>
+                            <p className="text-sm text-slate-500 leading-relaxed">
+                                Standard bookings include <strong>free cancellation</strong> up to 48 hours before check-in. 
+                                Cancellations within the 48-hour window may incur a late fee equivalent to a percentage of the total stay.
+                                Visit the management page to view the exact fee calculation for this booking.
+                            </p>
+                        </div>
+                    </div>
+                    <div className="mt-8 pt-6 border-t border-slate-100 flex justify-center">
+                        <Link to="/my-bookings" className="text-indigo-600 font-bold text-sm hover:underline flex items-center gap-2 bg-indigo-50 px-6 py-3 rounded-xl transition-colors">
+                            Manage My Booking <ExternalLink size={14} />
+                        </Link>
+                    </div>
+                </div>
             </section>
           </div>
 
