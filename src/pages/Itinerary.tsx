@@ -112,7 +112,8 @@ export const Itinerary: React.FC = () => {
           <div className="bg-slate-900 text-white p-10 print:bg-white print:text-slate-900 print:border-b-2 print:border-slate-100 print:p-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
               <div>
-                <p className="text-indigo-400 font-bold uppercase tracking-widest text-sm mb-2 print:text-indigo-600">Travel Itinerary</p>
+                <p className="text-indigo-400 font-bold uppercase tracking-widest text-sm mb-1 print:text-indigo-600">Travel Itinerary</p>
+                <p className="text-indigo-300/60 font-medium text-xs mb-4 print:text-slate-400">Booked by REALCal Bookings</p>
                 <h1 className="text-4xl font-bold tracking-tight mb-1">{property.name}</h1>
                 <a 
                   href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(property.location || '')}`}
@@ -220,10 +221,15 @@ export const Itinerary: React.FC = () => {
             </section>
           </div>
 
-          {/* Footer - Only visible on print */}
-          <div className="hidden print:block p-6 mt-12 border-t border-slate-100 text-center text-slate-400 text-xs">
-            <p className="mb-1">Thank you for booking with REALCal Bookings.</p>
-            <p>© {new Date().getFullYear()} REALCal Bookings. All rights reserved.</p>
+          {/* Footer - Branding & Credits */}
+          <div className="p-10 border-t border-slate-100 text-center">
+            <div className="space-y-1">
+              <p className="text-slate-400 text-xs font-semibold tracking-wider uppercase italic">a C.&.S.H. Group Properties APP</p>
+              <p className="text-slate-600 text-sm font-bold tracking-tight">Secure Property Management & Automated Bookings</p>
+            </div>
+            <div className="mt-6 text-slate-300 text-[10px] print:text-slate-400">
+               © {new Date().getFullYear()} REALCal Bookings. All rights reserved.
+            </div>
           </div>
         </div>
 
