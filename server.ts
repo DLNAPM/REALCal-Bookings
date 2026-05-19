@@ -5,7 +5,9 @@ import path from "path";
 import Stripe from "stripe";
 import * as dotenv from "dotenv";
 import fs from "fs";
+import cors from "cors";
 import * as admin from "firebase-admin";
+import { getFirestore } from "firebase-admin/firestore";
 import { calculatePriceDetails } from "./src/lib/pricing";
 
 // Load environment variables from .env file if present
@@ -14,15 +16,19 @@ dotenv.config();
 // Initialize Firebase Admin
 let db: admin.firestore.Firestore;
 try {
-  const firebaseConfig = JSON.parse(fs.readFileSync("./firebase-applet-config.json", "utf-8"));
+  const configRaw = fs.readFileSync("./firebase-applet-config.json", "utf-8");
+  const firebaseConfig = JSON.parse(configRaw);
+  
   if (admin.apps.length === 0) {
     admin.initializeApp({
       projectId: firebaseConfig.projectId,
     });
   }
-  // @ts-ignore
-  db = admin.firestore(firebaseConfig.firestoreDatabaseId);
-  console.log(`[Server] Firebase Admin initialized for project: ${firebaseConfig.projectId}, DB: ${firebaseConfig.firestoreDatabaseId}`);
+  
+  const app = admin.app();
+  db = getFirestore(app, firebaseConfig.firestoreDatabaseId || "(default)");
+  
+  console.log(`[Server] Firebase Admin initialized for project: ${firebaseConfig.projectId}, DB: ${firebaseConfig.firestoreDatabaseId || "(default)"}`);
 } catch (e) {
   console.error("[Server] Failed to initialize Firebase Admin:", e);
 }
@@ -58,6 +64,7 @@ async function startServer() {
   console.log(`[Server] Root: ${rootDir}, Dist: ${distPath}`);
 
   // Base Middlewares
+  app.use(cors());
   app.use(express.json());
   app.use((_req, res, next) => {
     res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
@@ -204,6 +211,10 @@ async function startServer() {
 
       if (!propertyId || !checkIn || !checkOut) {
         return res.status(400).json({ error: "Missing required booking details (propertyId, checkIn, checkOut)." });
+      }
+
+      if (!db) {
+        return res.status(500).json({ error: "Database (Firestore) is not initialized on the server." });
       }
 
       // 1. Fetch pricing rules and global settings from Firestore
