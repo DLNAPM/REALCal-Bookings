@@ -1,6 +1,6 @@
 import React from 'react';
 import { Calendar as CalendarIcon, Shield, ChevronLeft, ChevronRight } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 
 const CONSENT_Doc_URL = "/consent_document.html";
@@ -23,12 +23,12 @@ export const PrivacyPolicy: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900">
       <header className="py-6 px-6 max-w-7xl mx-auto w-full border-b border-slate-100 bg-white shadow-sm flex justify-between items-center sticky top-0 z-50">
-        <div className="flex items-center gap-3">
+        <Link to="/" className="flex items-center gap-3 hover:opacity-85 transition-opacity">
           <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200">
             <CalendarIcon size={20} />
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-800">REALCal <span className="text-indigo-600">Privacy</span></h1>
-        </div>
+        </Link>
         <button 
           onClick={() => navigate(-1)}
           className="flex items-center gap-2 text-slate-600 hover:text-indigo-600 font-bold transition-colors"

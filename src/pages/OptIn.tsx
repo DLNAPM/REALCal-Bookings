@@ -109,12 +109,12 @@ export const OptIn: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900">
       <header className="py-6 px-6 max-w-7xl mx-auto w-full">
-        <div className="flex items-center gap-3">
+        <Link to="/" className="flex items-center gap-3 hover:opacity-85 transition-opacity">
           <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200">
             <CalendarIcon size={20} />
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-800">REALCal <span className="text-indigo-600">Bookings</span></h1>
-        </div>
+        </Link>
       </header>
 
       <main className="flex-1 flex items-center justify-center p-6">
