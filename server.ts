@@ -215,9 +215,10 @@ async function startServer() {
 
       const { Resend } = await import('resend');
       const resend = new Resend(resendApiKey);
+      const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
 
       const result = await resend.emails.send({
-        from: 'bookings@realcal.demo',
+        from: fromEmail,
         to: to,
         subject: subject || "Test Email from REALCal Bookings",
         text: message || "Testing Resend integration on REALCal Bookings!"
@@ -402,6 +403,7 @@ async function startServer() {
           resend = new Resend(process.env.RESEND_API_KEY);
         } catch (e) {}
       }
+      const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
       
       let twilioClient = null;
       const tSid = process.env.TWILIO_ACCOUNT_SID;
@@ -420,7 +422,7 @@ async function startServer() {
         if (resend && m.email) {
           try {
             await resend.emails.send({
-              from: 'bookings@realcal.demo',
+              from: fromEmail,
               to: m.email,
               subject: `Booking Alert: ${propertyName}`,
               text: textMsg
@@ -456,7 +458,7 @@ async function startServer() {
 
       if (resend && guestEmail) {
         try {
-          await resend.emails.send({ from: 'bookings@realcal.demo', to: guestEmail, subject: guestSubject, text: emailText });
+          await resend.emails.send({ from: fromEmail, to: guestEmail, subject: guestSubject, text: emailText });
           results.push(`Guest confirmation email sent`);
         } catch (e) { results.push(`Guest email failed`); }
       }
