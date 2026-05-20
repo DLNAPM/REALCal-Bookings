@@ -756,6 +756,58 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
+  const [testEmailTarget, setTestEmailTarget] = useState("");
+  const [testEmailSubject, setTestEmailSubject] = useState("Testing Resend Email from REALCal Bookings!");
+  const [testEmailMessage, setTestEmailMessage] = useState("Hi! This is a test email confirmation sent from the REALCal Admin Dashboard using Resend.");
+  const [sendingTestEmail, setSendingTestEmail] = useState(false);
+
+  const handleTestEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!testEmailTarget) return;
+    setSendingTestEmail(true);
+    try {
+      console.log("Sending Test Email to", testEmailTarget);
+      const res = await fetch("/api/test-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          to: testEmailTarget, 
+          subject: testEmailSubject, 
+          message: testEmailMessage 
+        })
+      });
+      
+      console.log("Email Response status:", res.status);
+      const text = await res.text();
+      console.log("Raw Email Response Body:", text);
+      
+      if (!text) {
+        alert("Server returned EMPTY body. Status: " + res.status);
+        throw new Error("Empty response body");
+      }
+
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (parseErr) {
+        console.error("Failed to parse Email response:", text);
+        alert("Parse Error. Raw text: " + text + "\nStatus: " + res.status);
+        throw new Error("Invalid JSON response");
+      }
+
+      if (res.ok) {
+        alert("Success! Status: " + res.status + "\nData: " + JSON.stringify(data));
+      } else {
+        const errorMsg = data.error || "Unknown error";
+        alert("Email Failed (Status " + res.status + ")\nError: " + errorMsg);
+      }
+    } catch (err: any) {
+      alert("Fetch Error: " + err.message);
+    } finally {
+      setSendingTestEmail(false);
+    }
+  };
+
   const handlePing = async () => {
     try {
       const res = await fetch("/api/ping");
@@ -1024,6 +1076,54 @@ export const AdminDashboard: React.FC = () => {
                       className="w-full bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-indigo-500 transition-all shadow-md active:scale-[0.98] disabled:opacity-50"
                    >
                       {sendingTestSms ? 'Sending...' : 'Send Live Test SMS'}
+                   </button>
+                </div>
+             </form>
+          </div>
+
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm mt-8 border-indigo-200 border-2 shadow-indigo-50">
+             <h2 className="text-xl font-bold mb-6 flex items-center gap-2 text-indigo-900">
+                <Mail className="text-indigo-600" size={20}/> Test RESEND Email
+             </h2>
+             <form onSubmit={handleTestEmail} className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end bg-indigo-50/50 p-6 rounded-2xl border border-indigo-100">
+                <div className="md:col-span-1">
+                   <label className="text-xs font-bold text-indigo-400 uppercase tracking-tight mb-1.5 block italic">Destination Email Address</label>
+                   <input 
+                      type="email"
+                      value={testEmailTarget}
+                      onChange={e => setTestEmailTarget(e.target.value)}
+                      placeholder="guest@example.com"
+                      required
+                      className="w-full border border-indigo-200 rounded-xl p-3 bg-white shadow-sm focus:ring-2 focus:ring-indigo-300 outline-none text-sm"
+                   />
+                </div>
+                <div className="md:col-span-1">
+                   <label className="text-xs font-bold text-indigo-400 uppercase tracking-tight mb-1.5 block italic">Subject</label>
+                   <input 
+                      type="text"
+                      value={testEmailSubject}
+                      onChange={e => setTestEmailSubject(e.target.value)}
+                      placeholder="Test Booking Confirmation"
+                      className="w-full border border-indigo-200 rounded-xl p-3 bg-white shadow-sm focus:ring-2 focus:ring-indigo-300 outline-none text-sm"
+                   />
+                </div>
+                <div className="md:col-span-2 lg:col-span-1">
+                   <label className="text-xs font-bold text-indigo-400 uppercase tracking-tight mb-1.5 block italic">Message Body</label>
+                   <input 
+                      type="text"
+                      value={testEmailMessage}
+                      onChange={e => setTestEmailMessage(e.target.value)}
+                      placeholder="Hi! This is a test email confirmation..."
+                      className="w-full border border-indigo-200 rounded-xl p-3 bg-white shadow-sm focus:ring-2 focus:ring-indigo-300 outline-none text-sm"
+                   />
+                </div>
+                <div className="md:col-span-1 col-span-1">
+                   <button 
+                      type="submit" 
+                      disabled={sendingTestEmail || !testEmailTarget}
+                      className="w-full bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-indigo-500 transition-all shadow-md active:scale-[0.98] disabled:opacity-50 text-sm"
+                   >
+                      {sendingTestEmail ? 'Sending...' : 'Send Live Test Email'}
                    </button>
                 </div>
              </form>

@@ -203,6 +203,34 @@ async function startServer() {
     }
   });
 
+  app.post("/api/test-email", async (req, res) => {
+    console.log("[API] Test Email hit");
+    try {
+      const { to, subject, message } = req.body;
+      const resendApiKey = process.env.RESEND_API_KEY;
+
+      if (!resendApiKey) {
+        return res.status(400).json({ error: "RESEND_API_KEY is not configured in secrets." });
+      }
+
+      const { Resend } = await import('resend');
+      const resend = new Resend(resendApiKey);
+
+      const result = await resend.emails.send({
+        from: 'bookings@realcal.demo',
+        to: to,
+        subject: subject || "Test Email from REALCal Bookings",
+        text: message || "Testing Resend integration on REALCal Bookings!"
+      });
+
+      console.log("[API] Email Success:", result);
+      res.json({ success: true, result });
+    } catch (err: any) {
+      console.error("[API] Email Error:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.post("/api/provision-lock", async (req, res) => {
     try {
       const { checkIn, checkOut, name } = req.body;
