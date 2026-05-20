@@ -11,7 +11,8 @@ export const Confirmation: React.FC = () => {
     const formatDate = (dateStr: string) => {
         if (!dateStr) return '';
         try {
-            const date = new Date(dateStr);
+            const [year, month, day] = dateStr.split('T')[0].split('-').map(Number);
+            const date = new Date(year, month - 1, day);
             return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
         } catch (e) {
             return dateStr;
