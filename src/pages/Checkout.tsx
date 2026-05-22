@@ -240,9 +240,36 @@ const CheckoutForm: React.FC<{ clientSecret: string, bookingDetails: any, guestE
   const navigate = useNavigate();
   const { user } = useAuth();
 
+  const [showWarningModal, setShowWarningModal] = useState(false);
+  const [warningConfirmed, setWarningConfirmed] = useState(false);
+
+  const checkIsSameDay = () => {
+    if (!bookingDetails?.checkIn) return false;
+    const checkInYMD = bookingDetails.checkIn.split('T')[0];
+    const today = new Date();
+    const todayYMD = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    return checkInYMD === todayYMD;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!stripe || !elements || !user) return;
+
+    if (checkIsSameDay() && !warningConfirmed) {
+      setShowWarningModal(true);
+      return;
+    }
+
+    await executePayment();
+  };
+
+  const handleConfirmWarningAndPay = async () => {
+    setShowWarningModal(false);
+    setWarningConfirmed(true);
+    await executePayment();
+  };
+
+  const executePayment = async () => {
     setProcessing(true);
 
     const { error: submitError, paymentIntent } = await stripe.confirmPayment({
@@ -270,6 +297,54 @@ const CheckoutForm: React.FC<{ clientSecret: string, bookingDetails: any, guestE
       >
         {processing ? 'Processing...' : 'Pay & Confirm Booking'}
       </button>
+
+      {/* Same-day Booking Policy Agreement Dialog */}
+      {showWarningModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-slate-100 flex flex-col gap-6 animate-in fade-in-50 zoom-in-95 duration-200 text-left">
+            <div className="flex items-center gap-3 text-amber-500">
+              <span className="text-2xl">⚠️</span>
+              <h3 className="text-xl font-extrabold tracking-tight text-slate-800">Same-Day Booking Agreement</h3>
+            </div>
+            
+            <div className="space-y-4 text-slate-600 text-sm leading-relaxed">
+              <p className="font-semibold text-slate-700">
+                You are scheduling a booking that checks in today (<span className="text-indigo-600 font-bold">{bookingDetails.checkIn.split('T')[0]}</span>).
+              </p>
+              <p>
+                Same-day bookings are subject to unique cancellation restrictions. You must understand and accept:
+              </p>
+              <div className="space-y-3 pl-1">
+                <div className="flex gap-2.5">
+                  <span className="text-amber-500 font-extrabold font-mono">1.</span>
+                  <span><strong>Cancellation Forfeited:</strong> Since this booking starts today, you cannot cancel this reservation for a refund.</span>
+                </div>
+                <div className="flex gap-2.5">
+                  <span className="text-amber-500 font-extrabold font-mono">2.</span>
+                  <span><strong>Date Changes Allowed:</strong> You are still allowed to change/edit your dates in the future. However, if you do, <strong>you will still be charged a 50% nightly rate penalty for tonight</strong>, plus the regular pricing for your new dates.</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3 mt-2">
+              <button
+                type="button"
+                onClick={handleConfirmWarningAndPay}
+                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold py-3.5 px-4 rounded-xl transition-all shadow-md active:scale-95 text-sm"
+              >
+                I Understand & Proceed to Book
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowWarningModal(false)}
+                className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 px-4 rounded-xl transition-all text-sm"
+              >
+                Go Back / Edit Dates
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </form>
   )
 }

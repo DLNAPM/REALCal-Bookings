@@ -307,6 +307,16 @@ export const MyBookings: React.FC = () => {
 
     const handleSaveEdit = async (checkIn: string, checkOut: string, priceDetails: any, selectedBedrooms: any[], rentalMode: 'entire' | 'room') => {
         if (!editingBooking || !user) return;
+        
+        if (priceDetails.sameDayModificationFee > 0) {
+            const confirmChange = window.confirm(
+                `⚠️ Same-Day Booking Modification Policy:\n\n` +
+                `Because your original booking check-in is scheduled for today, changing your check-in to a later date incurs a 50% nightly fee penalty ($${(priceDetails.sameDayModificationFee).toFixed(2)}) for tonight.\n\n` +
+                `Do you understand and wish to proceed with this date change?`
+            );
+            if (!confirmChange) return;
+        }
+
         const newTotal = Math.round(priceDetails.grandTotal * 100);
         const oldTotal = editingBooking.totalPrice;
         const diff = newTotal - oldTotal;

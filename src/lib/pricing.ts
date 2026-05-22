@@ -50,7 +50,8 @@ export const calculatePriceDetails = (
   pricingRules: PricingRule[], 
   globalSettings: any, 
   selectedRooms: any[] | any | null, 
-  rentalMode: 'entire' | 'room'
+  rentalMode: 'entire' | 'room',
+  sameDayModificationFee: number = 0
 ) => {
   const checkIn = new Date(checkInStr);
   const checkOut = new Date(checkOutStr);
@@ -105,6 +106,7 @@ export const calculatePriceDetails = (
     cleaningFee,
     discount,
     taxes,
-    grandTotal: totalNightsRate + cleaningFee + taxes
+    sameDayModificationFee,
+    grandTotal: totalNightsRate + cleaningFee + taxes + sameDayModificationFee
   };
 };

@@ -264,7 +264,41 @@ export const Calendar: React.FC<{
 
   const calculatePrice = () => {
     if (!checkIn || !checkOut) return null;
-    return calculatePriceDetails(checkIn.toISOString(), checkOut.toISOString(), pricingRules, globalSettings, selectedRooms, rentalMode);
+
+    let sameDayModFee = 0;
+    if (isEditMode && initialCheckIn) {
+      const origCheckInYMD = initialCheckIn.split('T')[0];
+      const today = new Date();
+      const todayYMD = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      
+      const newCheckInYMD = format(checkIn, 'yyyy-MM-dd');
+      
+      // If original booking was same-day check-in, and the guest changed the check-in date
+      if (origCheckInYMD === todayYMD && newCheckInYMD !== origCheckInYMD) {
+        const origDateObj = parseLocalDate(initialCheckIn);
+        if (origDateObj) {
+          let originalRate = 0;
+          if (rentalMode === 'room' && selectedRooms && selectedRooms.length > 0) {
+            selectedRooms.forEach(room => {
+              originalRate += getNightlyRate(origDateObj, pricingRules, room, 'room');
+            });
+          } else {
+            originalRate = getNightlyRate(origDateObj, pricingRules, null, 'entire');
+          }
+          sameDayModFee = Math.round(originalRate * 0.5 * 100) / 100;
+        }
+      }
+    }
+
+    return calculatePriceDetails(
+      checkIn.toISOString(), 
+      checkOut.toISOString(), 
+      pricingRules, 
+      globalSettings, 
+      selectedRooms, 
+      rentalMode,
+      sameDayModFee
+    );
   };
 
   const priceDetails = calculatePrice();
@@ -445,6 +479,12 @@ export const Calendar: React.FC<{
                     <div className="flex justify-between items-center text-emerald-400">
                       <span>10% Weekly Discount</span>
                       <span className="font-mono">-${(priceDetails.discount).toFixed(2)}</span>
+                    </div>
+                  )}
+                  {priceDetails.sameDayModificationFee > 0 && (
+                    <div className="flex justify-between items-center text-amber-500 font-bold border-t border-slate-800/60 pt-2 mt-1">
+                      <span className="flex items-center gap-1.5">⚠️ Same-Day Change Fee (50%)</span>
+                      <span className="font-mono">${(priceDetails.sameDayModificationFee).toFixed(2)}</span>
                     </div>
                   )}
                 </div>
