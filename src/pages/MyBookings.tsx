@@ -528,8 +528,8 @@ export const MyBookings: React.FC = () => {
                                     freeCancelHoursBefore = appliedRule.freeCancelHoursBefore;
                                 }
                             }
-                            // Users can cancel/edit even if late just for a fee now as long as it's not the day of
-                            const canCancel = hoursUntilCheckIn >= 0 && booking.status !== 'cancelled';
+                            // Users can cancel/edit even if late just for a fee now, as long as it's confirmed and not yet checked out
+                            const canCancel = booking.status === 'confirmed' && !booking.checkedOut;
                             const isLate = hoursUntilCheckIn < freeCancelHoursBefore;
 
                             return (
@@ -685,7 +685,11 @@ export const MyBookings: React.FC = () => {
                                                 </Link>
                                             )}
 
-                                            {booking.status === 'confirmed' && !booking.checkedOut && (
+                                            {booking.status === 'confirmed' && !booking.checkedOut && (() => {
+                                                 const dateParts = booking.checkIn.split('T')[0].split('-').map(Number);
+                                                 const checkInTimeObj = new Date(dateParts[0], dateParts[1] - 1, dateParts[2], 16, 0, 0); // 4:00 PM
+                                                 return new Date() >= checkInTimeObj;
+                                             })() && (
                                                 <button 
                                                     onClick={() => setCheckoutTargetBooking(booking)}
                                                     className="w-full bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold py-3.5 px-4 rounded-xl transition-all flex justify-center items-center gap-2 border border-indigo-200 shadow-sm hover:scale-[1.01] active:scale-[0.99]"
