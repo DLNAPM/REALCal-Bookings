@@ -528,8 +528,18 @@ export const MyBookings: React.FC = () => {
                                     freeCancelHoursBefore = appliedRule.freeCancelHoursBefore;
                                 }
                             }
-                            // Users can cancel/edit even if late just for a fee now, as long as it's confirmed and not yet checked out
-                            const canCancel = booking.status === 'confirmed' && !booking.checkedOut;
+                            const bookingCheckInYMD = booking.checkIn.split('T')[0];
+                            const today = new Date();
+                            const year = today.getFullYear();
+                            const month = String(today.getMonth() + 1).padStart(2, '0');
+                            const day = String(today.getDate()).padStart(2, '0');
+                            const todayYMD = `${year}-${month}-${day}`;
+                            const isSameDayOrPastCheckIn = bookingCheckInYMD <= todayYMD;
+
+                            // Users can edit dates as long as it's active and they haven't checked out yet
+                            const canEditDates = (booking.status === 'confirmed' || booking.status === 'pending') && !booking.checkedOut;
+                            // Guest can cancel if they haven't checked out yet, and check-in is NOT today or in the past (same-day bookings forfeit cancellation)
+                            const canCancel = canEditDates && !isSameDayOrPastCheckIn;
                             const isLate = hoursUntilCheckIn < freeCancelHoursBefore;
 
                             return (
@@ -698,35 +708,44 @@ export const MyBookings: React.FC = () => {
                                                 </button>
                                             )}
 
-                                            <div className="flex gap-3">
-                                                {canCancel ? (
-                                                    <>
-                                                        <button 
-                                                            onClick={() => setEditingBooking(booking)}
-                                                            className="flex-1 bg-white border-2 border-indigo-100 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-200 font-bold py-3 rounded-xl transition-colors flex justify-center items-center gap-2"
-                                                        >
-                                                            <Edit3 size={18} /> Edit Dates
-                                                        </button>
-                                                        <button 
-                                                            onClick={() => handleCancel(booking)}
-                                                            className="flex-1 bg-white border-2 border-rose-100 text-rose-600 hover:bg-rose-50 hover:border-rose-200 font-bold py-3 rounded-xl transition-colors flex justify-center items-center gap-2"
-                                                        >
-                                                            <XCircle size={18} /> Cancel
-                                                        </button>
-                                                    </>
-                                                ) : booking.status !== 'cancelled' ? (
-                                                    booking.checkedOut ? (
-                                                        <div className="text-sm font-bold text-indigo-700 bg-indigo-50 px-4 py-3 rounded-xl border border-indigo-100 flex-1 text-center">
-                                                            Checked Out Successfully
-                                                        </div>
-                                                    ) : (
-                                                        <div className="text-sm font-bold text-amber-600 bg-amber-50 px-4 py-3 rounded-xl border border-amber-100 flex-1 text-center">
-                                                            Check-in complete or underway
-                                                        </div>
-                                                    )
-                                                ) : (
-                                                    <div className="text-sm font-bold text-slate-500 bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 flex-1 text-center">
+                                            <div className="space-y-3 w-full">
+                                                {/* If reservation is active (not cancelled and not checked out) */}
+                                                {booking.status !== 'cancelled' && !booking.checkedOut && (
+                                                    <div className="flex flex-col gap-3">
+                                                        {canEditDates && (
+                                                            <button 
+                                                                onClick={() => setEditingBooking(booking)}
+                                                                className="w-full bg-white border-2 border-indigo-100 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-200 font-bold py-3.5 rounded-xl transition-colors flex justify-center items-center gap-2 shadow-sm"
+                                                            >
+                                                                <Edit3 size={18} /> Edit Booking Dates
+                                                            </button>
+                                                        )}
+                                                        {canCancel ? (
+                                                            <button 
+                                                                onClick={() => handleCancel(booking)}
+                                                                className="w-full bg-white border-2 border-rose-100 text-rose-600 hover:bg-rose-50 hover:border-rose-200 font-bold py-3.5 rounded-xl transition-colors flex justify-center items-center gap-2 shadow-sm"
+                                                            >
+                                                                <XCircle size={18} /> Cancel Booking
+                                                            </button>
+                                                        ) : (
+                                                            <div className="text-xs font-semibold text-amber-600 bg-amber-50 px-4 py-3 rounded-xl border border-amber-100 text-center">
+                                                                ⚠️ Same-day booking: Cancellation is forfeited, but you can still modify check-in/check-out dates above.
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+
+                                                {/* Cancelled status display */}
+                                                {booking.status === 'cancelled' && (
+                                                    <div className="text-sm font-bold text-slate-500 bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 text-center">
                                                         Reservation Cancelled
+                                                    </div>
+                                                )}
+
+                                                {/* Checked out status display */}
+                                                {booking.checkedOut && (
+                                                    <div className="text-sm font-bold text-indigo-700 bg-indigo-50 px-4 py-3 rounded-xl border border-indigo-100 text-center">
+                                                        Checked Out Successfully
                                                     </div>
                                                 )}
                                             </div>
