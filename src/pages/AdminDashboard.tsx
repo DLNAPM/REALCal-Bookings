@@ -375,13 +375,13 @@ export const AdminDashboard: React.FC = () => {
     try {
         const minDaysDefault = parseInt(fd.get('minDaysDefault') as string) || 1;
         const minDaysWeekend = parseInt(fd.get('minDaysWeekend') as string) || 1;
+        const lateCheckoutFeePercent = parseFloat(fd.get('lateCheckoutFeePercent') as string) || 0;
         
-        // We will preserve the current cancellation rules or extract them from state
-        // For simplicity, we are binding the rules state directly to `globalSettings`
         await setDoc(doc(db, 'global_settings', 'settings'), {
             ...globalSettings,
             minDaysDefault,
             minDaysWeekend,
+            lateCheckoutFeePercent,
             updatedAt: serverTimestamp()
         });
         alert("Global Settings Saved!");
@@ -905,20 +905,29 @@ export const AdminDashboard: React.FC = () => {
                     <h3 className="font-bold mb-1 text-slate-800 text-lg">Minimum Required Booking Days</h3>
                     <p className="text-sm text-slate-500 mb-6">Set the default minimum length of stay.</p>
                     
-                    <form onSubmit={handleSaveGlobalSettings} className="space-y-4">
-                       <div className="flex items-center gap-4">
-                           <div className="flex-1">
-                               <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Standard (Default) Days</label>
-                               <input name="minDaysDefault" type="number" min="1" defaultValue={globalSettings?.minDaysDefault || 1} required className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm" />
-                           </div>
-                           <div className="flex-1">
-                               <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Weekend Minimum Days</label>
-                               <input name="minDaysWeekend" type="number" min="1" defaultValue={globalSettings?.minDaysWeekend || 1} required className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm" />
-                           </div>
-                       </div>
-                       
-                       <button type="submit" className="w-full bg-slate-900 text-white px-4 py-3 rounded-xl font-bold hover:bg-slate-800 transition-colors">Save Global Settings</button>
-                    </form>
+                     <form onSubmit={handleSaveGlobalSettings} className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Standard (Default) Days</label>
+                                <input name="minDaysDefault" type="number" min="1" defaultValue={globalSettings?.minDaysDefault || 1} required className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm" />
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Weekend Minimum Days</label>
+                                <input name="minDaysWeekend" type="number" min="1" defaultValue={globalSettings?.minDaysWeekend || 1} required className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm" />
+                            </div>
+                        </div>
+
+                        <div className="border-t border-slate-200 pt-4 mt-2">
+                            <label className="text-xs font-bold text-slate-700 uppercase tracking-tight block">Late Check-Out Hour Fee Rate</label>
+                            <p className="text-[11px] text-slate-500 mb-2">Hourly fee rate as a percent of total booking price charged when checked out past 11:00 AM.</p>
+                            <div className="relative flex items-center w-36">
+                                <input name="lateCheckoutFeePercent" type="number" step="0.1" min="0" max="100" defaultValue={globalSettings?.lateCheckoutFeePercent !== undefined ? globalSettings.lateCheckoutFeePercent : 5.0} required className="w-full border border-slate-200 rounded-xl p-2.5 pr-8 bg-white shadow-sm font-semibold font-mono text-slate-800" />
+                                <span className="absolute right-3.5 text-slate-400 font-bold text-xs">% / hr</span>
+                            </div>
+                        </div>
+                        
+                        <button type="submit" className="w-full bg-slate-900 text-white px-4 py-3 rounded-xl font-bold hover:bg-slate-800 transition-colors">Save Global Settings</button>
+                     </form>
                  </div>
 
                  {/* Cancellation Policies */}

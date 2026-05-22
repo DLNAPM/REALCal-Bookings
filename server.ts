@@ -232,6 +232,202 @@ async function startServer() {
     }
   });
 
+  app.post("/api/checkout-booking", async (req, res) => {
+    console.log("[API] Checkout Booking hit");
+    try {
+      const { bookingId } = req.body;
+      if (!bookingId) {
+        return res.status(400).json({ error: "Booking ID is required." });
+      }
+
+      if (!db) {
+        return res.status(500).json({ error: "Firebase Firestore is not initialized on the server." });
+      }
+
+      const bookingDoc = await db.collection("bookings").doc(bookingId).get();
+      if (!bookingDoc.exists) {
+        return res.status(404).json({ error: "Booking not found." });
+      }
+
+      const booking = bookingDoc.data();
+      if (!booking) {
+        return res.status(404).json({ error: "No data in booking." });
+      }
+
+      if (booking.checkedOut) {
+        return res.status(400).json({ error: "This reservation is already checked out." });
+      }
+
+      const propertySnap = await db.collection("properties").doc(booking.propertyId).get();
+      const propertyName = propertySnap.exists ? propertySnap.data().name : "Property";
+
+      const settingsSnap = await db.collection("global_settings").doc("settings").get();
+      const globalSettings = settingsSnap.exists ? settingsSnap.data() : null;
+      const lateCheckoutFeePercent = globalSettings && globalSettings.lateCheckoutFeePercent !== undefined 
+        ? parseFloat(globalSettings.lateCheckoutFeePercent) 
+        : 5.0; // default to 5% if not configured
+
+      const deadline = new Date(`${booking.checkOut}T11:00:00`);
+      const now = new Date();
+      let lateCheckoutFee = 0;
+      let overdueHours = 0;
+      let isLate = false;
+
+      if (now > deadline) {
+        isLate = true;
+        const diffMs = now.getTime() - deadline.getTime();
+        overdueHours = Math.ceil(diffMs / (1000 * 60 * 60));
+        const rate = lateCheckoutFeePercent / 100;
+        lateCheckoutFee = Math.round(overdueHours * booking.totalPrice * rate);
+      }
+
+      // Update the booking document in Firestore
+      await db.collection("bookings").doc(bookingId).update({
+        checkedOut: true,
+        checkedOutAt: now.toISOString(),
+        lateCheckoutFee: lateCheckoutFee,
+        overdueHours: overdueHours,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      console.log(`[API] Booking ${bookingId} successfully checked out. Overdue: ${isLate} (${overdueHours} hours, fee: $${(lateCheckoutFee / 100).toFixed(2)})`);
+
+      // Prepare guest information
+      let guestName = booking.guestName || "Guest";
+      let guestEmail = booking.guestEmail;
+      let guestPhone = booking.guestPhone;
+
+      if (!guestEmail || !guestPhone) {
+        try {
+          const userRec = await admin.auth().getUser(booking.userId);
+          if (!guestEmail) guestEmail = userRec.email;
+          if (!guestName || guestName === "Guest") guestName = userRec.displayName || "Guest";
+        } catch (err) {
+          console.error("[API] Firebase Auth user retrieval failed:", err);
+        }
+      }
+
+      // Setup Notification Services
+      let resend = null;
+      if (process.env.RESEND_API_KEY) {
+        try {
+          const { Resend } = await import('resend');
+          resend = new Resend(process.env.RESEND_API_KEY);
+        } catch (e) {}
+      }
+      const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
+
+      let twilioClient = null;
+      const tSid = process.env.TWILIO_ACCOUNT_SID;
+      const tTok = process.env.TWILIO_AUTH_TOKEN;
+      const tFrom = process.env.TWILIO_PHONE_NUMBER;
+      
+      if (tSid && tTok && tSid.startsWith('AC') && !tSid.includes('PROVIDE_REAL')) {
+        try {
+          const twilioPkg = await import('twilio');
+          const twilio = twilioPkg.default || twilioPkg;
+          twilioClient = (twilio as any)(tSid, tTok);
+        } catch (e) {}
+      }
+
+      const checkoutTimeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const checkoutDateStr = now.toLocaleDateString();
+      
+      // Guest thank you message
+      let guestMsg = `Hi ${guestName}, thank you so much for staying at ${propertyName}! This is to confirm your electronic check-out was completed successfully on ${checkoutDateStr} at ${checkoutTimeStr}.\n\nWe appreciate you choosing REALCal Bookings and hope to host you again soon!`;
+      if (isLate && lateCheckoutFee > 0) {
+        guestMsg += `\n\nNote: A late check-out fee of $${(lateCheckoutFee / 100).toFixed(2)} has been added to your Final bill for being ${overdueHours} hour(s) over the 11:00 AM checkout deadline on ${booking.checkOut}.`;
+      }
+
+      const results = [];
+
+      if (resend && guestEmail) {
+        try {
+          await resend.emails.send({
+            from: fromEmail,
+            to: guestEmail,
+            subject: `Thank you for staying at ${propertyName}! (Checked out)`,
+            text: guestMsg
+          });
+          results.push(`Guest thank-you email sent to ${guestEmail}`);
+        } catch (e: any) {
+          results.push(`Guest thank-you email failed: ${e.message}`);
+        }
+      }
+
+      if (twilioClient && guestPhone && tFrom) {
+        try {
+          await twilioClient.messages.create({
+            body: guestMsg,
+            from: tFrom,
+            to: guestPhone
+          });
+          results.push(`Guest thank-you SMS sent to ${guestPhone}`);
+        } catch (e: any) {
+          results.push(`Guest thank-you SMS failed: ${e.message}`);
+        }
+      }
+
+      // Send Alerts to all Enabled Property Managers
+      let roomsInfo = "";
+      if (booking.selectedBedrooms && booking.selectedBedrooms.length > 0) {
+        roomsInfo = " (Room(s): " + booking.selectedBedrooms.map((r: any) => `${r.roomNumber}`).join(', ') + ")";
+      } else if (booking.selectedBedroom) {
+        roomsInfo = ` (Room: ${booking.selectedBedroom.roomNumber})`;
+      }
+
+      const managerMsg = `ALERT: Guest ${guestName} has checked out of ${propertyName}${roomsInfo} on ${checkoutDateStr} at ${checkoutTimeStr}. The property and its room(s) are now ready for Cleaning/Maintenance.`;
+
+      try {
+        const managersSnap = await db.collection("property_managers").where("enabled", "==", true).get();
+        if (!managersSnap.empty) {
+          for (const mDoc of managersSnap.docs) {
+            const m = mDoc.data();
+            if (resend && m.email) {
+              try {
+                await resend.emails.send({
+                  from: fromEmail,
+                  to: m.email,
+                  subject: `Cleaning Alert: ${propertyName} Checked-out`,
+                  text: managerMsg
+                });
+                results.push(`Manager email alert sent to ${m.email}`);
+              } catch (e: any) {
+                results.push(`Manager email alert failed for ${m.email}: ${e.message}`);
+              }
+            }
+            if (twilioClient && m.phone && tFrom) {
+              try {
+                await twilioClient.messages.create({
+                  body: managerMsg,
+                  from: tFrom,
+                  to: m.phone
+                });
+                results.push(`Manager SMS alert sent to ${m.phone}`);
+              } catch (e: any) {
+                results.push(`Manager SMS alert failed for ${m.phone}: ${e.message}`);
+              }
+            }
+          }
+        }
+      } catch (err: any) {
+        console.error("[API] Manager notifications failed:", err);
+        results.push(`Manager notification query error: ${err.message}`);
+      }
+
+      res.json({
+        success: true,
+        checkedOutAt: now.toISOString(),
+        lateCheckoutFee,
+        overdueHours,
+        results
+      });
+    } catch (err: any) {
+      console.error("[API] Checkout Error:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.post("/api/provision-lock", async (req, res) => {
     try {
       const { checkIn, checkOut, name } = req.body;

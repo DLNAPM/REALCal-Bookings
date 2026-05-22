@@ -4,7 +4,7 @@ import { db } from '../lib/firebase';
 import { collection, query, where, getDocs, doc, updateDoc, getDoc, serverTimestamp, deleteDoc, setDoc } from 'firebase/firestore';
 import { Booking, Property } from '../types';
 import { useNavigate, Link } from 'react-router-dom';
-import { ChevronLeft, Calendar as CalendarIcon, XCircle, Home, MapPin, Edit3, X, Trash2, Printer, CreditCard, Loader2, AlertCircle } from 'lucide-react';
+import { ChevronLeft, Calendar as CalendarIcon, XCircle, CheckCircle, Home, MapPin, Edit3, X, Trash2, Printer, CreditCard, Loader2, AlertCircle } from 'lucide-react';
 import { parseISO, differenceInHours } from 'date-fns';
 import { Calendar } from '../components/Calendar';
 import { loadStripe } from '@stripe/stripe-js';
@@ -101,6 +101,8 @@ export const MyBookings: React.FC = () => {
     const [stripePromise, setStripePromise] = useState<any>(null);
 
     const [globalSettings, setGlobalSettings] = useState<any>(null);
+    const [checkoutTargetBooking, setCheckoutTargetBooking] = useState<(Booking & { propertyName?: string; propertyImage?: string; property?: Property | null }) | null>(null);
+    const [checkoutProcessing, setCheckoutProcessing] = useState(false);
 
     useEffect(() => {
         getStripe().then(setStripePromise);
@@ -159,6 +161,37 @@ export const MyBookings: React.FC = () => {
 
         fetchBookings();
     }, [user, loading, navigate]);
+
+    const executeCheckout = async (bookingId: string) => {
+        setCheckoutProcessing(true);
+        try {
+            const res = await fetch('/api/checkout-booking', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ bookingId })
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.error || "Failed to complete electronic check-out.");
+            }
+            
+            // Success! Update local listings state
+            setBookings(prev => prev.map(b => b.id === bookingId ? { 
+                ...b, 
+                checkedOut: true,
+                checkedOutAt: data.checkedOutAt,
+                lateCheckoutFee: data.lateCheckoutFee,
+                overdueHours: data.overdueHours
+            } : b));
+
+            alert("Check-out Completed! Thank you for staying with us. A confirmation email/SMS has been sent.");
+            setCheckoutTargetBooking(null);
+        } catch (err: any) {
+            alert(err.message);
+        } finally {
+            setCheckoutProcessing(false);
+        }
+    };
 
     const handleCancel = async (booking: Booking & { propertyName?: string; propertyImage?: string }) => {
         const now = new Date();
@@ -511,11 +544,12 @@ export const MyBookings: React.FC = () => {
                                             </div>
                                         )}
                                         <div className={`absolute top-4 left-4 text-xs font-bold uppercase tracking-widest px-3 py-1 rounded-full shadow-md text-white ${
+                                                booking.checkedOut ? 'bg-indigo-600' :
                                                 booking.status === 'confirmed' ? 'bg-emerald-500' :
                                                 booking.status === 'cancelled' ? 'bg-rose-500' :
                                                 'bg-amber-500'
                                             }`}>
-                                            {booking.status}
+                                            {booking.checkedOut ? 'Checked Out' : booking.status}
                                         </div>
                                     </div>
                                     
@@ -529,7 +563,15 @@ export const MyBookings: React.FC = () => {
                                             </div>
                                             {booking.status !== 'cancelled' ? (
                                                 <div className="text-right">
-                                                    <div className="text-2xl font-bold text-emerald-600">${(booking.totalPrice / 100).toFixed(2)}</div>
+                                                    {booking.lateCheckoutFee ? (
+                                                        <div className="flex flex-col items-end">
+                                                            <span className="text-xs text-slate-400 line-through font-normal font-mono">Base: ${(booking.totalPrice / 100).toFixed(2)}</span>
+                                                            <span className="text-xs text-rose-500 font-normal font-mono">+ Late: ${(booking.lateCheckoutFee / 100).toFixed(2)}</span>
+                                                            <span className="text-xl font-extrabold text-slate-950 font-mono">Total: ${((booking.totalPrice + booking.lateCheckoutFee) / 100).toFixed(2)}</span>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="text-2xl font-bold text-emerald-600">${(booking.totalPrice / 100).toFixed(2)}</div>
+                                                    )}
                                                 </div>
                                             ) : (
                                                 <button 
@@ -553,7 +595,7 @@ export const MyBookings: React.FC = () => {
                                             </div>
                                         </div>
 
-                                        {booking.status !== 'cancelled' && (
+                                        {booking.status !== 'cancelled' && !booking.checkedOut && (
                                             <div className="mb-6 p-4 bg-white border border-slate-100 rounded-2xl shadow-sm italic">
                                                 <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
                                                     <AlertCircle size={12} className="text-indigo-500" /> Flexible Booking Policies
@@ -585,7 +627,11 @@ export const MyBookings: React.FC = () => {
                                                     </div>
                                                     <div>
                                                         <span className="block text-xs font-bold uppercase text-indigo-400 tracking-wider mb-0.5">Main Entry PIN</span>
-                                                        <span className="font-mono text-xl font-bold text-indigo-700 tracking-widest">{booking.accessCode}</span>
+                                                        {booking.checkedOut ? (
+                                                            <span className="font-mono text-xs font-bold text-slate-400 line-through tracking-wider">Deactivated (Checked Out)</span>
+                                                        ) : (
+                                                            <span className="font-mono text-xl font-bold text-indigo-700 tracking-widest">{booking.accessCode}</span>
+                                                        )}
                                                     </div>
                                                 </div>
 
@@ -609,6 +655,26 @@ export const MyBookings: React.FC = () => {
                                             </div>
                                         )}
 
+                                        {booking.checkedOut && (
+                                            <div className="mb-6 p-4 bg-slate-50 border border-slate-200 rounded-2xl shadow-inner text-slate-700 space-y-2">
+                                                <h4 className="text-[11px] font-extrabold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                                                    <AlertCircle size={12} className="text-indigo-500" /> Electronic Check-Out Summary
+                                                </h4>
+                                                <p className="text-xs">
+                                                    Checked out successfully on <strong>{booking.checkedOutAt ? new Date(booking.checkedOutAt).toLocaleDateString() : 'N/A'}</strong> at <strong>{booking.checkedOutAt ? new Date(booking.checkedOutAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}</strong>.
+                                                </p>
+                                                {booking.overdueHours ? (
+                                                    <div className="text-xs bg-rose-50 text-rose-800 border border-rose-100 p-2 rounded-xl border-dashed">
+                                                        ⚠️ Check-out was <strong>{booking.overdueHours} hour(s) late</strong> (past the 11:00 AM deadline). A late check-out fee of <strong>${((booking.lateCheckoutFee || 0) / 100).toFixed(2)}</strong> has been added to your bill.
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-xs bg-emerald-50 text-emerald-800 border border-emerald-100 p-2 rounded-xl">
+                                                        ✅ Checked out on time! Thank you for staying with us.
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
                                         <div className="mt-auto flex flex-col gap-3 pt-6 border-t border-slate-100">
                                             {booking.status !== 'cancelled' && (
                                                 <Link 
@@ -618,6 +684,16 @@ export const MyBookings: React.FC = () => {
                                                     <Printer size={18} /> View Itinerary
                                                 </Link>
                                             )}
+
+                                            {booking.status === 'confirmed' && !booking.checkedOut && (
+                                                <button 
+                                                    onClick={() => setCheckoutTargetBooking(booking)}
+                                                    className="w-full bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold py-3.5 px-4 rounded-xl transition-all flex justify-center items-center gap-2 border border-indigo-200 shadow-sm hover:scale-[1.01] active:scale-[0.99]"
+                                                >
+                                                    🔔 Complete Electronic Check-out
+                                                </button>
+                                            )}
+
                                             <div className="flex gap-3">
                                                 {canCancel ? (
                                                     <>
@@ -635,9 +711,15 @@ export const MyBookings: React.FC = () => {
                                                         </button>
                                                     </>
                                                 ) : booking.status !== 'cancelled' ? (
-                                                    <div className="text-sm font-bold text-amber-600 bg-amber-50 px-4 py-3 rounded-xl border border-amber-100 flex-1 text-center">
-                                                        Check-in complete or underway
-                                                    </div>
+                                                    booking.checkedOut ? (
+                                                        <div className="text-sm font-bold text-indigo-700 bg-indigo-50 px-4 py-3 rounded-xl border border-indigo-100 flex-1 text-center">
+                                                            Checked Out Successfully
+                                                        </div>
+                                                    ) : (
+                                                        <div className="text-sm font-bold text-amber-600 bg-amber-50 px-4 py-3 rounded-xl border border-amber-100 flex-1 text-center">
+                                                            Check-in complete or underway
+                                                        </div>
+                                                    )
                                                 ) : (
                                                     <div className="text-sm font-bold text-slate-500 bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 flex-1 text-center">
                                                         Reservation Cancelled
@@ -698,6 +780,115 @@ export const MyBookings: React.FC = () => {
                     </Elements>
                 </div>
             )}
+
+            {checkoutTargetBooking && (
+                <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl overflow-hidden w-full max-w-lg shadow-2xl border border-slate-100 animate-duration-150">
+                        <div className="flex justify-between items-center p-6 border-b border-slate-100">
+                            <h2 className="text-xl font-bold text-slate-900">Confirm Electronic Check-Out</h2>
+                            <button 
+                                onClick={() => setCheckoutTargetBooking(null)} 
+                                className="p-2 bg-slate-100 text-slate-500 hover:bg-slate-200 rounded-full transition-colors"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div className="p-6 bg-slate-50 space-y-4">
+                            <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm text-slate-700">
+                                <h3 className="font-bold text-slate-900 text-sm mb-2">{checkoutTargetBooking.propertyName}</h3>
+                                <div className="grid grid-cols-2 gap-4 text-xs">
+                                    <div>
+                                        <span className="block text-slate-400 font-bold uppercase tracking-wider text-[10px]">Check Out Date</span>
+                                        <span className="font-semibold text-slate-700">{checkoutTargetBooking.checkOut}</span>
+                                    </div>
+                                    <div>
+                                        <span className="block text-slate-400 font-bold uppercase tracking-wider text-[10px]">Required Time</span>
+                                        <span className="font-semibold text-indigo-600">By 11:00 AM</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {(() => {
+                                const checkoutDeadline = new Date(`${checkoutTargetBooking.checkOut}T11:00:00`);
+                                const now = new Date();
+                                const isLate = now > checkoutDeadline;
+                                let overdueHours = 0;
+                                let computedLateFee = 0;
+                                if (isLate) {
+                                  overdueHours = Math.ceil((now.getTime() - checkoutDeadline.getTime()) / (1000 * 60 * 60));
+                                  const rate = (globalSettings?.lateCheckoutFeePercent !== undefined ? globalSettings.lateCheckoutFeePercent : 5) / 100;
+                                  computedLateFee = Math.round(overdueHours * checkoutTargetBooking.totalPrice * rate);
+                                }
+
+                                return (
+                                    <div className="space-y-4">
+                                        <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm text-xs">
+                                            <span className="block text-slate-400 font-bold uppercase tracking-wider text-[10px] mb-1">Your Check-Out Time</span>
+                                            <span className="font-semibold text-slate-800 text-sm">{now.toLocaleDateString()} at {now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                        </div>
+
+                                        {isLate ? (
+                                            <div className="bg-rose-50 border border-rose-200 text-rose-800 p-4 rounded-2xl space-y-2">
+                                                <div className="flex items-center gap-2 font-bold text-sm text-rose-900">
+                                                    <AlertCircle size={16} /> 
+                                                    Late Check-Out Detected
+                                                </div>
+                                                <p className="text-xs">
+                                                    The check-out deadline was 11:00 AM on {checkoutTargetBooking.checkOut}. You are checking out <strong>{overdueHours} hour(s) late</strong>.
+                                                </p>
+                                                <p className="text-xs bg-rose-100 p-2 rounded-xl font-bold mt-1 text-rose-900 flex justify-between">
+                                                    <span>Late Fee Accrued ({globalSettings?.lateCheckoutFeePercent || 5}% input rate/hr):</span>
+                                                    <span>${(computedLateFee / 100).toFixed(2)}</span>
+                                                </p>
+                                                <p className="text-[10px] text-rose-600 italic">
+                                                    Fee will be automatically calculated on the server and appended to your Final booking total.
+                                                </p>
+                                            </div>
+                                        ) : (
+                                            <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-2xl space-y-1">
+                                                <div className="flex items-center gap-2 font-bold text-sm text-emerald-950">
+                                                    <CheckCircle size={16} className="text-emerald-500" /> 
+                                                    On-Time Check-Out
+                                                </div>
+                                                <p className="text-xs">
+                                                    You are checking out before the 11:00 AM deadline. No late checkout fee will be applied to your account.
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })()}
+
+                            <p className="text-xs text-slate-500 text-center px-4 leading-relaxed">
+                                Complete your electronic check-out now to release your digital room keys. Property managers will be alerted for cleaning and maintenance.
+                            </p>
+                        </div>
+                        <div className="p-6 bg-white border-t border-slate-100 flex gap-4">
+                            <button 
+                                onClick={() => setCheckoutTargetBooking(null)}
+                                className="flex-1 border-2 border-slate-200 text-slate-600 hover:bg-slate-50 py-3 rounded-xl font-bold transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={() => executeCheckout(checkoutTargetBooking.id)}
+                                disabled={checkoutProcessing}
+                                className="flex-1 bg-indigo-600 text-white hover:bg-indigo-500 py-3 rounded-xl font-bold transition-all shadow-md flex justify-center items-center gap-2 disabled:opacity-50"
+                            >
+                                {checkoutProcessing ? (
+                                    <>
+                                        <Loader2 size={18} className="animate-spin" />
+                                        Processing...
+                                    </>
+                                ) : (
+                                    "Confirm Check-out"
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <LegalFooter />
         </div>
     );

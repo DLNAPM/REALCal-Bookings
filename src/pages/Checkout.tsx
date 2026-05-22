@@ -114,6 +114,8 @@ const processBooking = async (
       bookingRef,
       selectedBedrooms, // Save multiple rooms
       guestPhone: e164Phone, // Save formatted phone
+      guestEmail: guestEmail, // Save guest email
+      guestName: user.displayName || "Guest", // Save guest name
       guests: 1, // simplified for demo
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
