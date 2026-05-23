@@ -90,7 +90,7 @@ export const Home: React.FC = () => {
                             </div>
                         ) : user ? (
                             <div className="flex items-center gap-4">
-                                {user.role === 'admin' && (
+                                {(user.role === 'admin' || user.email === 'dlaniger.napm.consulting@gmail.com') && (
                                    <Link to="/admin" className="text-slate-600 hover:text-indigo-600 font-bold flex items-center gap-2 text-sm transition-colors rounded-lg px-3 py-2 hover:bg-slate-50">
                                        <Key size={16}/> Admin
                                    </Link>

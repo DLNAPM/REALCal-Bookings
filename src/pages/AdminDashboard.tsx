@@ -44,6 +44,14 @@ export const AdminDashboard: React.FC = () => {
   const [manualBookingPropId, setManualBookingPropId] = useState<string>('');
   const [manualBookingRooms, setManualBookingRooms] = useState<string[]>([]);
 
+  // User profile editing states
+  const [editingUser, setEditingUser] = useState<any | null>(null);
+  const [editUserRole, setEditUserRole] = useState<'user' | 'admin'>('user');
+  const [editUserDisplayName, setEditUserDisplayName] = useState('');
+  const [editUserPhotoURL, setEditUserPhotoURL] = useState('');
+  const [editUserTollFreeAccept, setEditUserTollFreeAccept] = useState(false);
+  const [updatingUser, setUpdatingUser] = useState(false);
+
   const [globalSettings, setGlobalSettings] = useState<any>(null);
   
   // Image uploader state
@@ -52,7 +60,7 @@ export const AdminDashboard: React.FC = () => {
   const [previewImages, setPreviewImages] = useState<string[]>([]);
   
   if (loading) return <div>Loading...</div>;
-  if (!user || user.role !== 'admin') return <Navigate to="/" />;
+  if (!user || (user.role !== 'admin' && user.email !== 'dlaniger.napm.consulting@gmail.com')) return <Navigate to="/" />;
 
   useEffect(() => {
     if (!db) return;
@@ -120,6 +128,33 @@ export const AdminDashboard: React.FC = () => {
     } finally {
       // Small timeout to give visual feedback
       setTimeout(() => setRefreshingUsers(false), 600);
+    }
+  };
+
+  const handleStartEditUser = (u: any) => {
+    setEditingUser(u);
+    setEditUserRole(u.role || 'user');
+    setEditUserDisplayName(u.displayName || '');
+    setEditUserPhotoURL(u.photoURL || '');
+    setEditUserTollFreeAccept(!!u.tollFreeAccept);
+  };
+
+  const handleUpdateUserProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser || !db) return;
+    setUpdatingUser(true);
+    try {
+      await updateDoc(doc(db, 'users', editingUser.uid), {
+        role: editUserRole,
+        displayName: editUserDisplayName,
+        photoURL: editUserPhotoURL,
+        tollFreeAccept: editUserTollFreeAccept,
+      });
+      setEditingUser(null);
+    } catch (err: any) {
+      alert(`Failed to update user profile: ${err.message}`);
+    } finally {
+      setUpdatingUser(false);
     }
   };
 
@@ -1299,6 +1334,7 @@ export const AdminDashboard: React.FC = () => {
                          <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest">Email</th>
                          <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest">Role</th>
                          <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-right">Toll-free-accept</th>
+                         <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-center">Actions</th>
                       </tr>
                    </thead>
                    <tbody className="divide-y divide-slate-100">
@@ -1327,6 +1363,14 @@ export const AdminDashboard: React.FC = () => {
                                   </span>
                                )}
                             </td>
+                            <td className="px-4 py-4 text-center">
+                               <button
+                                  onClick={() => handleStartEditUser(u)}
+                                  className="text-indigo-600 hover:text-indigo-800 font-bold text-xs bg-indigo-50 hover:bg-indigo-100 py-1.5 px-3 rounded-lg transition-colors border border-indigo-100"
+                               >
+                                  Edit Profile
+                               </button>
+                            </td>
                          </tr>
                       ))}
                    </tbody>
@@ -1334,6 +1378,91 @@ export const AdminDashboard: React.FC = () => {
                 {users.length === 0 && <p className="text-center py-8 text-slate-400 text-sm italic">No users found in directory.</p>}
              </div>
           </div>
+
+          {editingUser && (
+             <div id="edit-user-modal" className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                <div className="bg-white rounded-3xl p-6 max-w-md w-full border border-slate-200 shadow-xl animate-in fade-in zoom-in duration-200">
+                   <div className="flex justify-between items-start mb-4">
+                      <div>
+                         <h3 className="text-lg font-bold text-slate-900">Edit User Profile</h3>
+                         <p className="text-xs text-slate-500 mt-0.5">{editingUser.email}</p>
+                      </div>
+                      <button 
+                         onClick={() => setEditingUser(null)}
+                         className="text-slate-400 hover:text-slate-600 font-bold p-1 rounded-lg hover:bg-slate-100 transition-colors"
+                      >
+                         ✕
+                      </button>
+                   </div>
+
+                   <form onSubmit={handleUpdateUserProfile} className="space-y-4">
+                      <div>
+                         <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Display Name</label>
+                         <input 
+                            type="text" 
+                            required
+                            value={editUserDisplayName}
+                            onChange={(e) => setEditUserDisplayName(e.target.value)}
+                            className="w-full border border-slate-200 rounded-xl p-3 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all text-sm"
+                         />
+                      </div>
+
+                      <div>
+                         <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Photo URL</label>
+                         <input 
+                            type="text" 
+                            value={editUserPhotoURL}
+                            onChange={(e) => setEditUserPhotoURL(e.target.value)}
+                            className="w-full border border-slate-200 rounded-xl p-3 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all text-sm"
+                            placeholder="https://example.com/photo.jpg"
+                         />
+                      </div>
+
+                      <div>
+                         <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">User Role</label>
+                         <select 
+                            value={editUserRole}
+                            onChange={(e) => setEditUserRole(e.target.value as 'user' | 'admin')}
+                            className="w-full border border-slate-200 rounded-xl p-3 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all text-sm"
+                         >
+                            <option value="user">User</option>
+                            <option value="admin">Admin</option>
+                         </select>
+                      </div>
+
+                      <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-150">
+                         <input 
+                            type="checkbox" 
+                            id="tollFreeCheckbox"
+                            checked={editUserTollFreeAccept}
+                            onChange={(e) => setEditUserTollFreeAccept(e.target.checked)}
+                            className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-slate-300 rounded"
+                         />
+                         <label htmlFor="tollFreeCheckbox" className="text-sm font-medium text-slate-700 cursor-pointer select-none">
+                            Toll-free Consent Accepted
+                         </label>
+                      </div>
+
+                      <div className="flex items-center justify-end gap-3 pt-2">
+                         <button 
+                            type="button"
+                            onClick={() => setEditingUser(null)}
+                            className="px-4 py-2 border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors"
+                         >
+                            Cancel
+                         </button>
+                         <button 
+                            type="submit"
+                            disabled={updatingUser}
+                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold transition-colors disabled:opacity-50"
+                         >
+                            {updatingUser ? 'Saving...' : 'Save Changes'}
+                         </button>
+                      </div>
+                   </form>
+                </div>
+             </div>
+          )}
 
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm mt-8">
              <h2 className="text-2xl font-bold mb-6 text-slate-800">Manage Properties</h2>
