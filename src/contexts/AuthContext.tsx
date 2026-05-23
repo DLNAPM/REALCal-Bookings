@@ -50,7 +50,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const userSnap = await getDoc(userRef);
           
           let role: 'user' | 'admin' = 'user';
-          if (firebaseUser.email === 'dlaniger.napm.consulting@gmail.com') {
+          if (firebaseUser.email === 'dlaniger.napm.consulting@gmail.com' || firebaseUser.email === 'monnib30228@gmail.com') {
             role = 'admin';
             console.log("Detected admin email, assigning admin role in creation/sync");
           }
@@ -76,7 +76,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               console.log("User document data update:", data);
               
               let currentRole = data.role || 'user';
-              if (firebaseUser.email === 'dlaniger.napm.consulting@gmail.com') {
+              if (firebaseUser.email === 'dlaniger.napm.consulting@gmail.com' || firebaseUser.email === 'monnib30228@gmail.com') {
                 currentRole = 'admin';
               }
 
@@ -102,7 +102,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                email: firebaseUser.email || '',
                displayName: firebaseUser.displayName || 'Guest',
                photoURL: firebaseUser.photoURL || '',
-               role: (firebaseUser.email === 'dlaniger.napm.consulting@gmail.com' ? 'admin' : 'user') as 'user' | 'admin',
+               role: (firebaseUser.email === 'dlaniger.napm.consulting@gmail.com' || firebaseUser.email === 'monnib30228@gmail.com' ? 'admin' : 'user') as 'user' | 'admin',
             });
             setLoading(false);
           });
@@ -114,7 +114,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             email: firebaseUser.email || '',
             displayName: firebaseUser.displayName || 'Guest',
             photoURL: firebaseUser.photoURL || '',
-            role: (firebaseUser.email === 'dlaniger.napm.consulting@gmail.com' ? 'admin' : 'user') as 'user' | 'admin',
+            role: (firebaseUser.email === 'dlaniger.napm.consulting@gmail.com' || firebaseUser.email === 'monnib30228@gmail.com' ? 'admin' : 'user') as 'user' | 'admin',
           });
           setLoading(false);
         }

@@ -21,7 +21,7 @@ service cloud.firestore {
     
     // Bootstrap Admin + Explicit email check
     function isAdmin() { 
-      return (isSignedIn() && request.auth.token.email == 'dlaniger.napm.consulting@gmail.com') ||
+      return (isSignedIn() && (request.auth.token.email == 'dlaniger.napm.consulting@gmail.com' || request.auth.token.email == 'monnib30228@gmail.com')) ||
              (isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'); 
     }
 
@@ -145,7 +145,7 @@ service cloud.firestore {
       
       allow create: if isSignedIn() && isValidId(userId) && request.auth.uid == userId &&
         isValidUser(incoming()) && incoming().createdAt == request.time &&
-        (incoming().role == 'user' || (incoming().role == 'admin' && request.auth.token.email == 'dlaniger.napm.consulting@gmail.com'));
+        (incoming().role == 'user' || (incoming().role == 'admin' && (request.auth.token.email == 'dlaniger.napm.consulting@gmail.com' || request.auth.token.email == 'monnib30228@gmail.com')));
         
       allow update: if isSignedIn() && isValidId(userId) && request.auth.uid == userId &&
         isValidUser(incoming()) && 
