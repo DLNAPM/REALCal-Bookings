@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { useNavigate, Link } from 'react-router-dom';
-import { Calendar as CalendarIcon, ShieldCheck, Mail, MessageSquare, AlertCircle, LogIn, CheckCircle2, Info, Check } from 'lucide-react';
+import { Calendar as CalendarIcon, ShieldCheck, Mail, MessageSquare, AlertCircle, LogIn, CheckCircle2, Info, Check, Pointer } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { signIn, auth } from '../lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
@@ -148,9 +148,28 @@ export const OptIn: React.FC = () => {
                 "p-8 rounded-3xl border-2 transition-all group relative cursor-pointer shadow-sm",
                 smsConsent ? "bg-indigo-50/50 border-indigo-200 ring-4 ring-indigo-50" : "bg-slate-50 border-slate-200 hover:border-indigo-200 hover:bg-indigo-50/10"
               )} onClick={() => setSmsConsent(!smsConsent)}>
-                <div className="absolute top-6 right-6">
+                <div className="absolute top-6 right-6 flex items-center gap-3">
+                  <AnimatePresence>
+                    {!smsConsent && (
+                      <motion.div
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -10 }}
+                        className="flex items-center"
+                      >
+                        <motion.span
+                          animate={{ x: [0, -4, 0] }}
+                          transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
+                          className="bg-indigo-600 text-white text-[10px] sm:text-[11px] font-black uppercase tracking-wider px-2 sm:px-2.5 py-1.5 rounded-lg shadow-md flex items-center gap-1.5 shadow-indigo-200 border border-indigo-500 whitespace-nowrap"
+                        >
+                          Click here to Accept
+                          <Pointer size={11} style={{ transform: 'rotate(135deg)' }} className="text-white fill-white shrink-0" />
+                        </motion.span>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                   <div className={cn(
-                    "w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center",
+                    "w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center shrink-0",
                     smsConsent ? "bg-indigo-600 border-indigo-600" : "bg-white border-slate-300"
                   )}>
                     {smsConsent && <Check size={20} className="text-white" />}
