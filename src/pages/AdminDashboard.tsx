@@ -792,8 +792,8 @@ export const AdminDashboard: React.FC = () => {
   };
 
   const [testEmailTarget, setTestEmailTarget] = useState("");
-  const [testEmailSubject, setTestEmailSubject] = useState("Testing SMTP Email from REALCal Bookings!");
-  const [testEmailMessage, setTestEmailMessage] = useState("Hi! This is a test email confirmation sent from the REALCal Admin Dashboard using standard SMTP outgoing server.");
+  const [testEmailSubject, setTestEmailSubject] = useState("Testing IONOS SMTP Email from REALCal Bookings!");
+  const [testEmailMessage, setTestEmailMessage] = useState("Hi! This is a test email confirmation sent from the REALCal Admin Dashboard using IONOS SMTP outgoing server.");
   const [sendingTestEmail, setSendingTestEmail] = useState(false);
 
   const handleTestEmail = async (e: React.FormEvent) => {
@@ -1127,7 +1127,7 @@ export const AdminDashboard: React.FC = () => {
 
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm mt-8 border-indigo-200 border-2 shadow-indigo-50">
              <h2 className="text-xl font-bold mb-6 flex items-center gap-2 text-indigo-900">
-                <Mail className="text-indigo-600" size={20}/> Test SMTP Email
+                <Mail className="text-indigo-600" size={20}/> Test IONOS SMTP Email
              </h2>
              <form onSubmit={handleTestEmail} className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end bg-indigo-50/50 p-6 rounded-2xl border border-indigo-100">
                 <div className="md:col-span-1">
@@ -1167,7 +1167,7 @@ export const AdminDashboard: React.FC = () => {
                       disabled={sendingTestEmail || !testEmailTarget}
                       className="w-full bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-indigo-500 transition-all shadow-md active:scale-[0.98] disabled:opacity-50 text-sm"
                    >
-                      {sendingTestEmail ? 'Sending...' : 'Send Live Test Email'}
+                      {sendingTestEmail ? 'Sending...' : 'Send Live IONOS SMTP'}
                    </button>
                 </div>
              </form>
