@@ -81,6 +81,45 @@ try {
   __dirname = process.cwd();
 }
 
+// SMTP Outgoing Email Helper via Nodemailer
+async function sendSmtpEmail({ to, subject, text, html }: { to: string; subject: string; text: string; html?: string }) {
+  const nodemailer = await import("nodemailer");
+  
+  const host = process.env.SMTP_HOST || "smtp.mailgun.org";
+  const port = parseInt(process.env.SMTP_PORT || "587", 10);
+  const user = process.env.SMTP_USER || "donotreply@cashgroupproperties.com";
+  const pass = process.env.SMTP_PASS;
+  const secure = process.env.SMTP_SECURE === "true"; // normally false for 587, true for 465
+  const fromEmail = process.env.SMTP_FROM_EMAIL || "donotreply@cashgroupproperties.com";
+  const fromName = process.env.SMTP_FROM_NAME || "REALCal Bookings";
+
+  const transporter = nodemailer.createTransport({
+    host,
+    port,
+    secure,
+    auth: {
+      user,
+      pass,
+    },
+    tls: {
+      rejectUnauthorized: false
+    }
+  });
+
+  const mailOptions = {
+    from: `"${fromName}" <${fromEmail}>`,
+    to,
+    subject,
+    text,
+    html
+  };
+
+  console.log(`[SMTP] Sending email. Host: ${host}:${port}, From: ${fromEmail}, To: ${to}, Subject: ${subject}`);
+  const info = await transporter.sendMail(mailOptions);
+  console.log(`[SMTP] Email sent successfully. MessageId: ${info.messageId}`);
+  return info;
+}
+
 async function startServer() {
   const app = express();
   const PORT = process.env.PORT || 3000;
@@ -207,21 +246,16 @@ async function startServer() {
     console.log("[API] Test Email hit");
     try {
       const { to, subject, message } = req.body;
-      const resendApiKey = process.env.RESEND_API_KEY;
+      const smtpHost = process.env.SMTP_HOST;
 
-      if (!resendApiKey) {
-        return res.status(400).json({ error: "RESEND_API_KEY is not configured in secrets." });
+      if (!smtpHost) {
+        return res.status(400).json({ error: "SMTP_HOST environment variable is not configured on Render.com." });
       }
 
-      const { Resend } = await import('resend');
-      const resend = new Resend(resendApiKey);
-      const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
-
-      const result = await resend.emails.send({
-        from: fromEmail,
-        to: to,
+      const result = await sendSmtpEmail({
+        to,
         subject: subject || "Test Email from REALCal Bookings",
-        text: message || "Testing Resend integration on REALCal Bookings!"
+        text: message || "Testing SMTP integration on REALCal Bookings!"
       });
 
       console.log("[API] Email Success:", result);
@@ -308,14 +342,7 @@ async function startServer() {
       }
 
       // Setup Notification Services
-      let resend = null;
-      if (process.env.RESEND_API_KEY) {
-        try {
-          const { Resend } = await import('resend');
-          resend = new Resend(process.env.RESEND_API_KEY);
-        } catch (e) {}
-      }
-      const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
+      const useSmtpEmail = !!process.env.SMTP_HOST;
 
       let twilioClient = null;
       const tSid = process.env.TWILIO_ACCOUNT_SID;
@@ -341,10 +368,9 @@ async function startServer() {
 
       const results = [];
 
-      if (resend && guestEmail) {
+      if (useSmtpEmail && guestEmail) {
         try {
-          await resend.emails.send({
-            from: fromEmail,
+          await sendSmtpEmail({
             to: guestEmail,
             subject: `Thank you for staying at ${propertyName}! (Checked out)`,
             text: guestMsg
@@ -383,10 +409,9 @@ async function startServer() {
         if (!managersSnap.empty) {
           for (const mDoc of managersSnap.docs) {
             const m = mDoc.data();
-            if (resend && m.email) {
+            if (useSmtpEmail && m.email) {
               try {
-                await resend.emails.send({
-                  from: fromEmail,
+                await sendSmtpEmail({
                   to: m.email,
                   subject: `Cleaning Alert: ${propertyName} Checked-out`,
                   text: managerMsg
@@ -590,16 +615,7 @@ async function startServer() {
       const textMsg = `${eventType} for ${propertyName}!${roomsInfo}\nGuest: ${guestName}\nDates: ${new Date(checkIn).toLocaleDateString()} to ${new Date(checkOut).toLocaleDateString()}`;
       
       const results = [];
-      // ... (existing Twilio/Resend setup)
-      
-      let resend = null;
-      if (process.env.RESEND_API_KEY) {
-        try {
-          const { Resend } = await import('resend');
-          resend = new Resend(process.env.RESEND_API_KEY);
-        } catch (e) {}
-      }
-      const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
+      const useSmtpEmail = !!process.env.SMTP_HOST;
       
       let twilioClient = null;
       const tSid = process.env.TWILIO_ACCOUNT_SID;
@@ -615,10 +631,9 @@ async function startServer() {
       }
 
       for (const m of (managers || [])) {
-        if (resend && m.email) {
+        if (useSmtpEmail && m.email) {
           try {
-            await resend.emails.send({
-              from: fromEmail,
+            await sendSmtpEmail({
               to: m.email,
               subject: `Booking Alert: ${propertyName}`,
               text: textMsg
@@ -652,9 +667,9 @@ async function startServer() {
       if (accessCode) emailText += `\n\nYour master access code is: ${accessCode}`;
       emailText += `\n\nThank you!`;
 
-      if (resend && guestEmail) {
+      if (useSmtpEmail && guestEmail) {
         try {
-          await resend.emails.send({ from: fromEmail, to: guestEmail, subject: guestSubject, text: emailText });
+          await sendSmtpEmail({ to: guestEmail, subject: guestSubject, text: emailText });
           results.push(`Guest confirmation email sent`);
         } catch (e) { results.push(`Guest email failed`); }
       }
