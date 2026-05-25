@@ -610,15 +610,46 @@ async function startServer() {
   app.post("/api/notify-managers", async (req, res) => {
     try {
       const { managers, bookingDetails } = req.body;
-      const { checkIn, checkOut, propertyName, totalAmount, guestName, guestEmail, guestPhone, isUpdate, accessCode, selectedBedrooms } = bookingDetails;
+      const { checkIn, checkOut, originalCheckIn, originalCheckOut, propertyName, totalAmount, guestName, guestEmail, guestPhone, isUpdate, accessCode, selectedBedrooms } = bookingDetails;
       
+      let daysChangedText = "";
+      if (isUpdate && originalCheckIn && originalCheckOut) {
+        try {
+          const origIn = new Date(originalCheckIn.split('T')[0] + 'T12:00:00');
+          const origOut = new Date(originalCheckOut.split('T')[0] + 'T12:00:00');
+          const origNights = Math.round((origOut.getTime() - origIn.getTime()) / (1000 * 60 * 60 * 24));
+
+          const newIn = new Date(checkIn.split('T')[0] + 'T12:00:00');
+          const newOut = new Date(checkOut.split('T')[0] + 'T12:00:00');
+          const newNights = Math.round((newOut.getTime() - newIn.getTime()) / (1000 * 60 * 60 * 24));
+
+          const diffNights = newNights - origNights;
+          if (diffNights > 0) {
+            daysChangedText = `Your reservation length was extended by ${diffNights} day(s).`;
+          } else if (diffNights < 0) {
+            daysChangedText = `Your reservation length was reduced by ${Math.abs(diffNights)} day(s).`;
+          } else {
+            daysChangedText = `Your reservation length is unchanged.`;
+          }
+        } catch (e: any) {
+          console.warn("[Notifications] Error calculating nights diff:", e.message);
+        }
+      }
+
       const eventType = isUpdate ? 'Booking Update' : 'New Booking';
       let roomsInfo = "";
       if (selectedBedrooms && selectedBedrooms.length > 0) {
-        roomsInfo = "\nRooms: " + selectedBedrooms.map((r: any) => `Room ${r.roomNumber} (${r.type})`).join(', ');
+        roomsInfo = "\nRooms: " + selectedBedrooms.map((r: any) => {
+          let str = `Room ${r.roomNumber} (${r.type})`;
+          if (r.roomLockNumber) str += ` [Lock #: ${r.roomLockNumber}]`;
+          return str;
+        }).join(', ');
       }
       
-      const textMsg = `${eventType} for ${propertyName}!${roomsInfo}\nGuest: ${guestName}\nDates: ${new Date(checkIn).toLocaleDateString()} to ${new Date(checkOut).toLocaleDateString()}`;
+      let textMsg = `${eventType} for ${propertyName}!${roomsInfo}\nGuest: ${guestName}\nDates: ${new Date(checkIn).toLocaleDateString()} to ${new Date(checkOut).toLocaleDateString()}`;
+      if (daysChangedText) {
+        textMsg += `\nChange Details: ${daysChangedText}`;
+      }
       
       const results = [];
       const useSmtpEmail = !!process.env.SMTP_HOST;
@@ -661,6 +692,9 @@ async function startServer() {
       
       // Email Content (Single Email for multiple rooms)
       let emailText = `Hi ${guestDisplayName},\n\nYour booking for ${propertyName} from ${new Date(checkIn).toLocaleDateString()} to ${new Date(checkOut).toLocaleDateString()} is ${isUpdate ? 'updated' : 'confirmed'}.`;
+      if (daysChangedText) {
+        emailText += `\n\nStay Details: ${daysChangedText}`;
+      }
       
       if (selectedBedrooms && selectedBedrooms.length > 0) {
         emailText += `\n\nRoom Details:`;
@@ -687,14 +721,24 @@ async function startServer() {
                 // Send an SMS for each room that has a Lock number
                 for (const room of selectedBedrooms) {
                     if (room.roomLockNumber) {
-                        let roomSmsText = `Hi ${guestDisplayName}, access for ${propertyName} - ${room.type} Room ${room.roomNumber} is confirmed.\nAccess Code: ${accessCode || '123456'}\nLock #: ${room.roomLockNumber}`;
+                        let roomSmsText = "";
+                        if (isUpdate) {
+                          roomSmsText = `Hi ${guestDisplayName}, your booking for ${propertyName} - ${room.type} Room ${room.roomNumber} has been updated. ${daysChangedText}\nAccess Code: ${accessCode || '123456'}\nLock #: ${room.roomLockNumber}`;
+                        } else {
+                          roomSmsText = `Hi ${guestDisplayName}, access for ${propertyName} - ${room.type} Room ${room.roomNumber} is confirmed.\nAccess Code: ${accessCode || '123456'}\nLock #: ${room.roomLockNumber}`;
+                        }
                         await twilioClient.messages.create({ body: roomSmsText, from: tFrom, to: guestPhone });
                         results.push(`Guest SMS sent for Room ${room.roomNumber}`);
                     }
                 }
             } else {
                 // Default SMS for entire property
-                let defaultSmsText = `Hi ${guestDisplayName},\nYour booking for ${propertyName} from ${new Date(checkIn).toLocaleDateString()} to ${new Date(checkOut).toLocaleDateString()} is ${isUpdate ? 'updated' : 'confirmed'}.`;
+                let defaultSmsText = "";
+                if (isUpdate) {
+                  defaultSmsText = `Hi ${guestDisplayName},\nYour booking for ${propertyName} from ${new Date(checkIn).toLocaleDateString()} to ${new Date(checkOut).toLocaleDateString()} is updated. ${daysChangedText}`;
+                } else {
+                  defaultSmsText = `Hi ${guestDisplayName},\nYour booking for ${propertyName} from ${new Date(checkIn).toLocaleDateString()} to ${new Date(checkOut).toLocaleDateString()} is confirmed.`;
+                }
                 if (accessCode) defaultSmsText += `\nAccess code: ${accessCode}`;
                 await twilioClient.messages.create({ body: defaultSmsText, from: tFrom, to: guestPhone });
                 results.push(`Guest confirmation SMS sent`);

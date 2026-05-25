@@ -453,6 +453,10 @@ export const MyBookings: React.FC = () => {
                 const propSnap = await getDoc(doc(db, 'properties', editingBooking.propertyId));
                 const isTestProperty = propSnap.exists() && propSnap.data().isTestProperty;
 
+                const finalRooms = selectedBedrooms.length > 0 
+                    ? selectedBedrooms 
+                    : (editingBooking.selectedBedrooms || (editingBooking.selectedBedroom ? [editingBooking.selectedBedroom] : []));
+
                 await fetch('/api/notify-managers', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -460,13 +464,17 @@ export const MyBookings: React.FC = () => {
                        managers,
                        bookingDetails: {
                           isUpdate: true,
+                          originalCheckIn: editingBooking.checkIn,
+                          originalCheckOut: editingBooking.checkOut,
                           checkIn: cleanCheckIn,
                           checkOut: cleanCheckOut,
                           totalAmount: newTotal,
                           propertyName: editingBooking.propertyName || 'Property',
-                          guestName: user.displayName,
-                          guestEmail: user.email,
+                          guestName: user.displayName || editingBooking.guestName || 'Guest',
+                          guestEmail: user.email || editingBooking.guestEmail || '',
+                          guestPhone: editingBooking.guestPhone || '',
                           accessCode: editingBooking.accessCode,
+                          selectedBedrooms: finalRooms,
                           isTestProperty: isTestProperty
                        }
                     })
