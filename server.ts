@@ -90,7 +90,8 @@ async function sendSmtpEmail({ to, subject, text, html }: { to: string; subject:
   const user = process.env.SMTP_USER || "donotreply@cashgroupproperties.com";
   const pass = process.env.SMTP_PASS;
   const secure = process.env.SMTP_SECURE === "true"; // normally false for 587, true for 465
-  const fromEmail = process.env.SMTP_FROM_EMAIL || "donotreply@cashgroupproperties.com";
+  // IONOS and similar providers require fromEmail to match SMTP_USER exactly
+  const fromEmail = process.env.SMTP_FROM_EMAIL || user;
   const fromName = process.env.SMTP_FROM_NAME || "REALCal Bookings";
 
   const transporter = nodemailer.createTransport({
