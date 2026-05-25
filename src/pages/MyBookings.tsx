@@ -705,7 +705,7 @@ export const MyBookings: React.FC = () => {
                                                 </Link>
                                             )}
 
-                                            {booking.status === 'confirmed' && !booking.checkedOut && (() => {
+                                            {(booking.status === 'confirmed' || booking.status === 'pending') && !booking.checkedOut && (() => {
                                                  const dateParts = booking.checkIn.split('T')[0].split('-').map(Number);
                                                  const checkInTimeObj = new Date(dateParts[0], dateParts[1] - 1, dateParts[2], 0, 0, 0); // Allow checkout on or after the check-in date starts (12:00 AM)
                                                  return new Date() >= checkInTimeObj;
