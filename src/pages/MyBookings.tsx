@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
+import { YamiryLockGuide } from '../components/YamiryLockGuide';
 import { collection, query, where, getDocs, doc, updateDoc, getDoc, serverTimestamp, deleteDoc, setDoc } from 'firebase/firestore';
 import { Booking, Property } from '../types';
 import { useNavigate, Link } from 'react-router-dom';
@@ -543,6 +544,14 @@ export const MyBookings: React.FC = () => {
 
     if (loading || fetching) return <div className="min-h-screen bg-slate-50 flex items-center justify-center font-sans">Loading bookings...</div>;
 
+    const activeBookingsList = bookings.filter(b => b.status !== 'cancelled' && !b.checkedOut);
+    const hasActiveBookings = activeBookingsList.length > 0;
+    const firstActiveBooking = activeBookingsList[0];
+    const firstActiveAccessCode = firstActiveBooking?.accessCode;
+    const firstActiveRoomLock = firstActiveBooking 
+      ? (firstActiveBooking.selectedBedrooms || (firstActiveBooking.selectedBedroom ? [firstActiveBooking.selectedBedroom] : []))[0]?.roomLockNumber 
+      : undefined;
+
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900 pb-12">
             <header className="pt-6 px-6 max-w-5xl mx-auto w-full mb-8">
@@ -564,6 +573,13 @@ export const MyBookings: React.FC = () => {
                     <button onClick={() => setFilter('active')} className={`px-4 py-2 rounded-full font-bold ${filter === 'active' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}>Active</button>
                     <button onClick={() => setFilter('cancelled')} className={`px-4 py-2 rounded-full font-bold ${filter === 'cancelled' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}>Cancelled</button>
                 </div>
+
+                {filter === 'active' && hasActiveBookings && (
+                    <YamiryLockGuide 
+                        accessCode={firstActiveAccessCode} 
+                        roomLockNumber={firstActiveRoomLock} 
+                    />
+                )}
 
                 {bookings.filter(b => filter === 'cancelled' ? b.status === 'cancelled' : b.status !== 'cancelled').length === 0 ? (
                     <div className="text-center p-12 bg-white rounded-3xl border border-slate-200 shadow-sm">
