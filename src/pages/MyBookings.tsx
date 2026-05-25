@@ -121,13 +121,26 @@ export const MyBookings: React.FC = () => {
         const fetchBookings = async () => {
             setFetching(true);
             try {
-                const q = query(collection(db, 'bookings'), where('userId', '==', user.uid));
-                const snap = await getDocs(q);
-                const fetchedBookings = snap.docs.map(d => ({ id: d.id, ...d.data() } as Booking))
-                    .filter(b => !b.deletedByGuest);                
+                const q1 = query(collection(db, 'bookings'), where('userId', '==', user.uid));
+                const snap1 = await getDocs(q1);
+                const fetchedBookings = snap1.docs.map(d => ({ id: d.id, ...d.data() } as Booking));
+
+                if (user.email) {
+                    const q2 = query(collection(db, 'bookings'), where('guestEmail', '==', user.email));
+                    const snap2 = await getDocs(q2);
+                    const list2 = snap2.docs.map(d => ({ id: d.id, ...d.data() } as Booking));
+                    const existingIds = new Set(fetchedBookings.map(b => b.id));
+                    list2.forEach(b => {
+                        if (!existingIds.has(b.id)) {
+                            fetchedBookings.push(b);
+                        }
+                    });
+                }
+
+                const activeBookings = fetchedBookings.filter(b => !b.deletedByGuest);                
                 
                 // Enhance with property details
-                const enhanced = await Promise.all(fetchedBookings.map(async (b) => {
+                const enhanced = await Promise.all(activeBookings.map(async (b) => {
                     let propertyName = "Unknown Property";
                     let propertyImage = "";
                     let property: Property | null = null;

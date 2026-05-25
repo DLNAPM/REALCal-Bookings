@@ -61,6 +61,9 @@ export interface Booking {
   deletedByGuest?: boolean;
   selectedBedroom?: any;
   selectedBedrooms?: any[];
+  guestPhone?: string;
+  guestEmail?: string;
+  guestName?: string;
   createdAt: any;
   updatedAt: any;
 }

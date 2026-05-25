@@ -577,6 +577,7 @@ export const AdminDashboard: React.FC = () => {
     const checkIn = fd.get('checkIn') as string;
     const checkOut = fd.get('checkOut') as string;
     const guestName = fd.get('guestName') as string;
+    const guestEmail = fd.get('guestEmail') as string || '';
     const guestPhoneInput = fd.get('guestPhone') as string;
     const guestPhone = guestPhoneInput ? formatPhoneE164(guestPhoneInput) : "";
     const totalAmountStr = fd.get('totalPrice') as string;
@@ -616,6 +617,8 @@ export const AdminDashboard: React.FC = () => {
            checkOut,
            status: 'confirmed',
            totalPrice: Math.round(Number(totalAmountStr) * 100),
+           guestName: guestName || '',
+           guestEmail: guestEmail,
            guestPhone: guestPhone,
            guests: 1,
            selectedBedrooms: selectedBedroomObjects.length > 0 ? selectedBedroomObjects : null,
@@ -665,14 +668,14 @@ export const AdminDashboard: React.FC = () => {
             console.warn("Failed to create auto-blackout in admin", blackoutErr);
         }
 
-        // Notify Managers
+        // Notify Managers and Guest
         try {
            const managers = propertyManagers.filter(m => m.enabled);
            let propertyName = "Villa";
            const prop = properties.find(p => p.id === formPropId);
            if (prop) propertyName = prop.name;
-
-           if (managers.length > 0 || guestPhone) {
+ 
+           if (managers.length > 0 || guestPhone || guestEmail) {
               await fetch('/api/notify-managers', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -685,7 +688,9 @@ export const AdminDashboard: React.FC = () => {
                       propertyName: propertyName,
                       guestName: guestName,
                       guestPhone: guestPhone,
-                      accessCode: accessCode
+                      guestEmail: guestEmail,
+                      accessCode: accessCode,
+                      selectedBedrooms: selectedBedroomObjects
                    }
                 })
               });
@@ -1014,7 +1019,7 @@ export const AdminDashboard: React.FC = () => {
 
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm mt-8">
              <h2 className="text-xl font-bold mb-6 flex items-center gap-2"><CalendarIcon size={20}/> Create Manual Booking</h2>
-             <form onSubmit={handleAdminCreateBooking} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 items-end bg-slate-50 p-6 rounded-2xl border border-slate-300 border-dashed">
+             <form onSubmit={handleAdminCreateBooking} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-4 items-end bg-slate-50 p-6 rounded-2xl border border-slate-300 border-dashed">
                 <div className="lg:col-span-1">
                    <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Property</label>
                    <select 
@@ -1073,6 +1078,10 @@ export const AdminDashboard: React.FC = () => {
                    <input name="guestName" required placeholder="Guest Name" className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm" />
                 </div>
                 <div className="lg:col-span-1">
+                   <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Guest Email</label>
+                   <input name="guestEmail" type="email" required placeholder="guest@example.com" className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm" />
+                </div>
+                <div className="lg:col-span-1">
                    <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Guest Phone</label>
                    <input name="guestPhone" placeholder="+1..." className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm" />
                 </div>
@@ -1080,7 +1089,7 @@ export const AdminDashboard: React.FC = () => {
                    <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Total Price ($)</label>
                    <input name="totalPrice" type="number" required placeholder="0.00" className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm" />
                 </div>
-                <div className="md:col-span-2 lg:col-span-6 flex justify-end">
+                <div className="md:col-span-2 lg:col-span-7 flex justify-end">
                    <button type="submit" className="w-full bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-indigo-500 transition-colors">
                       Create Override Booking
                    </button>
