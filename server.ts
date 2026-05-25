@@ -488,7 +488,7 @@ async function startServer() {
 
   app.post("/api/create-payment-intent", async (req, res) => {
     try {
-      const { propertyId, checkIn, checkOut, selectedBedrooms, selectedBedroom, currency = "usd", metadata, amount } = req.body;
+      const { propertyId, checkIn, checkOut, selectedBedrooms, selectedBedroom, currency = "usd", metadata, amount, dailySelections } = req.body;
       const key = process.env.STRIPE_SECRET_KEY;
       if (!key || key === "sk_test_...") {
         return res.status(400).json({ error: "STRIPE_SECRET_KEY is not configured." });
@@ -557,7 +557,7 @@ async function startServer() {
         const globalSettings = settingsSnap.exists ? settingsSnap.data() : null;
 
         // 2. Calculate correct amount
-        const priceDetails = calculatePriceDetails(checkIn, checkOut, pricingRules as any, globalSettings, rooms, rentalMode);
+        const priceDetails = calculatePriceDetails(checkIn, checkOut, pricingRules as any, globalSettings, rooms, rentalMode, 0, dailySelections);
         amountInCents = Math.round(priceDetails.grandTotal * 100);
       }
 

@@ -547,17 +547,19 @@ export const MyBookings: React.FC = () => {
                                 }
                             }
                             const bookingCheckInYMD = booking.checkIn.split('T')[0];
+                            const bookingCheckOutYMD = booking.checkOut.split('T')[0];
                             const today = new Date();
                             const year = today.getFullYear();
                             const month = String(today.getMonth() + 1).padStart(2, '0');
                             const day = String(today.getDate()).padStart(2, '0');
                             const todayYMD = `${year}-${month}-${day}`;
                             const isSameDayOrPastCheckIn = bookingCheckInYMD <= todayYMD;
+                            const isCheckoutToday = bookingCheckOutYMD === todayYMD;
 
-                            // Users can edit dates as long as it's active and they haven't checked out yet
-                            const canEditDates = (booking.status === 'confirmed' || booking.status === 'pending') && !booking.checkedOut;
+                            // Users can edit dates as long as it's active, they haven't checked out yet, and checkout is NOT today
+                            const canEditDates = (booking.status === 'confirmed' || booking.status === 'pending') && !booking.checkedOut && !isCheckoutToday;
                             // Guest can cancel if they haven't checked out yet, and check-in is NOT today or in the past (same-day bookings forfeit cancellation)
-                            const canCancel = canEditDates && !isSameDayOrPastCheckIn;
+                            const canCancel = (booking.status === 'confirmed' || booking.status === 'pending') && !booking.checkedOut && !isSameDayOrPastCheckIn;
                             const isLate = hoursUntilCheckIn < freeCancelHoursBefore;
 
                             return (
@@ -746,8 +748,8 @@ export const MyBookings: React.FC = () => {
                                                                 <XCircle size={18} /> Cancel Booking
                                                             </button>
                                                         ) : (
-                                                            <div className="text-xs font-semibold text-amber-600 bg-amber-50 px-4 py-3 rounded-xl border border-amber-100 text-center">
-                                                                ⚠️ Same-day booking: Cancellation is forfeited, but you can still modify check-in/check-out dates above.
+                                                            <div className={`text-xs font-semibold px-4 py-3 rounded-xl border text-center ${isCheckoutToday ? "text-rose-600 bg-rose-50 border-rose-100/10 font-bold" : "text-amber-600 bg-amber-50/10 border-amber-100/20"}`}>
+                                                                {isCheckoutToday ? "⚠️ Lock applied: You cannot modify check-in or check-out dates on your scheduled check-out date today." : "⚠️ Same-day booking: Cancellation is forfeited, but you can still modify check-in/check-out dates above."}
                                                             </div>
                                                         )}
                                                     </div>
@@ -795,6 +797,8 @@ export const MyBookings: React.FC = () => {
                                 initialCheckIn={editingBooking.checkIn}
                                 initialCheckOut={editingBooking.checkOut}
                                 initialSelectedRoom={editingBooking.selectedBedroom}
+                                initialSelectedRooms={editingBooking.selectedBedrooms || []}
+                                initialDailySelections={editingBooking.dailySelections || null}
                                 onSaveEdit={handleSaveEdit}
                                 onCancelEdit={() => setEditingBooking(null)}
                             />

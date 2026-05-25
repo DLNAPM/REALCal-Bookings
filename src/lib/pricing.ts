@@ -51,7 +51,13 @@ export const calculatePriceDetails = (
   globalSettings: any, 
   selectedRooms: any[] | any | null, 
   rentalMode: 'entire' | 'room',
-  sameDayModificationFee: number = 0
+  sameDayModificationFee: number = 0,
+  dailySelections?: {
+    [dateStr: string]: {
+      rentalMode: 'entire' | 'room';
+      selectedBedrooms: any[];
+    }
+  }
 ) => {
   const checkIn = new Date(checkInStr);
   const checkOut = new Date(checkOutStr);
@@ -71,12 +77,33 @@ export const calculatePriceDetails = (
   
   let totalNightsRate = 0;
   interval.forEach(day => {
-    if (rentalMode === 'room' && rooms.length > 0) {
-      rooms.forEach(room => {
-        totalNightsRate += getNightlyRate(day, pricingRules, room, 'room');
-      });
+    const dayStr = format(day, 'yyyy-MM-dd');
+    const customSelection = dailySelections?.[dayStr];
+
+    if (customSelection) {
+      if (customSelection.rentalMode === 'room') {
+        const roomsToCharge = customSelection.selectedBedrooms && customSelection.selectedBedrooms.length > 0
+          ? customSelection.selectedBedrooms
+          : (rooms.length > 0 ? rooms : []);
+        
+        if (roomsToCharge.length > 0) {
+          roomsToCharge.forEach((room: any) => {
+            totalNightsRate += getNightlyRate(day, pricingRules, room, 'room');
+          });
+        } else {
+          totalNightsRate += getNightlyRate(day, pricingRules, null, 'entire');
+        }
+      } else {
+        totalNightsRate += getNightlyRate(day, pricingRules, null, 'entire');
+      }
     } else {
-      totalNightsRate += getNightlyRate(day, pricingRules, null, 'entire');
+      if (rentalMode === 'room' && rooms.length > 0) {
+        rooms.forEach(room => {
+          totalNightsRate += getNightlyRate(day, pricingRules, room, 'room');
+        });
+      } else {
+        totalNightsRate += getNightlyRate(day, pricingRules, null, 'entire');
+      }
     }
   });
   

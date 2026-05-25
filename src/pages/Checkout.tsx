@@ -71,7 +71,8 @@ const processBooking = async (
   isTestMode: boolean = false,
   selectedBedrooms: any[] = [],
   paymentIntentId?: string,
-  paymentIntentAmount?: number
+  paymentIntentAmount?: number,
+  dailySelections?: any
 ) => {
   const bookingId = uuidv4();
   const e164Phone = formatPhoneE164(guestPhone);
@@ -120,6 +121,10 @@ const processBooking = async (
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     };
+    
+    if (dailySelections) {
+      payload.dailySelections = dailySelections;
+    }
     
     // For backward compatibility / display
     if (selectedBedrooms.length > 0) {
@@ -232,7 +237,7 @@ const processBooking = async (
   }
 };
 
-const CheckoutForm: React.FC<{ clientSecret: string, bookingDetails: any, guestEmail: string, guestPhone: string, isTestProperty: boolean, selectedBedrooms: any[] }> = ({ clientSecret, bookingDetails, guestEmail, guestPhone, isTestProperty, selectedBedrooms }) => {
+const CheckoutForm: React.FC<{ clientSecret: string, bookingDetails: any, guestEmail: string, guestPhone: string, isTestProperty: boolean, selectedBedrooms: any[], dailySelections: any }> = ({ clientSecret, bookingDetails, guestEmail, guestPhone, isTestProperty, selectedBedrooms, dailySelections }) => {
   const stripe = useStripe();
   const elements = useElements();
   const [error, setError] = useState<string | null>(null);
@@ -282,7 +287,7 @@ const CheckoutForm: React.FC<{ clientSecret: string, bookingDetails: any, guestE
       setProcessing(false);
     } else {
       // Payment successful, generate lock code and write Booking to firestore
-      await processBooking(bookingDetails, user, guestEmail, guestPhone, navigate, setError, setProcessing, isTestProperty, selectedBedrooms, paymentIntent?.id, paymentIntent?.amount);
+      await processBooking(bookingDetails, user, guestEmail, guestPhone, navigate, setError, setProcessing, isTestProperty, selectedBedrooms, paymentIntent?.id, paymentIntent?.amount, dailySelections);
     }
   };
 
@@ -375,6 +380,7 @@ export const Checkout: React.FC = () => {
   const [hasPublishableKey, setHasPublishableKey] = useState(false);
 
   const [selectedBedrooms, setSelectedBedrooms] = useState<any[]>(location.state?.selectedBedrooms || []);
+  const dailySelections = location.state?.dailySelections || null;
   const navigate = useNavigate();
   
   useEffect(() => {
@@ -417,7 +423,7 @@ export const Checkout: React.FC = () => {
   useEffect(() => {
      if (checkIn && checkOut && pricingRules.length > 0) {
         const rentalMode = selectedBedrooms.length > 0 ? 'room' : 'entire';
-        const newDetails = calculatePriceDetails(checkIn, checkOut, pricingRules, globalSettings, selectedBedrooms, rentalMode);
+        const newDetails = calculatePriceDetails(checkIn, checkOut, pricingRules, globalSettings, selectedBedrooms, rentalMode, 0, dailySelections);
         setLocalPriceDetails(newDetails);
      }
   }, [selectedBedrooms, pricingRules, globalSettings, checkIn, checkOut]);
@@ -444,7 +450,8 @@ export const Checkout: React.FC = () => {
         propertyId,
         checkIn,
         checkOut,
-        selectedBedrooms // Pass array
+        selectedBedrooms, // Pass array
+        dailySelections
       })
     })
     .then(async res => {
@@ -631,7 +638,7 @@ export const Checkout: React.FC = () => {
 
              {clientSecret && clientSecret !== 'MOCK_TEST_MODE' ? (
                 <Elements stripe={stripePromise} options={{ clientSecret }}>
-                  <CheckoutForm clientSecret={clientSecret} bookingDetails={{ propertyId, checkIn, checkOut, priceDetails: localPriceDetails }} guestEmail={guestEmail} guestPhone={guestPhone} isTestProperty={isTestProperty} selectedBedrooms={selectedBedrooms} />
+                  <CheckoutForm clientSecret={clientSecret} bookingDetails={{ propertyId, checkIn, checkOut, priceDetails: localPriceDetails }} guestEmail={guestEmail} guestPhone={guestPhone} isTestProperty={isTestProperty} selectedBedrooms={selectedBedrooms} dailySelections={dailySelections} />
                 </Elements>
              ) : (
                 <div className="p-8 bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl text-center">

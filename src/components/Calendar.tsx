@@ -18,9 +18,11 @@ export const Calendar: React.FC<{
     initialCheckIn?: string,
     initialCheckOut?: string,
     initialSelectedRoom?: any,
-    onSaveEdit?: (checkIn: string, checkOut: string, priceDetails: any, selectedRooms: any[], rentalMode: 'entire' | 'room') => void,
+    initialSelectedRooms?: any[],
+    initialDailySelections?: any,
+    onSaveEdit?: (checkIn: string, checkOut: string, priceDetails: any, selectedRooms: any[], rentalMode: 'entire' | 'room', dailySelections?: any) => void,
     onCancelEdit?: () => void
-}> = ({ propertyId, property, isEditMode, editingBookingId, initialCheckIn, initialCheckOut, initialSelectedRoom, onSaveEdit, onCancelEdit }) => {
+}> = ({ propertyId, property, isEditMode, editingBookingId, initialCheckIn, initialCheckOut, initialSelectedRoom, initialSelectedRooms, initialDailySelections, onSaveEdit, onCancelEdit }) => {
   const parseLocalDate = (dateStr: string) => {
     if (!dateStr) return null;
     const [year, month, day] = dateStr.split('T')[0].split('-').map(Number);
@@ -35,10 +37,23 @@ export const Calendar: React.FC<{
   const [checkIn, setCheckIn] = useState<Date | null>(initialCheckIn ? parseLocalDate(initialCheckIn) : null);
   const [checkOut, setCheckOut] = useState<Date | null>(initialCheckOut ? parseLocalDate(initialCheckOut) : null);
   const [hoverDate, setHoverDate] = useState<Date | null>(null);
-  const [rentalMode, setRentalMode] = useState<'entire' | 'room'>(initialSelectedRoom ? 'room' : 'entire');
-  const [selectedRooms, setSelectedRooms] = useState<any[]>(
-    initialSelectedRoom ? (Array.isArray(initialSelectedRoom) ? initialSelectedRoom : [initialSelectedRoom]) : []
-  );
+  
+  const [rentalMode, setRentalMode] = useState<'entire' | 'room'>(() => {
+    if (initialSelectedRooms && initialSelectedRooms.length > 0) return 'room';
+    return initialSelectedRoom ? 'room' : 'entire';
+  });
+  
+  const [selectedRooms, setSelectedRooms] = useState<any[]>(() => {
+    if (initialSelectedRooms && initialSelectedRooms.length > 0) return initialSelectedRooms;
+    return initialSelectedRoom ? (Array.isArray(initialSelectedRoom) ? initialSelectedRoom : [initialSelectedRoom]) : [];
+  });
+
+  const [dailySelections, setDailySelections] = useState<{
+    [dateStr: string]: {
+      rentalMode: 'entire' | 'room';
+      selectedBedrooms: any[];
+    }
+  } | null>(initialDailySelections || null);
   
   const [pricingRules, setPricingRules] = useState<PricingRule[]>([]);
   const [blackoutDates, setBlackoutDates] = useState<BlackoutDate[]>([]);
@@ -71,6 +86,114 @@ export const Calendar: React.FC<{
     });
     return () => { unsubRules(); unsubBlackouts(); unsubBookings(); unsubSettings(); };
   }, [propertyId]);
+
+  // Synchronize and initialize dailySelections when dates change
+  useEffect(() => {
+    if (!checkIn || !checkOut) {
+      setDailySelections(null);
+      return;
+    }
+
+    const intervalDays = eachDayOfInterval({ start: startOfDay(checkIn), end: startOfDay(addDays(checkOut, -1)) });
+    const updated: { [key: string]: { rentalMode: 'entire' | 'room'; selectedBedrooms: any[] } } = {};
+    
+    intervalDays.forEach(day => {
+      const dateStr = format(day, 'yyyy-MM-dd');
+      if (dailySelections && dailySelections[dateStr]) {
+        updated[dateStr] = dailySelections[dateStr];
+      } else if (initialDailySelections && initialDailySelections[dateStr]) {
+        updated[dateStr] = initialDailySelections[dateStr];
+      } else {
+        updated[dateStr] = {
+          rentalMode: rentalMode,
+          selectedBedrooms: rentalMode === 'room' ? [...selectedRooms] : []
+        };
+      }
+    });
+
+    const currentKeys = Object.keys(dailySelections || {}).sort().join(',');
+    const newKeys = Object.keys(updated).sort().join(',');
+
+    if (currentKeys !== newKeys) {
+      setDailySelections(updated);
+    }
+  }, [checkIn, checkOut, initialDailySelections]);
+
+  const handleGlobalRentalModeChange = (mode: 'entire' | 'room') => {
+    setRentalMode(mode);
+    if (mode === 'entire') {
+      setSelectedRooms([]);
+    }
+    if (checkIn && checkOut) {
+      const intervalDays = eachDayOfInterval({ start: startOfDay(checkIn), end: startOfDay(addDays(checkOut, -1)) });
+      const updated: any = {};
+      intervalDays.forEach(day => {
+        const dateStr = format(day, 'yyyy-MM-dd');
+        updated[dateStr] = { 
+          rentalMode: mode, 
+          selectedBedrooms: mode === 'room' ? (property?.bedrooms && property.bedrooms.length > 0 ? [property.bedrooms[0]] : []) : [] 
+        };
+      });
+      setDailySelections(updated);
+    }
+  };
+
+  const handleGlobalRoomToggle = (room: any) => {
+    setRentalMode('room');
+    setSelectedRooms(prev => {
+      const isSelected = prev.some(r => r.roomNumber === room.roomNumber);
+      const updatedRooms = isSelected 
+        ? prev.filter(r => r.roomNumber !== room.roomNumber)
+        : [...prev, room];
+      
+      if (checkIn && checkOut) {
+        const intervalDays = eachDayOfInterval({ start: startOfDay(checkIn), end: startOfDay(addDays(checkOut, -1)) });
+        const updated: any = {};
+        intervalDays.forEach(day => {
+          const dateStr = format(day, 'yyyy-MM-dd');
+          updated[dateStr] = { rentalMode: 'room', selectedBedrooms: updatedRooms };
+        });
+        setDailySelections(updated);
+      }
+      return updatedRooms;
+    });
+  };
+
+  const handleDailyModeChange = (dateStr: string, mode: 'entire' | 'room') => {
+    setDailySelections(prev => {
+      const selections = prev || {};
+      const defaultState = selections[dateStr] || { rentalMode: rentalMode, selectedBedrooms: rentalMode === 'room' ? [...selectedRooms] : [] };
+      return {
+        ...selections,
+        [dateStr]: {
+          rentalMode: mode,
+          selectedBedrooms: mode === 'room' 
+            ? (defaultState.selectedBedrooms.length > 0 ? defaultState.selectedBedrooms : (property?.bedrooms && property.bedrooms.length > 0 ? [property.bedrooms[0]] : [])) 
+            : []
+        }
+      };
+    });
+  };
+
+  const handleDailyRoomToggle = (dateStr: string, room: any) => {
+    setDailySelections(prev => {
+      const selections = prev || {};
+      const defaultState = selections[dateStr] || { rentalMode: 'room', selectedBedrooms: [] };
+      const currentRooms = defaultState.selectedBedrooms;
+      const isSelected = currentRooms.some((r: any) => r.roomNumber === room.roomNumber);
+      const updatedRooms = isSelected 
+        ? currentRooms.filter((r: any) => r.roomNumber !== room.roomNumber)
+        : [...currentRooms, room];
+      
+      return {
+        ...selections,
+        [dateStr]: {
+          rentalMode: 'room',
+          selectedBedrooms: updatedRooms
+        }
+      };
+    });
+  };
 
   useEffect(() => {
     if (checkIn && checkOut) {
@@ -161,6 +284,20 @@ export const Calendar: React.FC<{
 
   const handleDateClick = (day: Date) => {
     if (isUnavailable(day) || isBefore(day, startOfDay(new Date()))) return;
+
+    if (isEditMode && initialCheckIn && initialCheckOut) {
+       const now = startOfDay(new Date());
+       const origCheckIn = startOfDay(parseLocalDate(initialCheckIn) || new Date(initialCheckIn));
+       const origCheckOut = startOfDay(parseLocalDate(initialCheckOut) || new Date(initialCheckOut));
+       const isCurrentlyCheckedIn = now >= origCheckIn && now <= origCheckOut;
+
+       if (isCurrentlyCheckedIn) {
+          if (day > origCheckOut) {
+             alert("You must start a new booking for the time period that starts after your current check-in date.");
+             return;
+          }
+       }
+    }
 
     const checkMinNights = (start: Date, end: Date): boolean => {
       const interval = eachDayOfInterval({ start, end });
@@ -297,7 +434,8 @@ export const Calendar: React.FC<{
       globalSettings, 
       selectedRooms, 
       rentalMode,
-      sameDayModFee
+      sameDayModFee,
+      dailySelections || undefined
     );
   };
 
@@ -364,7 +502,7 @@ export const Calendar: React.FC<{
          checkIn: format(checkIn, 'yyyy-MM-dd'), 
          checkOut: format(checkOut, 'yyyy-MM-dd'), 
          priceDetails,
-         selectedBedrooms: selectedRooms,
+         selectedBedrooms: selectedRooms, dailySelections,
          rentalMode
        }});
     }
@@ -376,8 +514,8 @@ export const Calendar: React.FC<{
       <div className="lg:col-span-8 bg-white rounded-3xl border border-slate-200 shadow-sm p-6 flex flex-col">
         {property?.allowIndividualRoomRental && (
             <div className="flex gap-4 p-1 bg-slate-100 rounded-2xl mb-6">
-               <button onClick={() => {setRentalMode('entire'); setSelectedRooms([]);}} className={cn("flex-1 px-4 py-2 rounded-xl font-bold text-sm", rentalMode === 'entire' ? "bg-white shadow-sm text-indigo-600" : "text-slate-500")}>Entire Property</button>
-               <button onClick={() => setRentalMode('room')} className={cn("flex-1 px-4 py-2 rounded-xl font-bold text-sm", rentalMode === 'room' ? "bg-white shadow-sm text-indigo-600" : "text-slate-500")}>Select Rooms</button>
+               <button onClick={() => handleGlobalRentalModeChange('entire')} className={cn("flex-1 px-4 py-2 rounded-xl font-bold text-sm", rentalMode === 'entire' ? "bg-white shadow-sm text-indigo-600" : "text-slate-500")}>Entire Property</button>
+               <button onClick={() => handleGlobalRentalModeChange('room')} className={cn("flex-1 px-4 py-2 rounded-xl font-bold text-sm", rentalMode === 'room' ? "bg-white shadow-sm text-indigo-600" : "text-slate-500")}>Select Rooms</button>
             </div>
         )}
         {rentalMode === 'room' && (
@@ -387,13 +525,7 @@ export const Calendar: React.FC<{
                     return (
                         <button 
                             key={room.roomNumber} 
-                            onClick={() => {
-                                setSelectedRooms(prev => 
-                                    isSelected 
-                                        ? prev.filter(r => r.roomNumber !== room.roomNumber)
-                                        : [...prev, room]
-                                );
-                            }} 
+                             onClick={() => handleGlobalRoomToggle(room)} 
                             className={cn(
                                 "px-4 py-2 rounded-xl text-sm font-bold border flex flex-col items-start gap-0.5 transition-all", 
                                 isSelected ? "bg-indigo-600 text-white border-indigo-600" : "bg-white border-slate-200 text-slate-700 hover:border-indigo-300"
@@ -448,14 +580,78 @@ export const Calendar: React.FC<{
             
             {priceDetails && checkIn && checkOut && (
               <div className="border-t border-slate-800 my-4 pt-4 space-y-3">
-                <div className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Nightly Breakdown</div>
-                <div className="max-h-32 overflow-y-auto space-y-2 pr-2 scrollbar-hide">
-                   {eachDayOfInterval({ start: checkIn, end: addDays(checkOut, -1) }).map(day => (
-                      <div key={day.toISOString()} className="flex justify-between items-center text-sm">
-                         <span className="text-slate-400">{format(day, 'MMM d, yyyy')}</span>
-                         <span className="font-mono">${getRate(day).toFixed(2)}</span>
-                      </div>
-                   ))}
+                <div className="text-xs font-bold text-indigo-400 uppercase tracking-wider mb-2 flex justify-between items-center bg-slate-800/40 p-2 rounded-lg border border-slate-800">
+                   <span>🌙 Night-by-Night Customizer</span>
+                   <span className="text-[9px] text-slate-400 normal-case font-normal">Adjust any night</span>
+                </div>
+                <div className="max-h-80 overflow-y-auto space-y-2.5 pr-2 scrollbar-hide">
+                   {eachDayOfInterval({ start: checkIn, end: addDays(checkOut, -1) }).map(day => {
+                      const dateStr = format(day, 'yyyy-MM-dd');
+                      const selection = dailySelections && dailySelections[dateStr] ? dailySelections[dateStr] : { rentalMode: rentalMode, selectedBedrooms: rentalMode === 'room' ? [...selectedRooms] : [] };
+                      const isEntireDay = selection.rentalMode === 'entire';
+                      const dayRate = isEntireDay 
+                         ? getNightlyRate(day, pricingRules, null, 'entire')
+                         : selection.selectedBedrooms.reduce((acc, r) => acc + getNightlyRate(day, pricingRules, r, 'room'), 0);
+                      
+                      return (
+                         <div key={dateStr} className="p-3 bg-slate-800/40 rounded-xl border border-slate-800/50 space-y-2">
+                            <div className="flex justify-between items-center text-xs">
+                               <div className="flex flex-col">
+                                  <span className="font-bold text-white text-xs">{format(day, 'EEE, MMM d')}</span>
+                                  <span className="text-[10px] text-indigo-300 font-medium mt-0.5">
+                                     {isEntireDay ? 'Entire Property' : `${selection.selectedBedrooms.length || 0} Room(s)`}
+                                  </span>
+                               </div>
+                               <span className="font-mono font-bold text-indigo-400">${dayRate.toFixed(2)}</span>
+                            </div>
+                            
+                            {property?.allowIndividualRoomRental && (
+                               <div className="flex flex-col gap-1.5 border-t border-slate-800/65 pt-2 text-[10px]">
+                                  {/* Selection Mode Selector to toggle entire vs room */}
+                                  <div className="flex bg-slate-900/90 p-0.5 rounded-lg border border-slate-800/80">
+                                     <button 
+                                        type="button"
+                                        onClick={() => handleDailyModeChange(dateStr, 'entire')}
+                                        className={cn("flex-1 py-1 rounded-md text-[9px] font-bold text-center transition-all", isEntireDay ? "bg-indigo-600 text-white shadow-sm" : "text-slate-400 hover:text-white")}
+                                     >
+                                        Entire Property
+                                     </button>
+                                     <button 
+                                        type="button"
+                                        onClick={() => handleDailyModeChange(dateStr, 'room')}
+                                        className={cn("flex-1 py-1 rounded-md text-[9px] font-bold text-center transition-all", !isEntireDay ? "bg-indigo-600 text-white shadow-sm" : "text-slate-400 hover:text-white")}
+                                     >
+                                        Select Rooms
+                                     </button>
+                                  </div>
+                                  
+                                  {/* Specific bedrooms checkboxes for this night if room rental chosen */}
+                                  {!isEntireDay && (
+                                     <div className="grid grid-cols-1 gap-1 bg-slate-950 p-2 rounded-lg border border-slate-800 mt-1">
+                                        {property?.bedrooms?.map(room => {
+                                           const isRoomActive = selection.selectedBedrooms.some((r: any) => r.roomNumber === room.roomNumber);
+                                           return (
+                                              <label key={room.roomNumber} className="flex items-center justify-between text-[10px] text-slate-400 hover:text-white cursor-pointer select-none">
+                                                 <div className="flex items-center gap-1.5">
+                                                    <input 
+                                                       type="checkbox"
+                                                       checked={isRoomActive}
+                                                       onChange={() => handleDailyRoomToggle(dateStr, room)}
+                                                       className="w-3 h-3 accent-indigo-500 rounded border-slate-700 bg-slate-800"
+                                                    />
+                                                    <span>{room.type} {room.roomNumber}</span>
+                                                 </div>
+                                                 <span className="font-mono text-[9px] text-indigo-300">+${room.fee}</span>
+                                              </label>
+                                           );
+                                        })}
+                                     </div>
+                                  )}
+                               </div>
+                            )}
+                         </div>
+                      );
+                   })}
                 </div>
                 
                 <div className="border-t border-slate-800 mt-2 pt-2 space-y-2">
@@ -496,7 +692,7 @@ export const Calendar: React.FC<{
                   <div className="text-xs font-bold text-slate-500 uppercase tracking-widest">Rental Selection</div>
                   <div className="grid grid-cols-1 gap-2">
                       <button 
-                         onClick={() => { setRentalMode('entire'); setSelectedRooms([]); }}
+                         onClick={() => handleGlobalRentalModeChange('entire')}
                          className={cn(
                              "flex justify-between items-center text-sm p-3 rounded-xl border transition-all text-left",
                              rentalMode === 'entire' 
@@ -521,7 +717,7 @@ export const Calendar: React.FC<{
                              key={room.roomNumber} 
                              onClick={() => { 
                                 setRentalMode('room'); 
-                                setSelectedRooms(prev => 
+if (false) setSelectedRooms(prev => 
                                     isSelected 
                                         ? prev.filter(r => r.roomNumber !== room.roomNumber)
                                         : [...prev, room]
@@ -576,7 +772,7 @@ export const Calendar: React.FC<{
             <button 
               onClick={() => {
                   if (isEditMode && onSaveEdit && checkIn && checkOut && priceDetails) {
-                      onSaveEdit(format(checkIn, 'yyyy-MM-dd'), format(checkOut, 'yyyy-MM-dd'), priceDetails, selectedRooms, rentalMode);
+                      onSaveEdit(format(checkIn, 'yyyy-MM-dd'), format(checkOut, 'yyyy-MM-dd'), priceDetails, selectedRooms, rentalMode, dailySelections);
                   } else {
                       handleBook();
                   }
