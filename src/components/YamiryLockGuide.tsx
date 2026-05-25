@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, RotateCcw, Volume2, VolumeX, Shield, ArrowRight, Video, ChevronRight, CheckCircle, Smartphone } from 'lucide-react';
+import { Play, Pause, RotateCcw, Volume2, VolumeX, Shield, Video, CheckCircle, Smartphone } from 'lucide-react';
 
 interface YamiryLockGuideProps {
   accessCode?: string;
@@ -9,7 +9,7 @@ interface YamiryLockGuideProps {
 export const YamiryLockGuide: React.FC<YamiryLockGuideProps> = ({ accessCode, roomLockNumber }) => {
   const [isPlaying, setIsPlaying] = useState<boolean>(true);
   const [progress, setProgress] = useState<number>(0); // 0 to 100
-  const [activeStep, setActiveStep] = useState<number>(0); // 0: Touch, 1: Enter, 2: Green, 3: Pull Handle
+  const [activeStep, setActiveStep] = useState<number>(0); // 0: Enter Code + Logo, 1: Green Indicator, 2: Turn Knob
   const [isMuted, setIsMuted] = useState<boolean>(true);
   
   // Custom states for lock simulation
@@ -17,35 +17,27 @@ export const YamiryLockGuide: React.FC<YamiryLockGuideProps> = ({ accessCode, ro
   const [inputDigits, setInputDigits] = useState<string[]>([]);
   const [activeDigitIndex, setActiveDigitIndex] = useState<number>(-1);
   const [indicatorColor, setIndicatorColor] = useState<'none' | 'blue' | 'green' | 'red'>('none');
-  const [handleAngle, setHandleAngle] = useState<number>(0);
+  const [knobAngle, setKnobAngle] = useState<number>(0);
   const [isDoorOpen, setIsDoorOpen] = useState<boolean>(false);
 
   // Auto playback loop simulation
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   
-  const displayCode = accessCode || "124793"; // Placeholder code if none provided
-  const digitsToPress = [...displayCode.split(''), '#'];
+  const displayCode = accessCode || "3348"; // Placeholder code if none provided
+  const digitsToPress = [...displayCode.split(''), 'YAMIRY'];
 
   const steps = [
     {
-      title: "1. Wake Up Keypad",
-      desc: "Touch or place your palm on the sensor touch screen to light up the blue keypad backlight.",
-      duration: 25, // covers progress 0% - 25%
+      title: "1. Enter Access Code + Logo",
+      desc: `Carefully type your code (${displayCode}) and press the 'YAMIRY' symbol right between the keys and the door knob.`,
     },
     {
-      title: "2. Enter Access Code + #",
-      desc: `Carefully type your code (${displayCode}) and press the '#' key in the bottom right corner to submit.`,
-      duration: 55, // covers progress 25% - 80%
+      title: "2. Wait for the Green Indicator",
+      desc: "The smart lock verifies the code. The 'YAMIRY' symbol turns bright green with a verification chime.",
     },
     {
-      title: "3. Wait for Green Indicator",
-      desc: "The smart lock verifies the code. The indicator bar turns bright green with a verification chime.",
-      duration: 10, // covers progress 80% - 90%
-    },
-    {
-      title: "4. Press Lever down & Open",
-      desc: "Press the lever handle downwards and pull or push to open the door. Re-locks automatically in 5 seconds.",
-      duration: 10, // covers progress 90% - 100%
+      title: "3. Turn knob left or right & Open",
+      desc: "Turn knob left or right and push to open the door. Re-locks automatically in 5 seconds.",
     }
   ];
 
@@ -85,7 +77,7 @@ export const YamiryLockGuide: React.FC<YamiryLockGuideProps> = ({ accessCode, ro
             setIsKeypadLit(false);
             setInputDigits([]);
             setIndicatorColor('none');
-            setHandleAngle(0);
+            setKnobAngle(0);
             setIsDoorOpen(false);
             setActiveDigitIndex(-1);
             return 0;
@@ -109,27 +101,31 @@ export const YamiryLockGuide: React.FC<YamiryLockGuideProps> = ({ accessCode, ro
       setIsKeypadLit(false);
       setInputDigits([]);
       setIndicatorColor('none');
-      setHandleAngle(0);
+      setKnobAngle(0);
       setIsDoorOpen(false);
       setActiveDigitIndex(-1);
     } else if (progress >= 15 && progress < 25) {
       // Touch screen, wake-up
       setActiveStep(0);
-      if (!isKeypadLit) {
-        setIsKeypadLit(true);
-        setIndicatorColor('none');
-        playBeep(440, 0.1); // awake beep
-      }
-    } else if (progress >= 25 && progress < 80) {
-      // Typing sequence
-      setActiveStep(1);
       setIsKeypadLit(true);
       setIndicatorColor('none');
-      setHandleAngle(0);
+      setKnobAngle(0);
+      setIsDoorOpen(false);
+      setInputDigits([]);
+      setActiveDigitIndex(-1);
+      if (progress === 15) {
+        playBeep(440, 0.1); // awake beep
+      }
+    } else if (progress >= 25 && progress < 75) {
+      // Typing sequence
+      setActiveStep(0);
+      setIsKeypadLit(true);
+      setIndicatorColor('none');
+      setKnobAngle(0);
       setIsDoorOpen(false);
 
       // Map progress to pressing key indices
-      const codeProgressSpan = 80 - 25; // 55% progress scope
+      const codeProgressSpan = 75 - 25; // 50% progress scope
       const progressOffset = progress - 25;
       const singleKeySpan = codeProgressSpan / digitsToPress.length;
       const targetDigitIdx = Math.floor(progressOffset / singleKeySpan);
@@ -142,10 +138,10 @@ export const YamiryLockGuide: React.FC<YamiryLockGuideProps> = ({ accessCode, ro
           setInputDigits(prev => {
             if (prev.length < targetDigitIdx + 1) {
               const res = [...prev, pressedDigit];
-              if (pressedDigit === '#') {
-                playBeep(880, 0.15, 'sine'); // verify press
+              if (pressedDigit === 'YAMIRY') {
+                playBeep(880, 0.15, 'sine'); // confirm pressed
               } else {
-                playBeep(523.25, 0.08, 'sine'); // digit beep
+                playBeep(523.25, 0.08, 'sine'); // number beep
               }
               return res;
             }
@@ -153,30 +149,30 @@ export const YamiryLockGuide: React.FC<YamiryLockGuideProps> = ({ accessCode, ro
           });
         }
       }
-    } else if (progress >= 80 && progress < 90) {
-      // Success Verification (Green glow)
-      setActiveStep(2);
+    } else if (progress >= 75 && progress < 87) {
+      // Success Verification (YAMIRY symbol glows Green)
+      setActiveStep(1);
       setIsKeypadLit(true);
       if (indicatorColor !== 'green') {
         setIndicatorColor('green');
         playBeep(987.77, 0.15, 'sine');
         setTimeout(() => playBeep(1318.51, 0.25, 'sine'), 100);
       }
-      setHandleAngle(0);
+      setKnobAngle(0);
       setIsDoorOpen(false);
       setActiveDigitIndex(-1);
-    } else if (progress >= 90 && progress < 98) {
-      // Handle depression and opening
-      setActiveStep(3);
+    } else if (progress >= 87 && progress < 98) {
+      // Handle rotating knob list
+      setActiveStep(2);
       setIsKeypadLit(true);
       setIndicatorColor('green');
-      setHandleAngle(45); // rot angle
+      setKnobAngle(65); // Rotate knob by 65 degrees
       setIsDoorOpen(true);
       setActiveDigitIndex(-1);
     } else {
       // Returning, resetting
       setIsKeypadLit(false);
-      setHandleAngle(0);
+      setKnobAngle(0);
       setIsDoorOpen(false);
       setIndicatorColor('none');
     }
@@ -187,11 +183,12 @@ export const YamiryLockGuide: React.FC<YamiryLockGuideProps> = ({ accessCode, ro
   };
 
   const handleStepClick = (stepIndex: number) => {
-    if (stepIndex === 0) setProgress(16);
-    if (stepIndex === 1) setProgress(30);
-    if (stepIndex === 2) setProgress(82);
-    if (stepIndex === 3) setProgress(92);
+    if (stepIndex === 0) setProgress(25);
+    if (stepIndex === 1) setProgress(76);
+    if (stepIndex === 2) setProgress(88);
   };
+
+  const isYAMIRYPressed = digitsToPress[activeDigitIndex] === 'YAMIRY';
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl p-6 md:p-8 text-white max-w-4xl mx-auto my-8 font-sans">
@@ -200,8 +197,8 @@ export const YamiryLockGuide: React.FC<YamiryLockGuideProps> = ({ accessCode, ro
           <span className="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider inline-flex items-center gap-1.5 mb-2">
             <Video size={12} className="animate-pulse" /> Animated Video Guide
           </span>
-          <h2 className="text-xl md:text-2xl font-extrabold tracking-tight">How to Open the YAMIRY [YR04] Smart Lock</h2>
-          <p className="text-slate-400 text-sm mt-1">Watch this interactive animated simulator showing step-by-step room access.</p>
+          <h2 className="text-xl md:text-2xl font-extrabold tracking-tight">How to Open the YAMIRY Smart Lock</h2>
+          <p className="text-slate-400 text-sm mt-1">Watch this interactive step-by-step animated guide to operate your room lock knob.</p>
         </div>
         <div className="flex items-center gap-3">
           {roomLockNumber && (
@@ -248,51 +245,37 @@ export const YamiryLockGuide: React.FC<YamiryLockGuideProps> = ({ accessCode, ro
           </div>
 
           <div className="w-full flex-1 flex items-center justify-center py-6">
-            {/* Real SVG simulation of the beautiful black YAMIRY YR04 smart lever lock */}
+            {/* SVG simulation of the beautiful black YAMIRY smart knob lock */}
             <svg width="220" height="300" viewBox="0 0 220 300" fill="none" className="drop-shadow-2xl">
               {/* Outer plate shadow/frame */}
               <rect x="70" y="20" width="80" height="260" rx="40" fill="#0d1117" stroke="#21262d" strokeWidth="4" />
               <rect x="74" y="24" width="72" height="252" rx="36" fill="#161b22" />
 
-              {/* Status Indicator Bar at bottom or top of screen */}
-              <rect x="95" y="38" width="30" height="6" rx="3" fill={
-                indicatorColor === 'green' ? '#10b981' :
-                indicatorColor === 'blue' ? '#3b82f6' :
-                indicatorColor === 'red' ? '#ef4444' : '#334155'
-              } className="transition-all duration-300" />
+              {/* Touch Keypad Face Plate (2 rows of numbers, 1-9, then 0 key space) */}
+              <rect x="80" y="45" width="60" height="52" rx="8" fill="#090d11" stroke="#30363d" />
 
-              {/* Backlit glow for indicator */}
-              {indicatorColor === 'green' && (
-                <rect x="93" y="36" width="34" height="10" rx="5" fill="#10b981" fillOpacity="0.15" className="animate-pulse" />
-              )}
-
-              {/* Touch Keypad Face Plate */}
-              <rect x="85" y="55" width="50" height="90" rx="10" fill="#090d11" stroke="#30363d" />
-
-              {/* Interactive Keypad Numbers inside SVG */}
-              {Array.from({ length: 4 }).map((_, rIdx) => {
+              {/* Interactive Keypad Numbers inside SVG (2 rows of numbers: 1-5, and 6-0) */}
+              {Array.from({ length: 2 }).map((_, rIdx) => {
                 const rowKeys = [
-                  ['1', '2', '3'],
-                  ['4', '5', '6'],
-                  ['7', '8', '9'],
-                  ['*', '0', '#']
+                  ['1', '2', '3', '4', '5'],
+                  ['6', '7', '8', '9', '0']
                 ][rIdx];
 
                 return rowKeys.map((key, cIdx) => {
-                  const x = 93 + (cIdx * 16);
-                  const y = 70 + (rIdx * 18);
+                  const x = 90 + (cIdx * 10);
+                  const y = 58 + (rIdx * 24);
                   const isBeingPressedKey = digitsToPress[activeDigitIndex] === key;
                   
                   return (
                     <g key={key}>
-                      {/* Glow background if key is active/lit or typed */}
+                      {/* Glow background if key is active / being pressed */}
                       {isKeypadLit && (
-                        <circle cx={x} cy={y} r="6" fill="#6366f1" fillOpacity={isBeingPressedKey ? "0.6" : "0.1"} className="transition-all duration-200" />
+                        <circle cx={x} cy={y} r="4" fill="#6366f1" fillOpacity={isBeingPressedKey ? "0.8" : "0.1"} className="transition-all duration-200" />
                       )}
                       <text 
                         x={x} 
-                        y={y + 2.5} 
-                        fontSize="7" 
+                        y={y + 1.8} 
+                        fontSize="6" 
                         fontFamily="monospace" 
                         fontWeight="bold" 
                         textAnchor="middle" 
@@ -300,7 +283,7 @@ export const YamiryLockGuide: React.FC<YamiryLockGuideProps> = ({ accessCode, ro
                           isBeingPressedKey ? '#ffffff' :
                           isKeypadLit ? '#a5b4fc' : '#4b5563'
                         }
-                        className="transition-colors duration-200 select-none"
+                        className="transition-colors duration-200 select-none animate-duration-150"
                       >
                         {key}
                       </text>
@@ -309,36 +292,90 @@ export const YamiryLockGuide: React.FC<YamiryLockGuideProps> = ({ accessCode, ro
                 });
               })}
 
+              {/* YAMIRY Symbol Button right between the keys and the door knob */}
+              <g transform="translate(110, 122)">
+                <rect 
+                  x="-32" 
+                  y="-10" 
+                  width="64" 
+                  height="20" 
+                  rx="10" 
+                  fill={indicatorColor === 'green' ? '#064e3b' : isYAMIRYPressed ? '#312e81' : '#0f172a'} 
+                  stroke={indicatorColor === 'green' ? '#10b981' : isYAMIRYPressed ? '#818cf8' : '#334155'} 
+                  strokeWidth="1.5"
+                  className="transition-all duration-300"
+                />
+                {/* Backlit Glow effect */}
+                {(indicatorColor === 'green' || isYAMIRYPressed) && (
+                  <rect 
+                    x="-34" 
+                    y="-12" 
+                    width="68" 
+                    height="24" 
+                    rx="12" 
+                    fill={indicatorColor === 'green' ? '#10b981' : '#6366f1'} 
+                    fillOpacity="0.15" 
+                    className="animate-pulse" 
+                  />
+                )}
+                {/* Word YAMIRY as the symbol button */}
+                <text 
+                  x="0" 
+                  y="3" 
+                  fontSize="7.5" 
+                  fontFamily="sans-serif" 
+                  fontWeight="900" 
+                  letterSpacing="1"
+                  textAnchor="middle" 
+                  fill={indicatorColor === 'green' ? '#34d399' : isYAMIRYPressed ? '#ffffff' : '#64748b'}
+                  className="transition-colors duration-300 select-none"
+                >
+                  YAMIRY
+                </text>
+              </g>
+
               {/* Custom Typed Code Text Box visualizer inside smart lock screen */}
               {isKeypadLit && (
                 <g>
-                  <rect x="90" y="130" width="40" height="8" rx="2" fill="#000" stroke="#21262d" />
-                  <text x="110" y="136" fontSize="5" fontFamily="monospace" fill="#38bdf8" textAnchor="middle" fontWeight="black tracking-widest">
-                    {inputDigits.map(d => d === '#' ? '' : d).join('') || "------"}
+                  <rect x="90" y="148" width="40" height="7" rx="1.5" fill="#000" stroke="#21262d" />
+                  <text x="110" y="153.5" fontSize="4.5" fontFamily="monospace" fill="#38bdf8" textAnchor="middle" fontWeight="black tracking-widest">
+                    {inputDigits.map(d => d === 'YAMIRY' ? '' : d).join('') || "------"}
                   </text>
                 </g>
               )}
 
-              {/* Rotatable Door Handle (Smart Lever) */}
-              <g transform={`translate(110, 185) rotate(${handleAngle})`}>
-                {/* Connecting bolt */}
-                <circle cx="0" cy="0" r="16" fill="#30363d" stroke="#484f58" strokeWidth="2" />
-                <circle cx="0" cy="0" r="10" fill="#21262d" />
-                <circle cx="0" cy="0" r="4" fill="#8b949e" />
-
-                {/* Lever arm sticking out dynamically to the right */}
-                <path d="M 12 -12 L 80 -12 C 86 -12 88 -6 88 0 C 88 6 86 12 80 12 L 12 12 Z" fill="#30363d" stroke="#484f58" strokeWidth="2" />
-                {/* Highlight details */}
-                <path d="M 20 -4 L 74 -4" stroke="#484f58" strokeWidth="1.5" strokeLinecap="round" />
+              {/* Rotatable Circular Door Knob (smart knob instead of lever) */}
+              <g transform={`translate(110, 215) rotate(${knobAngle})`} className="transition-transform duration-350">
+                {/* Knob outer plate */}
+                <circle cx="0" cy="0" r="32" fill="#2d3748" stroke="#4a5568" strokeWidth="3" />
+                {/* Dial ridges to look like a premium gripper knob */}
+                {Array.from({ length: 12 }).map((_, i) => {
+                  const angle = (i * 30) * Math.PI / 180;
+                  const x1 = Math.cos(angle) * 28;
+                  const y1 = Math.sin(angle) * 28;
+                  const x2 = Math.cos(angle) * 31;
+                  const y2 = Math.sin(angle) * 31;
+                  return (
+                    <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#1a202c" strokeWidth="2" />
+                  );
+                })}
+                {/* Knob face */}
+                <circle cx="0" cy="0" r="26" fill="#1a202c" stroke="#2d3748" strokeWidth="1" />
+                {/* Horizontal bar grip on the knob that turns visually when rotated */}
+                <rect x="-18" y="-4" width="36" height="8" rx="4" fill="#4a5568" stroke="#1a202c" strokeWidth="1" />
+                <circle cx="0" cy="0" r="4" fill="#a0aec0" />
               </g>
 
-              {/* Hand/Finger pointing simulator that flies into the plate */}
+              {/* Finger pointer simulator that flies into the plate */}
               {activeStep === 0 && progress > 5 && (
-                <g transform="translate(130, 95)" className="animate-pulse">
-                  <circle cx="0" cy="0" r="18" fill="#6366f1" fillOpacity="0.2" />
-                  <circle cx="0" cy="0" r="8" fill="#6366f1" fillOpacity="0.4" />
-                  {/* Glowing touch point */}
-                  <circle cx="0" cy="0" r="3" fill="#ffffff" />
+                <g transform={
+                  activeDigitIndex === 4 
+                    ? "translate(110, 122)" // points at YAMIRY logo
+                    : `translate(${90 + (Math.max(0, activeDigitIndex) % 5) * 10}, ${58 + Math.floor(Math.max(0, activeDigitIndex) / 5) * 24})` // points at row keys
+                } className="animate-pulse">
+                  <circle cx="0" cy="0" r="14" fill="#6366f1" fillOpacity="0.2" />
+                  <circle cx="0" cy="0" r="6" fill="#6366f1" fillOpacity="0.4" />
+                  <circle cx="0" cy="0" r="2" fill="#ffffff" />
                 </g>
               )}
             </svg>
@@ -348,7 +385,7 @@ export const YamiryLockGuide: React.FC<YamiryLockGuideProps> = ({ accessCode, ro
               <div className="absolute inset-0 bg-indigo-950/20 pointer-events-none border border-emerald-500 rounded-2xl flex items-center justify-center animate-pulse z-0 mb-14">
                 <div className="bg-emerald-950/90 text-emerald-400 border border-emerald-500/30 font-bold px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2 text-sm">
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
-                  LOCK DISENGAGED: Open Door Now!
+                  KNOB UNLOCKED: Turn & Push Door!
                 </div>
               </div>
             )}
@@ -382,7 +419,7 @@ export const YamiryLockGuide: React.FC<YamiryLockGuideProps> = ({ accessCode, ro
               <div className="flex items-center gap-2">
                 <button 
                   onClick={() => setIsPlaying(!isPlaying)} 
-                  className="bg-indigo-600 hover:bg-indigo-505 text-white p-2.5 rounded-xl transition-all shadow-md shadow-indigo-500/20 flex items-center justify-center"
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white p-2.5 rounded-xl transition-all shadow-md shadow-indigo-500/20 flex items-center justify-center"
                 >
                   {isPlaying ? <Pause size={16} /> : <Play size={16} className="ml-0.5" />}
                 </button>
@@ -453,7 +490,7 @@ export const YamiryLockGuide: React.FC<YamiryLockGuideProps> = ({ accessCode, ro
               <ul className="text-[11px] text-slate-300 space-y-1 list-disc pl-4 mt-1 leading-relaxed">
                 <li>Always ensure the lock turns <strong>Green</strong> before trying to depress the lever handle.</li>
                 <li>If the lock flashes <strong>Red</strong>, you typed a wrong code. Simply wait 3 seconds for the screen to clear and key in again.</li>
-                <li>Your key code is active starting <strong>exactly at Check-in (12:00 PM)</strong>.</li>
+                <li>Your key code is active starting <strong>exactly at Check-in (04:00 PM)</strong>.</li>
               </ul>
             </div>
           </div>
