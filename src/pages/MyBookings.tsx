@@ -30,6 +30,35 @@ const getStripe = async () => {
   return dynamicStripePromise;
 };
 
+const formatBookedDateTime = (createdAt: any) => {
+  if (!createdAt) return 'N/A';
+  try {
+    let date: Date;
+    if (typeof createdAt.toDate === 'function') {
+      date = createdAt.toDate();
+    } else if (createdAt.seconds) {
+      date = new Date(createdAt.seconds * 1000);
+    } else if (typeof createdAt.toMillis === 'function') {
+      date = new Date(createdAt.toMillis());
+    } else {
+      date = new Date(createdAt);
+    }
+    
+    if (isNaN(date.getTime())) return 'N/A';
+    
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+  } catch (e) {
+    return 'N/A';
+  }
+};
+
 const ModificationPaymentForm: React.FC<{ 
   clientSecret: string, 
   onSuccess: () => void, 
@@ -602,7 +631,13 @@ export const MyBookings: React.FC = () => {
                                                 <h3 className="text-2xl font-bold text-slate-900 mb-1 tracking-tight">{booking.propertyName}</h3>
                                                 <div className="text-sm font-mono text-slate-400 bg-slate-50 inline-block px-2 py-1 rounded-md border border-slate-100">
                                                     Ref: {booking.bookingRef || booking.id.substring(0, 8)}
-                                                </div>
+                                                 </div>
+                                                 {booking.createdAt && (
+                                                     <div className="text-xs text-slate-500 mt-2 flex items-center gap-1.5 flex-wrap">
+                                                         <span className="font-semibold text-slate-500">Booked on:</span>
+                                                         <span className="font-mono bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded border border-indigo-100/50 font-bold whitespace-nowrap">{formatBookedDateTime(booking.createdAt)}</span>
+                                                     </div>
+                                                 )}
                                             </div>
                                             {booking.status !== 'cancelled' ? (
                                                 <div className="text-right">

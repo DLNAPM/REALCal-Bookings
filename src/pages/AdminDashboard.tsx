@@ -21,6 +21,28 @@ const formatPhoneE164 = (phone: string) => {
   return cleaned;
 };
 
+const formatBookedDateTime = (createdAt: any) => {
+  if (!createdAt) return 'N/A';
+  try {
+    let date: Date;
+    if (typeof createdAt.toDate === 'function') {
+      date = createdAt.toDate();
+    } else if (createdAt.seconds) {
+      date = new Date(createdAt.seconds * 1000);
+    } else if (typeof createdAt.toMillis === 'function') {
+      date = new Date(createdAt.toMillis());
+    } else {
+      date = new Date(createdAt);
+    }
+    
+    if (isNaN(date.getTime())) return 'N/A';
+    
+    return format(date, 'MMM d, yyyy h:mm a');
+  } catch (e) {
+    return 'N/A';
+  }
+};
+
 export const AdminDashboard: React.FC = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
@@ -1261,6 +1283,7 @@ export const AdminDashboard: React.FC = () => {
                          <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest">Guest</th>
                          <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest">Property / Rooms</th>
                          <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest">Dates</th>
+                          <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest">Booked Date & Time</th>
                          <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest">Status</th>
                          <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-right">Actions</th>
                       </tr>
@@ -1284,6 +1307,9 @@ export const AdminDashboard: React.FC = () => {
                                <td className="px-4 py-4 text-slate-600 text-xs">
                                   <p>{b.checkIn} to</p>
                                   <p>{b.checkOut}</p>
+                               </td>
+                               <td className="px-4 py-4 text-slate-600 text-xs font-mono">
+                                  {formatBookedDateTime(b.createdAt)}
                                </td>
                                <td className="px-4 py-4">
                                   <span className={cn(
