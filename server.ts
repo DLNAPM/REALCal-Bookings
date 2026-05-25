@@ -117,7 +117,13 @@ async function sendSmtpEmail({ to, subject, text, html }: { to: string; subject:
   console.log(`[SMTP] Sending email. Host: ${host}:${port}, From: ${fromEmail}, To: ${to}, Subject: ${subject}`);
   const info = await transporter.sendMail(mailOptions);
   console.log(`[SMTP] Email sent successfully. MessageId: ${info.messageId}`);
-  return info;
+  return {
+    success: true,
+    messageId: info.messageId || "",
+    response: info.response || "",
+    accepted: info.accepted || [],
+    rejected: info.rejected || []
+  };
 }
 
 async function startServer() {
