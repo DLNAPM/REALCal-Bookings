@@ -65,6 +65,9 @@ export const AdminDashboard: React.FC = () => {
   // Manual booking states
   const [manualBookingPropId, setManualBookingPropId] = useState<string>('');
   const [manualBookingRooms, setManualBookingRooms] = useState<string[]>([]);
+  const [editingAccessCodeId, setEditingAccessCodeId] = useState<string | null>(null);
+  const [editHasSmartLock, setEditHasSmartLock] = useState<boolean>(false);
+  const [createHasSmartLock, setCreateHasSmartLock] = useState<boolean>(false);
 
   // User profile editing states
   const [editingUser, setEditingUser] = useState<any | null>(null);
@@ -131,11 +134,14 @@ export const AdminDashboard: React.FC = () => {
         const prop = properties.find(p => p.id === activePropertyId);
         if (prop) {
             setEditingBedrooms(prop.bedrooms || []);
+            setEditHasSmartLock(prop.hasSmartLock || false);
         } else {
             setEditingBedrooms([]);
+            setEditHasSmartLock(false);
         }
     } else {
         setEditingBedrooms([]);
+        setEditHasSmartLock(false);
     }
   }, [activePropertyId, properties]);
 
@@ -249,18 +255,21 @@ export const AdminDashboard: React.FC = () => {
       if (!db) return alert("Firebase not configured");
       const fd = new FormData(e.target as HTMLFormElement);
       try {
+          const hasSmartLock = fd.get('hasSmartLock') === 'on';
           const docRef = await addDoc(collection(db, 'properties'), {
               name: fd.get('name') as string,
               location: fd.get('location') as string,
               description: fd.get('description') as string,
               images: previewImages,
-              hasSmartLock: fd.get('hasSmartLock') === 'on',
+              hasSmartLock,
+              frontDoorCode: hasSmartLock ? (fd.get('frontDoorCode') as string || '') : '',
               allowIndividualRoomRental: fd.get('allowIndividualRoomRental') === 'on',
               bedrooms: [],
               createdAt: serverTimestamp()
           });
           (e.target as HTMLFormElement).reset();
           setPreviewImages([]);
+          setCreateHasSmartLock(false);
           setActivePropertyId(docRef.id);
           alert("Property created and selected for editing!");
       } catch (err: any) { alert(err.message); }
@@ -403,11 +412,13 @@ export const AdminDashboard: React.FC = () => {
       if (!activePropertyId) return alert("Select a property first");
       const fd = new FormData(e.target as HTMLFormElement);
       try {
+          const hasSmartLock = fd.get('hasSmartLock') === 'on';
           await updateDoc(doc(db, 'properties', activePropertyId), {
               name: fd.get('name') as string,
               location: fd.get('location') as string,
               description: fd.get('description') as string,
-              hasSmartLock: fd.get('hasSmartLock') === 'on',
+              hasSmartLock,
+              frontDoorCode: hasSmartLock ? (fd.get('frontDoorCode') as string || '') : '',
               allowIndividualRoomRental: fd.get('allowIndividualRoomRental') === 'on',
               bedrooms: editingBedrooms,
               // Note: images updating requires a separate flow or overriding
@@ -603,33 +614,44 @@ export const AdminDashboard: React.FC = () => {
     const guestPhoneInput = fd.get('guestPhone') as string;
     const guestPhone = guestPhoneInput ? formatPhoneE164(guestPhoneInput) : "";
     const totalAmountStr = fd.get('totalPrice') as string;
+    const manualAccessCode = fd.get('accessCode') as string || '';
     const bookingId = uuidv4();
     
     // For manual booking we mock a userId (admin uid or placeholder)
     const payloadUserId = user?.uid || 'admin-override';
 
     try {
-        // Provision Lock Code
-        const lockRes = await fetch('/api/provision-lock', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ checkIn, checkOut, name: guestName })
-        });
-        
-        let accessCode = '';
-        if (lockRes.ok) {
-           try {
-              const text = await lockRes.text();
-              if (text) {
-                 const data = JSON.parse(text);
-                 accessCode = data.accessCode || '';
-              }
-           } catch(err) {
-              console.warn("Failed to parse provision-lock response", err);
-           }
+        const prop = properties.find(p => p.id === formPropId);
+        let accessCode = manualAccessCode.trim();
+        if (!accessCode) {
+            if (prop?.hasSmartLock && prop?.frontDoorCode) {
+                accessCode = prop.frontDoorCode;
+            } else {
+                try {
+                    // Provision Lock Code
+                    const lockRes = await fetch('/api/provision-lock', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ checkIn, checkOut, name: guestName })
+                    });
+                    
+                    if (lockRes.ok) {
+                       try {
+                          const text = await lockRes.text();
+                          if (text) {
+                             const data = JSON.parse(text);
+                             accessCode = data.accessCode || '';
+                          }
+                       } catch(err) {
+                          console.warn("Failed to parse provision-lock response", err);
+                       }
+                    }
+                } catch (err) {
+                    console.warn("API lock provisioning failed:", err);
+                }
+            }
         }
 
-        const prop = properties.find(p => p.id === formPropId);
         const selectedBedroomObjects = (prop?.bedrooms || []).filter(b => manualBookingRooms.includes(b.roomNumber));
 
         const payload: any = {
@@ -728,6 +750,20 @@ export const AdminDashboard: React.FC = () => {
 
     } catch (err: any) { alert(err.message); }
   }
+
+  const handleUpdateBookingAccessCode = async (bookingId: string, newCode: string) => {
+    if (!db) return alert("Firebase not configured");
+    try {
+      await updateDoc(doc(db, 'bookings', bookingId), {
+         accessCode: newCode,
+         updatedAt: serverTimestamp()
+      });
+      setEditingAccessCodeId(null);
+      alert("SmartLock code updated!");
+    } catch (err: any) {
+      alert("Error updating SmartLock code: " + err.message);
+    }
+  };
 
   const handleAdminCancelBooking = async (bookingId: string) => {
     if (!db || !window.confirm("Are you sure you want to cancel this booking?")) return;
@@ -1041,7 +1077,7 @@ export const AdminDashboard: React.FC = () => {
 
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm mt-8">
              <h2 className="text-xl font-bold mb-6 flex items-center gap-2"><CalendarIcon size={20}/> Create Manual Booking</h2>
-             <form onSubmit={handleAdminCreateBooking} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-4 items-end bg-slate-50 p-6 rounded-2xl border border-slate-300 border-dashed">
+             <form onSubmit={handleAdminCreateBooking} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-8 gap-4 items-end bg-slate-50 p-6 rounded-2xl border border-slate-300 border-dashed">
                 <div className="lg:col-span-1">
                    <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Property</label>
                    <select 
@@ -1111,7 +1147,11 @@ export const AdminDashboard: React.FC = () => {
                    <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Total Price ($)</label>
                    <input name="totalPrice" type="number" required placeholder="0.00" className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm" />
                 </div>
-                <div className="md:col-span-2 lg:col-span-7 flex justify-end">
+                <div className="lg:col-span-1">
+                   <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">SmartLock Code</label>
+                   <input name="accessCode" placeholder="Auto / Custom" className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm font-mono focus:ring-2 focus:ring-indigo-200 outline-none" />
+                </div>
+                <div className="md:col-span-2 lg:col-span-8 flex justify-end">
                    <button type="submit" className="w-full bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-indigo-500 transition-colors">
                       Create Override Booking
                    </button>
@@ -1283,6 +1323,7 @@ export const AdminDashboard: React.FC = () => {
                          <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest">Guest</th>
                          <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest">Property / Rooms</th>
                          <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest">Dates</th>
+                         <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-indigo-600 font-extrabold">SmartLock Code</th>
                           <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest">Booked Date & Time</th>
                          <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest">Status</th>
                          <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-right">Actions</th>
@@ -1308,6 +1349,46 @@ export const AdminDashboard: React.FC = () => {
                                   <p>{b.checkIn} to</p>
                                   <p>{b.checkOut}</p>
                                </td>
+                               <td className="px-4 py-4">
+                                  {editingAccessCodeId === b.id ? (
+                                     <div className="flex items-center gap-1.5 p-1 border border-indigo-200 rounded-xl bg-slate-50 shadow-inner inline-flex">
+                                        <input 
+                                           type="text" 
+                                           defaultValue={b.accessCode || ''}
+                                           id={`access-code-input-${b.id}`}
+                                           placeholder="Code"
+                                           className="w-20 border border-indigo-200 rounded px-1.5 py-0.5 text-xs font-mono font-bold text-slate-800 bg-white outline-none focus:ring-1 focus:ring-indigo-500"
+                                        />
+                                        <button 
+                                           onClick={async () => {
+                                              const inputEl = document.getElementById(`access-code-input-${b.id}`) as HTMLInputElement;
+                                              await handleUpdateBookingAccessCode(b.id, inputEl?.value || '');
+                                            }}
+                                            className="bg-indigo-600 hover:bg-indigo-700 text-white rounded px-2 py-0.5 text-[10px] font-bold cursor-pointer transition-colors"
+                                         >
+                                            Save
+                                         </button>
+                                         <button 
+                                            onClick={() => setEditingAccessCodeId(null)}
+                                            className="border border-slate-200 hover:bg-white text-slate-500 rounded px-2 py-0.5 text-[10px] font-medium bg-slate-100 cursor-pointer"
+                                         >
+                                            Cancel
+                                         </button>
+                                      </div>
+                                   ) : (
+                                      <div className="flex items-center gap-2">
+                                         <span className="font-mono text-xs font-bold bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg border border-slate-200 select-all tracking-wider inline-block text-center min-w-[60px]">
+                                            {b.accessCode || '—'}
+                                         </span>
+                                         <button 
+                                            onClick={() => setEditingAccessCodeId(b.id)}
+                                            className="text-xs font-bold text-indigo-600 hover:text-indigo-850 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded-lg transition-colors cursor-pointer"
+                                         >
+                                            Set
+                                         </button>
+                                      </div>
+                                   )}
+                                </td>
                                <td className="px-4 py-4 text-slate-600 text-xs font-mono">
                                   {formatBookedDateTime(b.createdAt)}
                                </td>
@@ -1527,6 +1608,25 @@ export const AdminDashboard: React.FC = () => {
                              {uploadingProperty && <div className="w-20 h-20 flex items-center justify-center bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-500">Processing...</div>}
                          </div>
                      </div>
+                     <div className="flex flex-wrap gap-6 items-center p-1">
+                         <label className="flex items-center gap-2 font-medium cursor-pointer text-slate-600">
+                            <input 
+                              type="checkbox" 
+                              name="hasSmartLock" 
+                              checked={createHasSmartLock} 
+                              onChange={(e) => setCreateHasSmartLock(e.target.checked)}
+                              className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-slate-300" 
+                            />
+                            <span className="text-sm font-semibold">Has SmartLock</span>
+                         </label>
+                     </div>
+
+                     {createHasSmartLock && (
+                       <div className="p-1">
+                          <label className="text-xs font-bold text-slate-400 uppercase tracking-tight block mb-1">Front Door SmartLock Code (Manual)</label>
+                          <input name="frontDoorCode" placeholder="Auto / Custom" className="w-full border border-slate-200 rounded-xl p-3 bg-white shadow-sm text-sm font-mono focus:ring-2 focus:ring-indigo-100 outline-none" />
+                       </div>
+                     )}
                      <button type="submit" disabled={uploadingProperty} className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-indigo-500 transition-colors">Save Property</button>
                  </div>
              </form>
@@ -1564,7 +1664,13 @@ export const AdminDashboard: React.FC = () => {
                              
                              <div className="flex flex-wrap gap-6 items-center">
                                  <label className="flex items-center gap-2 font-medium cursor-pointer text-slate-600">
-                                    <input type="checkbox" name="hasSmartLock" defaultChecked={p.hasSmartLock} className="w-4 h-4 text-indigo-600 rounded" />
+                                    <input 
+                                       type="checkbox" 
+                                       name="hasSmartLock" 
+                                       checked={editHasSmartLock} 
+                                       onChange={(e) => setEditHasSmartLock(e.target.checked)}
+                                       className="w-4 h-4 text-indigo-600 rounded" 
+                                    />
                                     <span className="text-sm font-semibold">Has SmartLock</span>
                                  </label>
                                  <label className="flex items-center gap-2 font-medium cursor-pointer text-slate-600">
@@ -1572,6 +1678,19 @@ export const AdminDashboard: React.FC = () => {
                                     <span className="text-sm font-semibold">Allow Individual Room rentals</span>
                                  </label>
                              </div>
+
+                             {editHasSmartLock && (
+                                <div className="p-4 bg-indigo-50 border border-indigo-200 border-dashed rounded-2xl space-y-2 mt-4">
+                                   <label className="text-xs font-bold text-indigo-750 uppercase tracking-tight block">Front Door SmartLock Code (Manual)</label>
+                                   <input 
+                                      type="text" 
+                                      name="frontDoorCode" 
+                                      defaultValue={p.frontDoorCode || ''} 
+                                      placeholder="e.g. 1234 or 4321 / leave blank for random" 
+                                      className="w-full border border-indigo-200 rounded-xl p-3 bg-white shadow-sm text-sm font-mono font-bold text-slate-700 focus:ring-2 focus:ring-indigo-100 outline-none" 
+                                   />
+                                </div>
+                             )}
 
                              <button type="submit" className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-indigo-500 transition-colors">Update Info</button>
                          </div>

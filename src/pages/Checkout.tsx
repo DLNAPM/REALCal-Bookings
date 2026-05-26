@@ -78,28 +78,44 @@ const processBooking = async (
   const e164Phone = formatPhoneE164(guestPhone);
   
   try {
-    // Provision Yale access code via backend
-    const lockRes = await fetch('/api/provision-lock', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        checkIn: bookingDetails.checkIn,
-        checkOut: bookingDetails.checkOut,
-        name: user.displayName,
-      })
-    });
-    
     let accessCode = '';
-    if (lockRes.ok) {
-       try {
-           const text = await lockRes.text();
-           if (text) {
-               const data = JSON.parse(text);
-               accessCode = data.accessCode || '';
-           }
-       } catch (err) {
-           console.warn("Failed to parse provision-lock response", err);
-       }
+
+    // Check if property has a manual front door lock code set
+    try {
+      const propSnap = await getDoc(doc(db, 'properties', bookingDetails.propertyId));
+      if (propSnap.exists()) {
+        const propData = propSnap.data() as Property;
+        if (propData.hasSmartLock && propData.frontDoorCode) {
+          accessCode = propData.frontDoorCode.trim();
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to fetch property details for manual lock code lookup:", err);
+    }
+
+    if (!accessCode) {
+      // Provision Yale access code via backend
+      const lockRes = await fetch('/api/provision-lock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          checkIn: bookingDetails.checkIn,
+          checkOut: bookingDetails.checkOut,
+          name: user.displayName,
+        })
+      });
+      
+      if (lockRes.ok) {
+         try {
+             const text = await lockRes.text();
+             if (text) {
+                 const data = JSON.parse(text);
+                 accessCode = data.accessCode || '';
+             }
+         } catch (err) {
+             console.warn("Failed to parse provision-lock response", err);
+         }
+      }
     }
 
     const bookingRef = Math.random().toString(36).substring(2, 8).toUpperCase();
