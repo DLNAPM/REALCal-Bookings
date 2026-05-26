@@ -264,7 +264,7 @@ async function createInvoicePDF(booking: any, propertyName: string, priceDetails
 
       // Footer
       doc.font('Helvetica-Oblique').fontSize(8).fillColor(accentColor).text(
-        'Thank you for your business. For any billing inquiries, contact payments@realcalbookings.com.',
+        'Thank you for your business. For any billing inquiries, contact payments@cashgroupproperties.com.',
         50,
         740,
         { align: 'center', width: 495 }
