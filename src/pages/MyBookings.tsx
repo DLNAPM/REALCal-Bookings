@@ -31,6 +31,48 @@ const getStripe = async () => {
   return dynamicStripePromise;
 };
 
+const getBookingPriceBreakdown = (booking: any, globalSettings: any) => {
+  if (booking.priceDetails) {
+    return booking.priceDetails;
+  }
+  
+  // Reconstruct high-fidelity estimated breakdown if not saved
+  const checkIn = new Date(booking.checkIn);
+  const checkOut = new Date(booking.checkOut);
+  const nights = Math.max(1, Math.round((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24)));
+  
+  const cleaningFee = globalSettings?.cleaningFee || 100;
+  const sameDayModificationFee = booking.sameDayModificationFee || 0;
+  
+  // Since we have booking.totalPrice (in cents), we know:
+  // totalPriceInDollars = (baseTotal + cleaningFee + sameDayModificationFee - discount) * 1.12
+  const totalInDollars = booking.totalPrice / 100;
+  
+  let estimatedBase = Math.round((totalInDollars / 1.12) - cleaningFee - sameDayModificationFee);
+  if (estimatedBase <= 0) {
+    estimatedBase = totalInDollars - cleaningFee;
+    if (estimatedBase < 0) estimatedBase = 0;
+  }
+  
+  let discount = 0;
+  if (nights >= 7) {
+    discount = estimatedBase * 0.1;
+  }
+  
+  const subtotal = estimatedBase + cleaningFee - discount + sameDayModificationFee;
+  const taxes = subtotal * 0.12;
+  
+  return {
+    nights,
+    baseTotal: estimatedBase,
+    cleaningFee,
+    discount,
+    taxes,
+    sameDayModificationFee,
+    grandTotal: subtotal + taxes
+  };
+};
+
 const formatBookedDateTime = (createdAt: any) => {
   if (!createdAt) return 'N/A';
   try {
@@ -423,10 +465,10 @@ export const MyBookings: React.FC = () => {
             }
         }
 
-        await finalizeBookingUpdate(checkIn, checkOut, newTotal, selectedBedrooms, rentalMode);
+        await finalizeBookingUpdate(checkIn, checkOut, newTotal, selectedBedrooms, rentalMode, priceDetails);
     };
 
-    const finalizeBookingUpdate = async (checkIn: string, checkOut: string, newTotal: number, selectedBedrooms: any[], rentalMode: 'entire' | 'room') => {
+    const finalizeBookingUpdate = async (checkIn: string, checkOut: string, newTotal: number, selectedBedrooms: any[], rentalMode: 'entire' | 'room', priceDetails?: any) => {
         if (!editingBooking || !user) return;
         try {
             const cleanCheckIn = checkIn.split('T')[0];
@@ -447,14 +489,18 @@ export const MyBookings: React.FC = () => {
             }
 
             // 2. Update Booking
-            await updateDoc(doc(db, 'bookings', editingBooking.id), {
+            const updatePayload: any = {
                 checkIn: cleanCheckIn,
                 checkOut: cleanCheckOut,
                 totalPrice: newTotal,
                 selectedBedrooms: selectedBedrooms.length > 0 ? selectedBedrooms : null,
                 selectedBedroom: null, // Wipe legacy field if exists
                 updatedAt: serverTimestamp()
-            });
+            };
+            if (priceDetails) {
+                updatePayload.priceDetails = priceDetails;
+            }
+            await updateDoc(doc(db, 'bookings', editingBooking.id), updatePayload);
 
             // 3. Create new maintenance blackouts
             try {
@@ -531,7 +577,8 @@ export const MyBookings: React.FC = () => {
                 checkIn: cleanCheckIn, 
                 checkOut: cleanCheckOut,
                 totalPrice: newTotal,
-                selectedBedrooms: selectedBedrooms.length > 0 ? selectedBedrooms : null
+                selectedBedrooms: selectedBedrooms.length > 0 ? selectedBedrooms : null,
+                priceDetails: priceDetails || b.priceDetails
             } : b));
             
             alert("Booking successfully updated! Notifications have been sent.");
@@ -769,6 +816,64 @@ export const MyBookings: React.FC = () => {
                                             </div>
                                         )}
 
+                                        {booking.checkedOut && (() => {
+                                            const breakdown = getBookingPriceBreakdown(booking, globalSettings);
+                                            const grandTotalVal = (breakdown.grandTotal || 0) + ((booking.lateCheckoutFee || 0) / 100);
+                                            return (
+                                                <div className="mb-6 border border-slate-200 shadow-sm rounded-2xl overflow-hidden bg-slate-50">
+                                                    <div className="bg-slate-100 py-3 px-4 border-b border-slate-200">
+                                                        <h4 className="text-xs font-bold uppercase text-slate-600 tracking-wider flex items-center justify-between">
+                                                            <span>🧾 Paid Final Bill Breakdown</span>
+                                                            <a 
+                                                                href={`/api/bookings/${booking.id}/invoice.pdf`} 
+                                                                target="_blank" 
+                                                                rel="noopener noreferrer"
+                                                                className="text-xs font-bold text-indigo-600 hover:text-indigo-850 underline flex items-center gap-1 normal-case"
+                                                            >
+                                                                View PDF Invoice
+                                                            </a>
+                                                        </h4>
+                                                    </div>
+                                                    <div className="p-4 space-y-2 text-xs">
+                                                        <div className="flex justify-between items-center text-slate-600">
+                                                            <span>Room / Property Rental ({breakdown.nights} Nights)</span>
+                                                            <span className="font-mono text-slate-900 font-medium">${(breakdown.baseTotal || 0).toFixed(2)}</span>
+                                                        </div>
+                                                        <div className="flex justify-between items-center text-slate-600">
+                                                            <span>Cleaning Service Fee</span>
+                                                            <span className="font-mono text-slate-900 font-medium">${(breakdown.cleaningFee || 0).toFixed(2)}</span>
+                                                        </div>
+                                                        {breakdown.discount > 0 && (
+                                                            <div className="flex justify-between items-center text-emerald-600 font-medium">
+                                                                <span>Weekly Stay Discount (10%)</span>
+                                                                <span className="font-mono">-${(breakdown.discount || 0).toFixed(2)}</span>
+                                                            </div>
+                                                        )}
+                                                        {breakdown.sameDayModificationFee > 0 && (
+                                                            <div className="flex justify-between items-center text-indigo-600 font-medium">
+                                                                <span>Same-Day Modification Surcharge</span>
+                                                                <span className="font-mono">${(breakdown.sameDayModificationFee || 0).toFixed(2)}</span>
+                                                            </div>
+                                                        )}
+                                                        <div className="flex justify-between items-center text-slate-650">
+                                                            <span>Lodging Taxes (12%)</span>
+                                                            <span className="font-mono text-slate-900 font-medium">${(breakdown.taxes || 0).toFixed(2)}</span>
+                                                        </div>
+                                                        {(booking.lateCheckoutFee || 0) > 0 && (
+                                                            <div className="flex justify-between items-center text-rose-600 font-bold">
+                                                                <span>Late Check-out Surcharge ({booking.overdueHours}h)</span>
+                                                                <span className="font-mono">+${((booking.lateCheckoutFee || 0) / 100).toFixed(2)}</span>
+                                                            </div>
+                                                        )}
+                                                        <div className="pt-2 border-t border-slate-200 flex justify-between items-center text-slate-900 font-extrabold text-sm">
+                                                            <span>Final Paid Bill Total</span>
+                                                            <span className="font-mono text-indigo-600">${grandTotalVal.toFixed(2)}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
+
                                         <div className="mt-auto flex flex-col gap-3 pt-6 border-t border-slate-100">
                                             {booking.status !== 'cancelled' && (
                                                 <Link 
@@ -882,7 +987,8 @@ export const MyBookings: React.FC = () => {
                                 modificationPayment.checkOut, 
                                 Math.round(modificationPayment.priceDetails.grandTotal * 100),
                                 modificationPayment.selectedBedrooms,
-                                modificationPayment.rentalMode
+                                modificationPayment.rentalMode,
+                                modificationPayment.priceDetails
                             )}
                             onCancel={() => setModificationPayment(null)}
                         />

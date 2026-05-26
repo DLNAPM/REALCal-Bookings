@@ -9,6 +9,7 @@ import cors from "cors";
 import * as admin from "firebase-admin";
 import { getFirestore } from "firebase-admin/firestore";
 import { calculatePriceDetails } from "./src/lib/pricing";
+import PDFDocument from "pdfkit";
 
 // Load environment variables from .env file if present
 dotenv.config();
@@ -82,7 +83,7 @@ try {
 }
 
 // SMTP Outgoing Email Helper via Nodemailer
-async function sendSmtpEmail({ to, subject, text, html }: { to: string; subject: string; text: string; html?: string }) {
+async function sendSmtpEmail({ to, subject, text, html, attachments }: { to: string; subject: string; text: string; html?: string; attachments?: any[] }) {
   const nodemailer = await import("nodemailer");
   
   const host = process.env.SMTP_HOST || "smtp.mailgun.org";
@@ -107,13 +108,17 @@ async function sendSmtpEmail({ to, subject, text, html }: { to: string; subject:
     }
   });
 
-  const mailOptions = {
+  const mailOptions: any = {
     from: `"${fromName}" <${fromEmail}>`,
     to,
     subject,
     text,
     html
   };
+
+  if (attachments) {
+    mailOptions.attachments = attachments;
+  }
 
   console.log(`[SMTP] Sending email. Host: ${host}:${port}, From: ${fromEmail}, To: ${to}, Subject: ${subject}`);
   const info = await transporter.sendMail(mailOptions);
@@ -125,6 +130,157 @@ async function sendSmtpEmail({ to, subject, text, html }: { to: string; subject:
     accepted: info.accepted || [],
     rejected: info.rejected || []
   };
+}
+
+async function createInvoicePDF(booking: any, propertyName: string, priceDetails: any, lateFee: number, overdueHours: number): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({ margin: 50, size: 'A4' });
+      const buffers: Buffer[] = [];
+      doc.on('data', buffers.push.bind(buffers));
+      doc.on('end', () => {
+        resolve(Buffer.concat(buffers));
+      });
+
+      // Colors
+      const primaryColor = '#4f46e5'; // Indigo
+      const secondaryColor = '#1e293b'; // Slate 800
+      const accentColor = '#64748b'; // Slate 500
+
+      // Title & Header
+      doc.fillColor(primaryColor).fontSize(22).font('Helvetica-Bold').text('Invoice & Final Statement', { align: 'right' });
+      doc.fillColor(secondaryColor).fontSize(14).font('Helvetica-Bold').text('REALCal Bookings', 50, 50);
+      doc.fontSize(9).font('Helvetica').fillColor(accentColor).text('Your Automated Luxury Stay Platform', 50, 68);
+      
+      doc.moveDown(2.5);
+
+      // Horizontal separator line
+      doc.strokeColor('#cbd5e1').lineWidth(1).moveTo(50, 95).lineTo(545, 95).stroke();
+
+      // Details Block
+      const topInfoY = 110;
+      doc.font('Helvetica-Bold').fontSize(10).fillColor(secondaryColor).text('BILL TO:', 50, topInfoY);
+      doc.font('Helvetica').fontSize(10).fillColor(secondaryColor).text(booking.guestName || 'Valued Guest', 50, topInfoY + 15);
+      if (booking.guestEmail) {
+        doc.fillColor(accentColor).text(booking.guestEmail, 50, topInfoY + 28);
+      }
+      if (booking.guestPhone) {
+        doc.fillColor(accentColor).text(booking.guestPhone, 50, topInfoY + 41);
+      }
+
+      doc.font('Helvetica-Bold').fontSize(10).fillColor(secondaryColor).text('RESERVATION DETAILS:', 320, topInfoY);
+      doc.font('Helvetica').fontSize(10).fillColor(secondaryColor).text(`Booking Ref: ${booking.bookingRef || 'N/A'}`, 320, topInfoY + 15);
+      doc.text(`Property: ${propertyName}`, 320, topInfoY + 28);
+      doc.text(`Check-In Date: ${booking.checkIn}`, 320, topInfoY + 41);
+      doc.text(`Check-Out Date: ${booking.checkOut}`, 320, topInfoY + 54);
+      if (booking.selectedBedrooms && booking.selectedBedrooms.length > 0) {
+        const roomsStr = booking.selectedBedrooms.map((r: any) => `Room ${r.roomNumber}`).join(', ');
+        doc.text(`Selected Room(s): ${roomsStr}`, 320, topInfoY + 67);
+      }
+
+      // Charges Table Header
+      const tableY = 215;
+      doc.rect(50, tableY, 495, 20).fill(primaryColor);
+      doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(9);
+      doc.text('Charge Description', 60, tableY + 6);
+      doc.text('Details', 280, tableY + 6);
+      doc.text('Charged Amount', 440, tableY + 6, { width: 100, align: 'right' });
+
+      let currentY = tableY + 20;
+
+      const drawRow = (desc: string, details: string, amount: string, isAccent: boolean = false) => {
+        if (isAccent) {
+          doc.rect(50, currentY, 495, 20).fill('#f8fafc');
+        }
+        doc.fillColor(secondaryColor).font('Helvetica').fontSize(9);
+        doc.text(desc, 60, currentY + 6);
+        doc.fillColor(accentColor).text(details, 280, currentY + 6);
+        doc.fillColor(secondaryColor).font('Helvetica-Bold').text(amount, 440, currentY + 6, { width: 100, align: 'right' });
+        doc.strokeColor('#e2e8f0').lineWidth(0.5).moveTo(50, currentY + 20).lineTo(545, currentY + 20).stroke();
+        currentY += 21;
+      };
+
+      // Base Cost
+      const baseNightly = (priceDetails.baseTotal || 0);
+      drawRow(
+        'Base Room / Property Rental', 
+        `${priceDetails.nights || 0} Night(s) Stay`, 
+        `$${baseNightly.toFixed(2)}`,
+        false
+      );
+
+      // Cleaning Fee
+      drawRow(
+        'Cleaning Service Fee', 
+        'One-time sanitization service', 
+        `$${(priceDetails.cleaningFee || 0).toFixed(2)}`,
+        true
+      );
+
+      // Discount
+      if (priceDetails.discount && priceDetails.discount > 0) {
+        drawRow(
+          'Long-term Stay Discount', 
+          '10% off for weekly stay (7+ nights)', 
+          `-$${(priceDetails.discount).toFixed(2)}`,
+          false
+        );
+      }
+
+      // Same day change fee if any
+      if (priceDetails.sameDayModificationFee && priceDetails.sameDayModificationFee > 0) {
+        drawRow(
+          'Same-Day Change Surcharge', 
+          'Booking change penalty', 
+          `$${(priceDetails.sameDayModificationFee).toFixed(2)}`,
+          true
+        );
+      }
+
+      // Taxes
+      drawRow(
+        'Lodging Taxes & Fees', 
+        'State tourism tax (12%)', 
+        `$${(priceDetails.taxes || 0).toFixed(2)}`,
+        false
+      );
+
+      // Late checkout fee
+      if (lateFee > 0) {
+        drawRow(
+          'Late Check-out Surcharge', 
+          `${overdueHours} hour(s) past 11:00 AM deadline`, 
+          `$${(lateFee / 100).toFixed(2)}`,
+          true
+        );
+      }
+
+      // Grand Total Card
+      const grandTotalVal = (priceDetails.grandTotal || 0) + (lateFee / 100);
+      currentY += 10;
+      doc.rect(345, currentY, 200, 30).fill('#e0e7ff');
+      doc.fillColor(primaryColor).font('Helvetica-Bold').fontSize(10).text('TOTAL PAID BILL:', 355, currentY + 11);
+      doc.text(`$${grandTotalVal.toFixed(2)}`, 440, currentY + 11, { width: 100, align: 'right' });
+
+      // Footer
+      doc.font('Helvetica-Oblique').fontSize(8).fillColor(accentColor).text(
+        'Thank you for your business. For any billing inquiries, contact payments@realcalbookings.com.',
+        50,
+        740,
+        { align: 'center', width: 495 }
+      );
+      doc.font('Helvetica-Bold').fillColor(primaryColor).text(
+        'Your security and comfort is our highest priority.',
+        50,
+        755,
+        { align: 'center', width: 495 }
+      );
+
+      doc.end();
+    } catch (e) {
+      reject(e);
+    }
+  });
 }
 
 async function startServer() {
@@ -178,6 +334,62 @@ async function startServer() {
         .filter((r: any) => r.route)
         .map((r: any) => `${Object.keys(r.route.methods).join(',').toUpperCase()} ${r.route.path}`)
     });
+  });
+
+  app.get("/api/bookings/:id/invoice.pdf", async (req, res) => {
+    try {
+      const { id } = req.params;
+      if (!id) {
+        return res.status(400).send("Booking ID is required.");
+      }
+      if (!db) {
+        return res.status(500).send("Database not initialized.");
+      }
+
+      const bookingDoc = await db.collection("bookings").doc(id).get();
+      if (!bookingDoc.exists) {
+        return res.status(404).send("Booking not found.");
+      }
+
+      const booking = bookingDoc.data();
+      if (!booking) {
+        return res.status(404).send("No data found for this booking.");
+      }
+
+      const propertySnap = await db.collection("properties").doc(booking.propertyId).get();
+      const propertyName = propertySnap.exists ? propertySnap.data().name : "Property";
+
+      const settingsSnap = await db.collection("global_settings").doc("settings").get();
+      const globalSettings = settingsSnap.exists ? settingsSnap.data() : null;
+
+      const pricingRulesSnap = await db.collection("pricing_rules").where("propertyId", "==", booking.propertyId).get();
+      const pricingRules = pricingRulesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+
+      const rentalMode = (booking.selectedBedrooms && booking.selectedBedrooms.length > 0) ? 'room' : 'entire';
+
+      const priceDetails = calculatePriceDetails(
+        booking.checkIn,
+        booking.checkOut,
+        pricingRules,
+        globalSettings,
+        booking.selectedBedrooms || null,
+        rentalMode,
+        booking.sameDayModificationFee || 0,
+        booking.dailySelections
+      );
+
+      const lateFee = booking.lateCheckoutFee || 0;
+      const overdueHours = booking.overdueHours || 0;
+
+      const pdfBuffer = await createInvoicePDF(booking, propertyName, priceDetails, lateFee, overdueHours);
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="Invoice-${booking.bookingRef || 'Booking'}.pdf"`);
+      res.send(pdfBuffer);
+    } catch (e: any) {
+      console.error("[API] Failed to generate PDF:", e);
+      res.status(500).send(`Error generating invoice PDF: ${e.message}`);
+    }
   });
 
   app.get("/api/config", (req, res) => {
@@ -367,20 +579,63 @@ async function startServer() {
       const checkoutTimeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       const checkoutDateStr = now.toLocaleDateString();
       
+      let priceDetailsObj: any = {};
+      let pdfBuffer: Buffer | null = null;
+      let invoiceUrl = "";
+
+      try {
+        const pricingRulesSnap = await db.collection("pricing_rules").where("propertyId", "==", booking.propertyId).get();
+        const pricingRules = pricingRulesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+
+        const rentalMode = (booking.selectedBedrooms && booking.selectedBedrooms.length > 0) ? 'room' : 'entire';
+
+        priceDetailsObj = calculatePriceDetails(
+          booking.checkIn,
+          booking.checkOut,
+          pricingRules,
+          globalSettings,
+          booking.selectedBedrooms || null,
+          rentalMode,
+          booking.sameDayModificationFee || 0,
+          booking.dailySelections
+        );
+
+        pdfBuffer = await createInvoicePDF(booking, propertyName, priceDetailsObj, lateCheckoutFee, overdueHours);
+
+        const appUrl = `${req.protocol}://${req.get('host')}`;
+        invoiceUrl = `${appUrl}/api/bookings/${bookingId}/invoice.pdf`;
+      } catch (err: any) {
+        console.error("[API] Error compiling invoice details or PDF during checkout:", err);
+      }
+
       // Guest thank you message
-      let guestMsg = `Hi ${guestName}, thank you so much for staying at ${propertyName}! This is to confirm your electronic check-out was completed successfully on ${checkoutDateStr} at ${checkoutTimeStr}.\n\nWe appreciate you choosing REALCal Bookings and hope to host you again soon!`;
+      let guestMsg = `Hi ${guestName}, thank you so much for staying at ${propertyName}! This is to confirm your electronic check-out was completed successfully on ${checkoutDateStr} at ${checkoutTimeStr}.\n\nAn electronic PDF copy of your Final charges broken down line by line has been attached to your confirmation email.`;
+      
+      if (invoiceUrl) {
+        guestMsg += `\n\nYou can also view & download your electronic invoice PDF here: ${invoiceUrl}`;
+      }
+
       if (isLate && lateCheckoutFee > 0) {
         guestMsg += `\n\nNote: A late check-out fee of $${(lateCheckoutFee / 100).toFixed(2)} has been added to your Final bill for being ${overdueHours} hour(s) over the 11:00 AM checkout deadline on ${booking.checkOut}.`;
       }
+
+      guestMsg += `\n\nWe appreciate you choosing REALCal Bookings and hope to host you again soon!`;
 
       const results = [];
 
       if (useSmtpEmail && guestEmail) {
         try {
+          const emailAttachments = pdfBuffer ? [{
+            filename: `Invoice-${booking.bookingRef || 'Booking'}.pdf`,
+            content: pdfBuffer,
+            contentType: 'application/pdf'
+          }] : undefined;
+
           await sendSmtpEmail({
             to: guestEmail,
             subject: `Thank you for staying at ${propertyName}! (Checked out)`,
-            text: guestMsg
+            text: guestMsg,
+            attachments: emailAttachments
           });
           results.push(`Guest thank-you email sent to ${guestEmail}`);
         } catch (e: any) {

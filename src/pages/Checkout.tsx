@@ -118,6 +118,7 @@ const processBooking = async (
       guestEmail: guestEmail, // Save guest email
       guestName: user.displayName || "Guest", // Save guest name
       guests: 1, // simplified for demo
+      priceDetails: bookingDetails.priceDetails,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     };
