@@ -79,14 +79,18 @@ const processBooking = async (
   
   try {
     let accessCode = '';
+    let bedroomsForNotification = [...selectedBedrooms];
 
-    // Check if property has a manual front door lock code set
+    // Check if property has a manual front door lock code set & lookup bedrooms if empty
     try {
       const propSnap = await getDoc(doc(db, 'properties', bookingDetails.propertyId));
       if (propSnap.exists()) {
         const propData = propSnap.data() as Property;
         if (propData.hasSmartLock && propData.frontDoorCode) {
           accessCode = propData.frontDoorCode.trim();
+        }
+        if (bedroomsForNotification.length === 0 && propData.bedrooms && propData.bedrooms.length > 0) {
+          bedroomsForNotification = propData.bedrooms;
         }
       }
     } catch (err) {
@@ -226,7 +230,7 @@ const processBooking = async (
                   guestPhone: e164Phone,
                   accessCode: accessCode,
                   isTestProperty: isTestProperty,
-                  selectedBedrooms: selectedBedrooms // Pass multiple rooms
+                  selectedBedrooms: bedroomsForNotification // Pass multiple rooms
                }
             })
           });
@@ -246,7 +250,7 @@ const processBooking = async (
        console.error("Manager notification failed, but booking succeeded", notifyErr);
     }
 
-    navigate('/confirmation', { state: { bookingId, accessCode, notificationResults, bookingRef, selectedBedrooms, checkIn: bookingDetails.checkIn, checkOut: bookingDetails.checkOut }});
+    navigate('/confirmation', { state: { bookingId, accessCode, notificationResults, bookingRef, selectedBedrooms: bedroomsForNotification, checkIn: bookingDetails.checkIn, checkOut: bookingDetails.checkOut }});
   } catch (e: any) {
      console.error("Booking error:", e);
      setError(`Booking failed: ${e.message}`);
@@ -577,7 +581,34 @@ export const Checkout: React.FC = () => {
              {/* Bedroom / SmartLock Section */}
              {property?.bedrooms && property.bedrooms.length > 0 && (
                  <div className="mb-6">
-                    <label className="block text-sm font-bold text-slate-700 mb-2">Select Rooms</label>
+                    {selectedBedrooms.length === 0 ? (
+                        <div className="bg-indigo-50/50 border border-indigo-105 p-5 rounded-2xl mb-4">
+                           <div className="flex items-center gap-2 mb-2">
+                               <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 inline-block animate-pulse"></span>
+                               <label className="block text-sm font-bold text-indigo-950">Entire Property Booking Included Access</label>
+                           </div>
+                           <p className="text-xs text-indigo-700/80 mb-4 leading-relaxed font-semibold">
+                              You booked the **Entire Property**. This includes digital smart lock entry for the front door and secure individual codes for **all** rooms below:
+                           </p>
+                           <div className="space-y-2.5">
+                               {property?.bedrooms?.map((b, i) => (
+                                   <div key={i} className="flex justify-between items-center bg-white p-3 rounded-xl border border-indigo-50/60 shadow-sm">
+                                       <div>
+                                           <span className="font-bold text-xs text-slate-800">{b.type}</span>
+                                           <span className="text-[10px] text-slate-400 font-bold ml-1.5 font-mono">Room {b.roomNumber}</span>
+                                       </div>
+                                       <div className="flex items-center gap-2">
+                                           <span className="text-[9px] font-bold uppercase tracking-wide text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">Private Code</span>
+                                           <span className="font-mono text-xs font-black text-slate-700 bg-slate-50 px-2 py-1 rounded border border-slate-200">{b.roomLockNumber}</span>
+                                       </div>
+                                   </div>
+                               ))}
+                           </div>
+                        </div>
+                    ) : (
+                        <label className="block text-sm font-bold text-slate-700 mb-2">Select Rooms</label>
+                    )}
+                    {selectedBedrooms.length > 0 && (
                     <div className="space-y-2">
                         {property.bedrooms.map((b, i) => {
                             const isSelected = selectedBedrooms.some(rb => rb.roomNumber === b.roomNumber);
@@ -609,6 +640,7 @@ export const Checkout: React.FC = () => {
                             );
                         })}
                     </div>
+                    )}
                  </div>
              )}
              

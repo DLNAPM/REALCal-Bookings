@@ -48,6 +48,11 @@ export const Calendar: React.FC<{
     return initialSelectedRoom ? (Array.isArray(initialSelectedRoom) ? initialSelectedRoom : [initialSelectedRoom]) : [];
   });
 
+  const [isEntirePropertyLocked, setIsEntirePropertyLocked] = useState<boolean>(() => {
+    const isRoomMode = (initialSelectedRooms && initialSelectedRooms.length > 0) || !!initialSelectedRoom;
+    return !isRoomMode;
+  });
+
   const [dailySelections, setDailySelections] = useState<{
     [dateStr: string]: {
       rentalMode: 'entire' | 'room';
@@ -123,6 +128,9 @@ export const Calendar: React.FC<{
     setRentalMode(mode);
     if (mode === 'entire') {
       setSelectedRooms([]);
+      setIsEntirePropertyLocked(true);
+    } else {
+      setIsEntirePropertyLocked(false);
     }
     if (checkIn && checkOut) {
       const intervalDays = eachDayOfInterval({ start: startOfDay(checkIn), end: startOfDay(addDays(checkOut, -1)) });
@@ -135,6 +143,14 @@ export const Calendar: React.FC<{
         };
       });
       setDailySelections(updated);
+    }
+  };
+
+  const handleEntirePropertyClick = () => {
+    if (rentalMode === 'entire') {
+      setIsEntirePropertyLocked(prev => !prev);
+    } else {
+      handleGlobalRentalModeChange('entire');
     }
   };
 
@@ -514,8 +530,36 @@ export const Calendar: React.FC<{
       <div className="lg:col-span-8 bg-white rounded-3xl border border-slate-200 shadow-sm p-6 flex flex-col">
         {property?.allowIndividualRoomRental && (
             <div className="flex gap-4 p-1 bg-slate-100 rounded-2xl mb-6">
-               <button onClick={() => handleGlobalRentalModeChange('entire')} className={cn("flex-1 px-4 py-2 rounded-xl font-bold text-sm", rentalMode === 'entire' ? "bg-white shadow-sm text-indigo-600" : "text-slate-500")}>Entire Property</button>
-               <button onClick={() => handleGlobalRentalModeChange('room')} className={cn("flex-1 px-4 py-2 rounded-xl font-bold text-sm", rentalMode === 'room' ? "bg-white shadow-sm text-indigo-600" : "text-slate-500")}>Select Rooms</button>
+               <button 
+                  type="button"
+                  onClick={handleEntirePropertyClick} 
+                  className={cn(
+                     "flex-1 px-4 py-2 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all", 
+                     rentalMode === 'entire' 
+                        ? "bg-white shadow-sm text-indigo-600" 
+                        : "text-slate-500 hover:text-indigo-600"
+                  )}
+               >
+                  {rentalMode === 'entire' && (
+                     isEntirePropertyLocked 
+                        ? <Lock size={14} className="text-indigo-600" /> 
+                        : <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
+                  )}
+                  Entire Property {rentalMode === 'entire' && (isEntirePropertyLocked ? "(Locked)" : "(Released)")}
+               </button>
+               <button 
+                  type="button"
+                  onClick={() => handleGlobalRentalModeChange('room')} 
+                  disabled={rentalMode === 'entire' && isEntirePropertyLocked}
+                  className={cn(
+                     "flex-1 px-4 py-2 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-1.5", 
+                     rentalMode === 'room' 
+                        ? "bg-white shadow-sm text-indigo-600" 
+                        : (rentalMode === 'entire' && isEntirePropertyLocked ? "text-slate-300 cursor-not-allowed opacity-50" : "text-slate-500 hover:text-indigo-600")
+                  )}
+               >
+                  Select Rooms
+               </button>
             </div>
         )}
         {rentalMode === 'room' && (
@@ -612,14 +656,16 @@ export const Calendar: React.FC<{
                                      <button 
                                         type="button"
                                         onClick={() => handleDailyModeChange(dateStr, 'entire')}
-                                        className={cn("flex-1 py-1 rounded-md text-[9px] font-bold text-center transition-all", isEntireDay ? "bg-indigo-600 text-white shadow-sm" : "text-slate-400 hover:text-white")}
+                                        disabled={rentalMode === 'entire' && isEntirePropertyLocked}
+                                        className={cn("flex-1 py-1 rounded-md text-[9px] font-bold text-center transition-all", isEntireDay ? "bg-indigo-600 text-white shadow-sm" : (rentalMode === 'entire' && isEntirePropertyLocked ? "text-slate-600 cursor-not-allowed opacity-50" : "text-slate-400 hover:text-white"))}
                                      >
                                         Entire Property
                                      </button>
                                      <button 
                                         type="button"
                                         onClick={() => handleDailyModeChange(dateStr, 'room')}
-                                        className={cn("flex-1 py-1 rounded-md text-[9px] font-bold text-center transition-all", !isEntireDay ? "bg-indigo-600 text-white shadow-sm" : "text-slate-400 hover:text-white")}
+                                        disabled={rentalMode === 'entire' && isEntirePropertyLocked}
+                                        className={cn("flex-1 py-1 rounded-md text-[9px] font-bold text-center transition-all", !isEntireDay ? "bg-indigo-600 text-white shadow-sm" : (rentalMode === 'entire' && isEntirePropertyLocked ? "text-slate-600 cursor-not-allowed opacity-50" : "text-slate-400 hover:text-white"))}
                                      >
                                         Select Rooms
                                      </button>
