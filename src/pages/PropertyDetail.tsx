@@ -24,7 +24,7 @@ export const PropertyDetail: React.FC = () => {
         getDoc(doc(db, 'properties', id)).then(snap => {
             if (snap.exists()) {
                 const propData = { id: snap.id, ...snap.data() } as Property;
-                const allowedTestEmails = ['reach_dlaniger@hotmail.com', 'candshproperties@gmail.com', 'dlaniger.napm.consulting@gmail.com', 'monnib30228@gmail.com'];
+                const allowedTestEmails = ['reach_dlaniger@hotmail.com', 'dlaniger.napm.consulting@gmail.com', 'monnib30228@gmail.com'];
                 const canViewTestProps = user && user.email && allowedTestEmails.includes(user.email);
                 
                 if (propData.isTestProperty && !canViewTestProps) {

@@ -37,7 +37,7 @@ export const Home: React.FC = () => {
         if (!db) return;
         const unsub = onSnapshot(query(collection(db, 'properties')), (snap) => {
             const allProperties = snap.docs.map(d => ({id: d.id, ...d.data() } as Property));
-            const allowedTestEmails = ['reach_dlaniger@hotmail.com', 'candshproperties@gmail.com', 'dlaniger.napm.consulting@gmail.com', 'monnib30228@gmail.com'];
+            const allowedTestEmails = ['reach_dlaniger@hotmail.com', 'dlaniger.napm.consulting@gmail.com', 'monnib30228@gmail.com'];
             const canViewTestProps = user && user.email && allowedTestEmails.includes(user.email);
             
             setProperties(allProperties.filter(p => !p.isTestProperty || canViewTestProps));

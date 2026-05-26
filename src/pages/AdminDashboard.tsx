@@ -964,9 +964,22 @@ export const AdminDashboard: React.FC = () => {
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="text-lg font-bold text-indigo-900">Admin Quick Stats</h3>
                     <div className="flex gap-2">
-                        <button onClick={handleSeedTestData} className="text-xs bg-indigo-100 text-indigo-700 font-bold px-3 py-1.5 rounded-lg hover:bg-indigo-200 transition-colors flex items-center gap-1">
-                           Seed Test Data
-                        </button>
+                        <div className="relative group">
+                            <button onClick={handleSeedTestData} className="text-xs bg-indigo-100 text-indigo-700 font-bold px-3 py-1.5 rounded-lg hover:bg-indigo-200 transition-colors flex items-center gap-1">
+                               Seed Test Data
+                            </button>
+                            <div className="absolute right-0 top-full mt-2 hidden group-hover:block bg-slate-900 text-white text-xs rounded-xl p-4 w-72 shadow-xl z-50 border border-slate-700 animate-in fade-in slide-in-from-top-1 duration-150 text-left">
+                               <p className="font-bold text-indigo-400 mb-1.5 flex items-center gap-1">
+                                  <span>🌱</span> Seeding Test Data:
+                               </p>
+                               <ul className="space-y-1.5 text-[11px] text-slate-200 leading-normal list-disc pl-3">
+                                  <li>Creates **Oceanview Paradise Villa** test property.</li>
+                                  <li>Creates **Mountain Retreat Cabin** test property.</li>
+                                  <li>Registers **Test Manager** (<span className="text-indigo-300 font-mono font-bold">reach_dlaniger@hotmail.com</span>) to receive automated email/SMS alerts.</li>
+                                  <li>Commits all records atomically to Firestore.</li>
+                               </ul>
+                            </div>
+                        </div>
                         <button onClick={exportCSV} className="text-xs bg-white text-indigo-600 border border-indigo-200 font-bold px-3 py-1.5 rounded-lg hover:bg-indigo-600 hover:text-white transition-colors flex items-center gap-1">
                            <FileDown size={14}/> Export CSV
                         </button>
