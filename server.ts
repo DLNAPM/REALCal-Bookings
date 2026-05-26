@@ -624,7 +624,7 @@ async function startServer() {
       }
 
       // Guest thank you message
-      let guestMsg = `Hi ${guestName}, thank you so much for staying at ${propertyName}! This is to confirm your electronic check-out was completed successfully on ${checkoutDateStr} at ${checkoutTimeStr}.\n\nAn electronic PDF copy of your Final charges broken down line by line has been attached to your confirmation email.`;
+      let guestMsg = `Hi ${guestName}, thank you so much for staying at ${propertyName}! This is to confirm your electronic check-out was completed successfully on ${checkoutDateStr} at ${checkoutTimeStr}.\n\nAn electronic PDF copy of your Final charges broken down line by line has been attached to your confirmation email.\n\nPlease remember to review your Final Bill by clicking on "View PDF Invoice" under your "My Bookings" section of the App.`;
       
       if (invoiceUrl) {
         guestMsg += `\n\nYou can also view & download your electronic invoice PDF here: ${invoiceUrl}`;
