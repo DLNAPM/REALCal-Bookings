@@ -706,6 +706,7 @@ async function startServer() {
       }
       
       if (accessCode) emailText += `\n\nYour master access code is: ${accessCode}`;
+      emailText += `\n\nTo view a short animated video and instructions on how to enter the Property and/or Room via our YAMIRY Smart Lock, please go to your "My Bookings" section.`;
       emailText += `\n\nThank you!`;
 
       if (useSmtpEmail && guestEmail) {
@@ -724,9 +725,9 @@ async function startServer() {
                     if (room.roomLockNumber) {
                         let roomSmsText = "";
                         if (isUpdate) {
-                          roomSmsText = `Hi ${guestDisplayName}, your booking for ${propertyName} - ${room.type} Room ${room.roomNumber} has been updated. ${daysChangedText}\nAccess Code: ${accessCode || '123456'}\nLock #: ${room.roomLockNumber}`;
+                          roomSmsText = `Hi ${guestDisplayName}, your booking for ${propertyName} - ${room.type} Room ${room.roomNumber} has been updated. ${daysChangedText}\nAccess Code: ${accessCode || '123456'}\nLock #: ${room.roomLockNumber}\nGo to "My Bookings" to watch the animated video on how to open the door with the YAMIRY Smart Lock.`;
                         } else {
-                          roomSmsText = `Hi ${guestDisplayName}, access for ${propertyName} - ${room.type} Room ${room.roomNumber} is confirmed.\nAccess Code: ${accessCode || '123456'}\nLock #: ${room.roomLockNumber}`;
+                          roomSmsText = `Hi ${guestDisplayName}, access for ${propertyName} - ${room.type} Room ${room.roomNumber} is confirmed.\nAccess Code: ${accessCode || '123456'}\nLock #: ${room.roomLockNumber}\nGo to "My Bookings" to watch the animated video on how to open the door with the YAMIRY Smart Lock.`;
                         }
                         await twilioClient.messages.create({ body: roomSmsText, from: tFrom, to: guestPhone });
                         results.push(`Guest SMS sent for Room ${room.roomNumber}`);
@@ -741,6 +742,7 @@ async function startServer() {
                   defaultSmsText = `Hi ${guestDisplayName},\nYour booking for ${propertyName} from ${new Date(checkIn).toLocaleDateString()} to ${new Date(checkOut).toLocaleDateString()} is confirmed.`;
                 }
                 if (accessCode) defaultSmsText += `\nAccess code: ${accessCode}`;
+                defaultSmsText += `\nGo to "My Bookings" to review operating instructions and watch the short video on using the YAMIRY Smart Lock.`;
                 await twilioClient.messages.create({ body: defaultSmsText, from: tFrom, to: guestPhone });
                 results.push(`Guest confirmation SMS sent`);
             }

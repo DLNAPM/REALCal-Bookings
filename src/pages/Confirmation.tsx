@@ -1,6 +1,6 @@
 import React from 'react';
 import { useLocation, Link, Navigate } from 'react-router-dom';
-import { CheckCircle, Key, Printer } from 'lucide-react';
+import { CheckCircle, Key, Printer, Video } from 'lucide-react';
 import { LegalFooter } from '../components/LegalFooter';
 
 export const Confirmation: React.FC = () => {
@@ -82,6 +82,27 @@ export const Confirmation: React.FC = () => {
                       <p className="text-xs text-indigo-200 mt-4 opacity-80">Valid during your stay duration</p>
                   </div>
                 )}
+
+                <div className="bg-slate-900 text-white p-6 rounded-2xl mb-8 text-left relative overflow-hidden border border-slate-800 shadow-md">
+                    <div className="absolute -top-3 -right-3 p-4 opacity-10">
+                        <Video size={80} className="text-indigo-400" />
+                    </div>
+                    <div className="flex items-center gap-2 mb-2">
+                        <span className="w-2 h-2 rounded-full bg-emerald-450 animate-ping"></span>
+                        <h3 className="text-xs font-black uppercase text-indigo-400 tracking-wider">
+                            YAMIRY Smart Lock Guide
+                        </h3>
+                    </div>
+                    <p className="text-[11px] text-slate-300 leading-relaxed mb-4">
+                        Please watch the short animated video and instructions on how to enter the Property and/or Room via the YAMIRY Smart Lock.
+                    </p>
+                    <Link 
+                        to="/my-bookings" 
+                        className="inline-flex items-center justify-center w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-xs font-bold text-white transition-all shadow-md shadow-indigo-600/30 text-center"
+                    >
+                        View Interactive Video Guide
+                    </Link>
+                </div>
 
                 <p className="text-sm text-slate-500 mb-6">We've sent a receipt and full instructions to your email.</p>
 
