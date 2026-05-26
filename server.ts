@@ -132,6 +132,21 @@ async function sendSmtpEmail({ to, subject, text, html, attachments }: { to: str
   };
 }
 
+function formatPhoneToE164(phone: string | undefined): string {
+  if (!phone) return "";
+  let cleaned = phone.replace(/[^\d+]/g, '');
+  if (!cleaned.startsWith('+')) {
+    if (cleaned.length === 10) {
+      cleaned = '+1' + cleaned;
+    } else if (cleaned.length === 11 && cleaned.startsWith('1')) {
+      cleaned = '+' + cleaned;
+    } else {
+      cleaned = '+1' + cleaned;
+    }
+  }
+  return cleaned;
+}
+
 async function createInvoicePDF(booking: any, propertyName: string, priceDetails: any, lateFee: number, overdueHours: number): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     try {
@@ -450,7 +465,7 @@ async function startServer() {
       const result = await client.messages.create({
         body: message || "Test from REALCal Bookings",
         from: from,
-        to: to
+        to: formatPhoneToE164(to)
       });
       
       console.log("[API] SMS Success:", result.sid);
@@ -548,7 +563,7 @@ async function startServer() {
       // Prepare guest information
       let guestName = booking.guestName || "Guest";
       let guestEmail = booking.guestEmail;
-      let guestPhone = booking.guestPhone;
+      let guestPhone = formatPhoneToE164(booking.guestPhone);
 
       if (!guestEmail || !guestPhone) {
         try {
@@ -867,6 +882,7 @@ async function startServer() {
     try {
       const { managers, bookingDetails } = req.body;
       const { checkIn, checkOut, originalCheckIn, originalCheckOut, propertyName, totalAmount, guestName, guestEmail, guestPhone, isUpdate, accessCode, selectedBedrooms } = bookingDetails;
+      const formattedGuestPhone = formatPhoneToE164(guestPhone);
       
       let daysChangedText = "";
       if (isUpdate && originalCheckIn && originalCheckOut) {
@@ -972,7 +988,7 @@ async function startServer() {
       }
 
       // SMS Notifications (Multiple if multiple rooms with locks)
-      if (twilioClient && guestPhone && tFrom) {
+      if (twilioClient && formattedGuestPhone && tFrom) {
         try {
             if (selectedBedrooms && selectedBedrooms.length > 0) {
                 // Send an SMS for each room that has a Lock number
@@ -984,7 +1000,7 @@ async function startServer() {
                         } else {
                           roomSmsText = `Hi ${guestDisplayName}, access for ${propertyName} - ${room.type} Room ${room.roomNumber} is confirmed.\nAccess Code: ${accessCode || '123456'}\nLock #: ${room.roomLockNumber}\nGo to "My Bookings" to watch the animated video on how to open the door with the YAMIRY Smart Lock.`;
                         }
-                        await twilioClient.messages.create({ body: roomSmsText, from: tFrom, to: guestPhone });
+                        await twilioClient.messages.create({ body: roomSmsText, from: tFrom, to: formattedGuestPhone });
                         results.push(`Guest SMS sent for Room ${room.roomNumber}`);
                     }
                 }
@@ -998,7 +1014,7 @@ async function startServer() {
                 }
                 if (accessCode) defaultSmsText += `\nAccess code: ${accessCode}`;
                 defaultSmsText += `\nGo to "My Bookings" to review operating instructions and watch the short video on using the YAMIRY Smart Lock.`;
-                await twilioClient.messages.create({ body: defaultSmsText, from: tFrom, to: guestPhone });
+                await twilioClient.messages.create({ body: defaultSmsText, from: tFrom, to: formattedGuestPhone });
                 results.push(`Guest confirmation SMS sent`);
             }
         } catch (e) { results.push(`Guest SMS failed: ${e.message}`); }

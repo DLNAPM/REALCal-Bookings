@@ -49,12 +49,12 @@ const getStripe = async () => {
 };
 
 const formatPhoneE164 = (phone: string) => {
-  // Remove all non-numeric characters except +
-  let cleaned = phone.replace(/[^\d+]/g, '');
+  // Remove all non-numeric characters
+  let cleaned = phone.replace(/\D/g, '');
   
-  // If it doesn't start with +, and it's 10 digits, assume US (+1)
-  if (!cleaned.startsWith('+') && cleaned.length === 10) {
-    cleaned = '+1' + cleaned;
+  // If it starts with 1 and has 11 digits, strip the leading 1 (assume US/Canada 10-digit number)
+  if (cleaned.length === 11 && cleaned.startsWith('1')) {
+    cleaned = cleaned.substring(1);
   }
   
   return cleaned;
@@ -666,14 +666,14 @@ export const Checkout: React.FC = () => {
                  <div>
                     <div className="flex items-center gap-1.5 mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400 italic">
                         <span>*</span>
-                        <span>Mobile number must be in E.164 format (e.g., +14155552671) for automated access codes</span>
+                        <span>Enter mobile number (e.g., 4155552671) for automated access codes</span>
                      </div>
                      <label className="block text-sm font-bold text-slate-700 mb-1">Mobile Number (For Access Code SMS)</label>
                     <input 
                        type="tel" 
                        value={guestPhone}
                        onChange={e => setGuestPhone(e.target.value)}
-                       placeholder="+1 (123) 456-7890"
+                       placeholder="(415) 555-2671"
                        className="w-full border border-slate-200 rounded-xl px-4 py-3 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent transition-shadow"
                     />
                  </div>
