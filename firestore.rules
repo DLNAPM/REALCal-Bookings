@@ -88,7 +88,8 @@ service cloud.firestore {
         (data.keys().hasAll(['bookingRef']) ? data.bookingRef is string && data.bookingRef.size() <= 32 : true) &&
         (data.keys().hasAll(['guestPhone']) ? data.guestPhone is string && data.guestPhone.size() <= 32 : true) &&
         (data.keys().hasAll(['selectedBedroom']) ? (data.selectedBedroom is map || data.selectedBedroom == null) : true) &&
-        (data.keys().hasAll(['selectedBedrooms']) ? data.selectedBedrooms is list : true) &&
+        (data.keys().hasAll(['selectedBedrooms']) ? (data.selectedBedrooms is list || data.selectedBedrooms == null) : true) &&
+        (data.keys().hasAll(['priceDetails']) ? (data.priceDetails is map || data.priceDetails == null) : true) &&
         (data.keys().hasAll(['cancellationFee']) ? data.cancellationFee is number : true) &&
         (data.keys().hasAll(['deletedByGuest']) ? data.deletedByGuest is bool : true) &&
         (data.keys().hasAll(['paymentIntentId']) ? (data.paymentIntentId is string || data.paymentIntentId == null) : true) &&
@@ -174,12 +175,13 @@ service cloud.firestore {
         incoming().userId == existing().userId &&
         incoming().createdAt == existing().createdAt &&
         incoming().updatedAt == request.time &&
+        isValidBooking(incoming()) &&
         (
           isAdmin() ||
           (
             existing().userId == request.auth.uid && 
             existing().status != 'cancelled' &&
-            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt', 'checkIn', 'checkOut', 'guests', 'totalPrice', 'cancellationFee', 'deletedByGuest', 'paymentIntentId', 'selectedBedroom', 'selectedBedrooms', 'accessCode', 'bookingRef', 'guestPhone'])
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt', 'checkIn', 'checkOut', 'guests', 'totalPrice', 'cancellationFee', 'deletedByGuest', 'paymentIntentId', 'selectedBedroom', 'selectedBedrooms', 'accessCode', 'bookingRef', 'guestPhone', 'priceDetails'])
           ) ||
           (
             existing().userId == request.auth.uid &&
