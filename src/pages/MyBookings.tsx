@@ -168,7 +168,7 @@ export const MyBookings: React.FC = () => {
     const { user, loading } = useAuth();
     const navigate = useNavigate();
     const [bookings, setBookings] = useState<(Booking & { propertyName?: string; propertyImage?: string; property?: Property | null })[]>([]);
-    const [filter, setFilter] = useState<'active' | 'cancelled'>('active');
+    const [filter, setFilter] = useState<'active' | 'checked-out' | 'cancelled'>('active');
     const [fetching, setFetching] = useState(true);
     const [editingBooking, setEditingBooking] = useState<(Booking & { propertyName?: string; propertyImage?: string; property?: Property | null }) | null>(null);
     const [modificationPayment, setModificationPayment] = useState<{ clientSecret: string; amount: number; checkIn: string; checkOut: string; priceDetails: any; selectedBedrooms: any[]; rentalMode: 'entire' | 'room' } | null>(null);
@@ -233,11 +233,9 @@ export const MyBookings: React.FC = () => {
                     return { ...b, propertyName, propertyImage, property };
                 }));
 
-                // Sort descending by creation
+                // Sort bookings from least to greatest by Check-in Date (ascending chronological)
                 enhanced.sort((a, b) => {
-                    const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
-                    const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
-                    return timeB - timeA;
+                    return a.checkIn.localeCompare(b.checkIn);
                 });
 
                 setBookings(enhanced);
@@ -636,6 +634,18 @@ export const MyBookings: React.FC = () => {
       ? (firstActiveBooking.selectedBedrooms || (firstActiveBooking.selectedBedroom ? [firstActiveBooking.selectedBedroom] : []))[0]?.roomLockNumber 
       : undefined;
 
+    const getFilteredBookings = () => {
+        return bookings.filter(b => {
+            if (filter === 'active') {
+                return b.status !== 'cancelled' && !b.checkedOut;
+            } else if (filter === 'checked-out') {
+                return b.status !== 'cancelled' && b.checkedOut;
+            } else {
+                return b.status === 'cancelled';
+            }
+        });
+    };
+
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900 pb-12">
             <header className="pt-6 px-6 max-w-5xl mx-auto w-full mb-8">
@@ -654,8 +664,27 @@ export const MyBookings: React.FC = () => {
                 <h1 className="text-3xl font-bold tracking-tight text-slate-900 mb-8">Your Travel Itineraries</h1>
 
                 <div className="flex gap-4 mb-6">
-                    <button onClick={() => setFilter('active')} className={`px-4 py-2 rounded-full font-bold ${filter === 'active' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}>Active</button>
-                    <button onClick={() => setFilter('cancelled')} className={`px-4 py-2 rounded-full font-bold ${filter === 'cancelled' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}>Cancelled</button>
+                    <button 
+                        id="tab-active"
+                        onClick={() => setFilter('active')} 
+                        className={`px-4 py-2 rounded-full font-bold transition-all ${filter === 'active' ? 'bg-slate-900 text-white shadow-sm' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}`}
+                    >
+                        Active
+                    </button>
+                    <button 
+                        id="tab-checked-out"
+                        onClick={() => setFilter('checked-out')} 
+                        className={`px-4 py-2 rounded-full font-bold transition-all ${filter === 'checked-out' ? 'bg-slate-900 text-white shadow-sm' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}`}
+                    >
+                        Checked-Out
+                    </button>
+                    <button 
+                        id="tab-cancelled"
+                        onClick={() => setFilter('cancelled')} 
+                        className={`px-4 py-2 rounded-full font-bold transition-all ${filter === 'cancelled' ? 'bg-slate-900 text-white shadow-sm' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}`}
+                    >
+                        Cancelled
+                    </button>
                 </div>
 
                 {filter === 'active' && hasActiveBookings && (
@@ -665,16 +694,28 @@ export const MyBookings: React.FC = () => {
                     />
                 )}
 
-                {bookings.filter(b => filter === 'cancelled' ? b.status === 'cancelled' : b.status !== 'cancelled').length === 0 ? (
+                {getFilteredBookings().length === 0 ? (
                     <div className="text-center p-12 bg-white rounded-3xl border border-slate-200 shadow-sm">
                         <CalendarIcon className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-                        <h3 className="text-xl font-bold text-slate-700 mb-2">No {filter} bookings</h3>
-                        <p className="text-slate-500 mb-6">You haven't {filter === 'active' ? 'booked any active properties' : 'cancelled any properties'} yet.</p>
-                        {filter === 'active' && <Link to="/" className="inline-block bg-indigo-600 text-white font-bold py-3 px-8 rounded-xl hover:bg-indigo-500 transition-colors">Explore Properties</Link>}
+                        <h3 className="text-xl font-bold text-slate-700 mb-2">No {filter} Bookings</h3>
+                        <p className="text-slate-500 mb-6">
+                            You haven't {
+                                filter === 'active' 
+                                ? 'booked any active properties' 
+                                : filter === 'checked-out' 
+                                ? 'checked out of any properties' 
+                                : 'cancelled any reservations'
+                            } yet.
+                        </p>
+                        {filter === 'active' && (
+                            <Link to="/" className="inline-block bg-indigo-600 text-white font-bold py-3 px-8 rounded-xl hover:bg-indigo-500 transition-colors shadow-sm">
+                                Explore Properties
+                            </Link>
+                        )}
                     </div>
                 ) : (
                     <div className="space-y-6">
-                        {bookings.filter(b => filter === 'cancelled' ? b.status === 'cancelled' : b.status !== 'cancelled').map(booking => {
+                        {getFilteredBookings().map(booking => {
                             const checkInDate = parseISO(booking.checkIn);
                             const checkOutDate = parseISO(booking.checkOut);
                             const hoursUntilCheckIn = differenceInHours(checkInDate, new Date());
@@ -707,7 +748,7 @@ export const MyBookings: React.FC = () => {
                             return (
                                 <div key={booking.id} className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm flex flex-col md:flex-row">
                                     <div className="md:w-64 h-48 md:h-auto bg-slate-100 relative shrink-0">
-                                        {filter === 'active' && booking.propertyImage ? (
+                                        {filter !== 'cancelled' && booking.propertyImage ? (
                                             <img src={booking.propertyImage} alt={booking.propertyName} className="w-full h-full object-cover" />
                                         ) : (
                                             <div className="w-full h-full flex flex-col items-center justify-center text-slate-400">
