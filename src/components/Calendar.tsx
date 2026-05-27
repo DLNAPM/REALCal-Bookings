@@ -333,6 +333,18 @@ export const Calendar: React.FC<{
       return interval.slice(0, -1).some(d => isUnavailable(d));
     };
 
+    const origCheckIn = initialCheckIn ? parseLocalDate(initialCheckIn) : null;
+    const origCheckOut = initialCheckOut ? parseLocalDate(initialCheckOut) : null;
+    const currentCheckIn = checkIn || origCheckIn;
+
+    if (isEditMode && origCheckIn && origCheckOut && currentCheckIn && isBefore(day, currentCheckIn)) {
+       if (!hasConflictBetween(day, currentCheckIn)) {
+          setCheckIn(day);
+          setCheckOut(checkOut || origCheckOut);
+          return;
+       }
+    }
+
     // If no selection OR clicking a boundary OR starting a fresh range
     if (!checkIn || !checkOut || isSameDay(day, checkIn) || isSameDay(day, checkOut)) {
       if (checkIn && checkOut && (isSameDay(day, checkIn) || isSameDay(day, checkOut))) {
