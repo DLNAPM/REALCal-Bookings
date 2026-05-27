@@ -1230,6 +1230,158 @@ async function startServer() {
     res.status(404).send("Not Found");
   });
 
+  // --- CHECK-OUT REMINDERS SCHEDULER SYSTEM ---
+  async function checkAndSendCheckoutReminders() {
+    if (!db) {
+      console.log("[Reminders] Firestore is not initialized yet.");
+      return;
+    }
+    try {
+      const bookingsSnap = await db.collection("bookings").where("status", "==", "confirmed").get();
+      if (bookingsSnap.empty) {
+        return;
+      }
+
+      const now = new Date();
+      const useSmtpEmail = !!process.env.SMTP_HOST;
+
+      let twilioClient = null;
+      const tSid = process.env.TWILIO_ACCOUNT_SID;
+      const tTok = process.env.TWILIO_AUTH_TOKEN;
+      const tFrom = process.env.TWILIO_PHONE_NUMBER;
+      
+      if (tSid && tTok && tSid.startsWith('AC') && !tSid.includes('PROVIDE_REAL')) {
+        try {
+          const twilioPkg = await import('twilio');
+          const twilio = twilioPkg.default || twilioPkg;
+          twilioClient = (twilio as any)(tSid, tTok);
+        } catch (e) {}
+      }
+
+      for (const doc of bookingsSnap.docs) {
+        const b = doc.data();
+        if (!b) continue;
+
+        // Only remind if checkoutRemindersEnabled is true (defaults to true if not set)
+        const remindersEnabled = b.checkoutRemindersEnabled !== false;
+        if (!remindersEnabled) continue;
+
+        // Only check-out active/not checked out bookings
+        if (b.checkedOut === true) continue;
+
+        // Standard checkout deadline is 11:00 AM on the b.checkOut date
+        if (!b.checkOut) continue;
+
+        const checkoutDeadline = new Date(`${b.checkOut}T11:00:00`);
+        const diffMs = checkoutDeadline.getTime() - now.getTime();
+        const diffHours = diffMs / (1000 * 60 * 60);
+
+        // Only care about upcoming checkouts in the future
+        if (diffHours <= 0) continue;
+
+        let guestName = b.guestName || "Guest";
+        let guestEmail = b.guestEmail;
+        let guestPhone = formatPhoneToE164(b.guestPhone);
+
+        if (!guestEmail || !guestPhone) {
+          try {
+            const userRec = await admin.auth().getUser(b.userId);
+            if (!guestEmail) guestEmail = userRec.email;
+            if (!guestName || guestName === "Guest") guestName = userRec.displayName || "Guest";
+          } catch (err) {
+            console.error(`[Reminders] Failed to retrieve guest details for user ${b.userId}:`, err);
+          }
+        }
+
+        // Fetch property details for property name
+        let propertyName = "Property";
+        try {
+          const propSnap = await db.collection("properties").doc(b.propertyId).get();
+          if (propSnap.exists) {
+            propertyName = propSnap.data()?.name || "Property";
+          }
+        } catch (err) {}
+
+        let roomsStr = "";
+        if (b.selectedBedrooms && b.selectedBedrooms.length > 0) {
+          roomsStr = " (Room(s): " + b.selectedBedrooms.map((r: any) => `${r.roomNumber}`).join(', ') + ")";
+        } else if (b.selectedBedroom) {
+          roomsStr = ` (Room: ${b.selectedBedroom.roomNumber})`;
+        }
+
+        // Determine due threshold
+        let updateFields: any = {};
+        let reminderReason = "";
+        let hoursLeftStr = "";
+
+        // 1-hour reminder: diffHours <= 1.05 and hasn't been sent yet
+        if (diffHours <= 1.05 && diffHours > 0 && !b.sent1hReminder) {
+          reminderReason = "1h";
+          hoursLeftStr = "1 hour";
+          updateFields.sent1hReminder = true;
+        }
+        // 2-hour reminder: diffHours <= 2.05 and hasn't been sent yet
+        else if (diffHours <= 2.05 && diffHours > 1.05 && !b.sent2hReminder) {
+          reminderReason = "2h";
+          hoursLeftStr = "2 hours";
+          updateFields.sent2hReminder = true;
+        }
+        // 12-hour reminder: diffHours <= 12.05 and hasn't been sent yet
+        else if (diffHours <= 12.05 && diffHours > 2.05 && !b.sent12hReminder) {
+          reminderReason = "12h";
+          hoursLeftStr = "12 hours";
+          updateFields.sent12hReminder = true;
+        }
+
+        if (reminderReason && (guestEmail || guestPhone)) {
+          const msgText = `Hi ${guestName}, this is a friendly reminder that you have ${hoursLeftStr} left before your scheduled check-out at ${propertyName}${roomsStr}. Standard check-out is by 11:00 AM on ${b.checkOut}.\n\nPlease complete your electronic check-out through the App to avoid late fees. Thank you!`;
+
+          console.log(`[Reminders] Sending ${reminderReason} check-out alert to ${guestName} for booking ${doc.id}`);
+
+          // Send Email
+          if (useSmtpEmail && guestEmail) {
+            try {
+              await sendSmtpEmail({
+                to: guestEmail,
+                subject: `Check-out Reminder: ${hoursLeftStr} remaining at ${propertyName}`,
+                text: msgText
+              });
+              console.log(`[Reminders] Sent email to ${guestEmail}`);
+            } catch (e: any) {
+              console.error(`[Reminders] Failed to send email to ${guestEmail}:`, e.message);
+            }
+          }
+
+          // Send SMS
+          if (twilioClient && guestPhone && tFrom) {
+            try {
+              await twilioClient.messages.create({
+                body: msgText,
+                from: tFrom,
+                to: guestPhone
+              });
+              console.log(`[Reminders] Sent SMS to ${guestPhone}`);
+            } catch (e: any) {
+              console.error(`[Reminders] Failed to send SMS to ${guestPhone}:`, e.message);
+            }
+          }
+
+          // Update database with flags
+          updateFields.updatedAt = admin.firestore.FieldValue.serverTimestamp();
+          await db.collection("bookings").doc(doc.id).update(updateFields);
+          console.log(`[Reminders] Updated booking ${doc.id} flags:`, updateFields);
+        }
+      }
+    } catch (err: any) {
+      console.error("[Reminders] Error in scheduler loop:", err);
+    }
+  }
+
+  // Start checkout reminders background scheduler
+  console.log("[Server] Starting check-out reminders scheduler (running every 60s)...");
+  setInterval(checkAndSendCheckoutReminders, 60000);
+  checkAndSendCheckoutReminders().catch(console.error);
+
   app.listen(Number(PORT), "0.0.0.0", () => {
     console.log(`Server running on http://0.0.0.0:${PORT}`);
     // Log routes for debugging

@@ -74,6 +74,10 @@ export interface Booking {
   checkedOutAt?: string;
   lateCheckoutFee?: number;
   overdueHours?: number;
+  checkoutRemindersEnabled?: boolean;
+  sent12hReminder?: boolean;
+  sent2hReminder?: boolean;
+  sent1hReminder?: boolean;
 }
 
 export interface GlobalSettings {

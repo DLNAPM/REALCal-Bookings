@@ -979,7 +979,58 @@ export const MyBookings: React.FC = () => {
                                                 {/* If reservation is active (not cancelled and not checked out) */}
                                                 {booking.status !== 'cancelled' && !booking.checkedOut && (
                                                     <div className="flex flex-col gap-3">
-                                                        {canEditDates && (
+                                                         {/* Check-Out Reminders Toggle Settings */}
+                                                         <div id={`reminder-prefs-${booking.id}`} className="p-4 bg-slate-50 border border-slate-200/50 rounded-2xl flex flex-col gap-2.5">
+                                                             <div className="flex items-center justify-between">
+                                                                 <span className="text-xs font-bold uppercase text-slate-600 tracking-wider flex items-center gap-2">
+                                                                     🔔 Check-Out Alerts & Reminders
+                                                                 </span>
+                                                                 <button
+                                                                     id={`toggle-reminder-${booking.id}`}
+                                                                     onClick={async () => {
+                                                                         const currentSetting = booking.checkoutRemindersEnabled !== false;
+                                                                         const newSetting = !currentSetting;
+                                                                         try {
+                                                                             await updateDoc(doc(db, 'bookings', booking.id), {
+                                                                                 checkoutRemindersEnabled: newSetting,
+                                                                                 updatedAt: serverTimestamp()
+                                                                             });
+                                                                             // Update local state
+                                                                             setBookings(prev => prev.map(b => b.id === booking.id ? { ...b, checkoutRemindersEnabled: newSetting } : b));
+                                                                         } catch (e: any) {
+                                                                             alert('Error saving notification preferences: ' + e.message);
+                                                                         }
+                                                                     }}
+                                                                     className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                                                         (booking.checkoutRemindersEnabled !== false) ? "bg-indigo-600" : "bg-slate-300"
+                                                                     }`}
+                                                                 >
+                                                                     <span
+                                                                         className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                                                             (booking.checkoutRemindersEnabled !== false) ? "translate-x-5" : "translate-x-0"
+                                                                         }`}
+                                                                     />
+                                                                 </button>
+                                                             </div>
+                                                             <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
+                                                                 Receive automatic email and SMS reminders 12 hours, 2 hours, and 1 hour before scheduled 11:00 AM check-out. Toggling this will instantly enable or disable these smart alerts.
+                                                             </p>
+                                                             {(booking.checkoutRemindersEnabled !== false) && (
+                                                                 <div className="flex flex-wrap gap-2 pt-1 border-t border-slate-200/50">
+                                                                     <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded border uppercase tracking-wider ${booking.sent12hReminder ? "bg-slate-200 text-slate-500 border-slate-300" : "bg-indigo-50 text-indigo-700 border-indigo-150/40 animate-pulse"}`}>
+                                                                         {booking.sent12hReminder ? "Sent 12h" : "Pending 12h"}
+                                                                     </span>
+                                                                     <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded border uppercase tracking-wider ${booking.sent2hReminder ? "bg-slate-200 text-slate-500 border-slate-300" : "bg-indigo-50 text-indigo-700 border-indigo-150/40 animate-pulse"}`}>
+                                                                         {booking.sent2hReminder ? "Sent 2h" : "Pending 2h"}
+                                                                     </span>
+                                                                     <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded border uppercase tracking-wider ${booking.sent1hReminder ? "bg-slate-200 text-slate-500 border-slate-300" : "bg-indigo-50 text-indigo-700 border-indigo-150/40 animate-pulse"}`}>
+                                                                         {booking.sent1hReminder ? "Sent 1h" : "Pending 1h"}
+                                                                     </span>
+                                                                 </div>
+                                                             )}
+                                                         </div>
+
+                                                         {canEditDates && (
                                                             <button 
                                                                 onClick={() => setEditingBooking(booking)}
                                                                 className="w-full bg-white border-2 border-indigo-100 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-200 font-bold py-3.5 rounded-xl transition-colors flex justify-center items-center gap-2 shadow-sm"

@@ -99,6 +99,10 @@ service cloud.firestore {
         (data.keys().hasAll(['checkedOutAt']) ? data.checkedOutAt is string && data.checkedOutAt.size() <= 64 : true) &&
         (data.keys().hasAll(['lateCheckoutFee']) ? data.lateCheckoutFee is number : true) &&
         (data.keys().hasAll(['overdueHours']) ? data.overdueHours is number : true) &&
+        (data.keys().hasAll(['checkoutRemindersEnabled']) ? data.checkoutRemindersEnabled is bool : true) &&
+        (data.keys().hasAll(['sent12hReminder']) ? data.sent12hReminder is bool : true) &&
+        (data.keys().hasAll(['sent2hReminder']) ? data.sent2hReminder is bool : true) &&
+        (data.keys().hasAll(['sent1hReminder']) ? data.sent1hReminder is bool : true) &&
         data.createdAt is timestamp &&
         data.updatedAt is timestamp;
     }
@@ -187,7 +191,7 @@ service cloud.firestore {
           (
             existing().userId == request.auth.uid && 
             existing().status != 'cancelled' &&
-            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt', 'checkIn', 'checkOut', 'guests', 'totalPrice', 'cancellationFee', 'deletedByGuest', 'paymentIntentId', 'selectedBedroom', 'selectedBedrooms', 'accessCode', 'bookingRef', 'guestPhone', 'priceDetails'])
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt', 'checkIn', 'checkOut', 'guests', 'totalPrice', 'cancellationFee', 'deletedByGuest', 'paymentIntentId', 'selectedBedroom', 'selectedBedrooms', 'accessCode', 'bookingRef', 'guestPhone', 'priceDetails', 'checkoutRemindersEnabled', 'sent12hReminder', 'sent2hReminder', 'sent1hReminder'])
           ) ||
           (
             existing().userId == request.auth.uid &&
