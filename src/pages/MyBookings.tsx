@@ -177,6 +177,7 @@ export const MyBookings: React.FC = () => {
     const [globalSettings, setGlobalSettings] = useState<any>(null);
     const [checkoutTargetBooking, setCheckoutTargetBooking] = useState<(Booking & { propertyName?: string; propertyImage?: string; property?: Property | null }) | null>(null);
     const [checkoutProcessing, setCheckoutProcessing] = useState(false);
+    const [checkinProcessing, setCheckinProcessing] = useState(false);
 
     useEffect(() => {
         getStripe().then(setStripePromise);
@@ -277,6 +278,34 @@ export const MyBookings: React.FC = () => {
             alert(err.message);
         } finally {
             setCheckoutProcessing(false);
+        }
+    };
+
+    const executeCheckin = async (bookingId: string) => {
+        setCheckinProcessing(true);
+        try {
+            const res = await fetch('/api/checkin-booking', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ bookingId })
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.error || "Failed to complete electronic check-in.");
+            }
+            
+            // Success! Update local listings state
+            setBookings(prev => prev.map(b => b.id === bookingId ? { 
+                ...b, 
+                checkedIn: true,
+                checkedInAt: data.checkedInAt
+            } : b));
+
+            alert("Check-in completed successfully! Welcome to your property. A confirmation email and SMS with code details has been sent.");
+        } catch (err: any) {
+            alert(err.message);
+        } finally {
+            setCheckinProcessing(false);
         }
     };
 
@@ -898,17 +927,52 @@ export const MyBookings: React.FC = () => {
                                                 </Link>
                                             )}
 
-                                            {(booking.status === 'confirmed' || booking.status === 'pending') && !booking.checkedOut && (() => {
-                                                 const dateParts = booking.checkIn.split('T')[0].split('-').map(Number);
-                                                 const checkInTimeObj = new Date(dateParts[0], dateParts[1] - 1, dateParts[2], 0, 0, 0); // Allow checkout on or after the check-in date starts (12:00 AM)
-                                                 return new Date() >= checkInTimeObj;
-                                             })() && (
-                                                <button 
-                                                    onClick={() => setCheckoutTargetBooking(booking)}
-                                                    className="w-full bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold py-3.5 px-4 rounded-xl transition-all flex justify-center items-center gap-2 border border-indigo-200 shadow-sm hover:scale-[1.01] active:scale-[0.99]"
-                                                >
-                                                    🔔 Complete Electronic Check-out
-                                                </button>
+                                            {(booking.status === 'confirmed' || booking.status === 'pending') && !booking.checkedOut && (
+                                                <div className="flex flex-col gap-3 w-full">
+                                                    {/* Check-In Button */}
+                                                    {!booking.checkedIn && (() => {
+                                                        const dateParts = booking.checkIn.split('T')[0].split('-').map(Number);
+                                                        const checkInTimeObj = new Date(dateParts[0], dateParts[1] - 1, dateParts[2], 16, 0, 0); // Global Check-In: 4:00 PM
+                                                        const isPastCheckInTime = new Date() >= checkInTimeObj;
+                                                        return (
+                                                            <div className="w-full" id={`checkin-container-${booking.id}`}>
+                                                                <button 
+                                                                    id={`btn-checkin-${booking.id}`}
+                                                                    onClick={() => executeCheckin(booking.id)}
+                                                                    disabled={!isPastCheckInTime || checkinProcessing}
+                                                                    className={`w-full font-extrabold py-3.5 px-4 rounded-xl transition-all flex justify-center items-center gap-2 border shadow-sm ${
+                                                                        isPastCheckInTime 
+                                                                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-700 hover:scale-[1.01] active:scale-[0.99] cursor-pointer' 
+                                                                        : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                                                                    }`}
+                                                                >
+                                                                    🔑 {checkinProcessing ? 'Processing Check-in...' : 'Complete Electronic Check-In'}
+                                                                </button>
+                                                                {!isPastCheckInTime && (
+                                                                    <p className="text-[11px] text-slate-500 mt-1.5 text-center font-medium" id={`checkin-alert-${booking.id}`}>
+                                                                        Electronic check-in becomes available at the global 4:00 PM check-in time on {booking.checkIn.split('T')[0]}.
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })()}
+
+                                                    {/* Check-Out Button (Only available if already checked-in) */}
+                                                    {booking.checkedIn && (() => {
+                                                        const dateParts = booking.checkIn.split('T')[0].split('-').map(Number);
+                                                        const checkInTimeObj = new Date(dateParts[0], dateParts[1] - 1, dateParts[2], 0, 0, 0);
+                                                        const isPastCheckInStart = new Date() >= checkInTimeObj;
+                                                        return isPastCheckInStart && (
+                                                            <button 
+                                                                id={`btn-checkout-${booking.id}`}
+                                                                onClick={() => setCheckoutTargetBooking(booking)}
+                                                                className="w-full bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold py-3.5 px-4 rounded-xl transition-all flex justify-center items-center gap-2 border border-indigo-200 shadow-sm hover:scale-[1.01] active:scale-[0.99]"
+                                                            >
+                                                                🔔 Complete Electronic Check-out
+                                                            </button>
+                                                        );
+                                                    })()}
+                                                </div>
                                             )}
 
                                             <div className="space-y-3 w-full">
@@ -946,7 +1010,18 @@ export const MyBookings: React.FC = () => {
                                                 )}
 
                                                 {/* Checked out status display */}
-                                                {booking.checkedOut && (
+                                                {booking.checkedIn && !booking.checkedOut && (
+                                             <div className="mb-6 p-4 bg-emerald-50 border border-emerald-100 rounded-2xl shadow-inner text-slate-700 space-y-2">
+                                                 <h4 className="text-[11px] font-extrabold text-emerald-800 uppercase tracking-widest flex items-center gap-1.5">
+                                                     <CheckCircle size={12} className="text-emerald-500" /> Electronic Check-In Confirmed
+                                                 </h4>
+                                                 <p className="text-xs text-slate-600">
+                                                     Checked in successfully on <strong>{booking.checkedInAt ? new Date(booking.checkedInAt).toLocaleDateString() : 'N/A'}</strong> at <strong>{booking.checkedInAt ? new Date(booking.checkedInAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}</strong>. Your SmartLock entry PIN codes are active, and our property management team has been notified of your safe arrival.
+                                                 </p>
+                                             </div>
+                                         )}
+
+                                         {booking.checkedOut && (
                                                     <div className="text-sm font-bold text-indigo-700 bg-indigo-50 px-4 py-3 rounded-xl border border-indigo-100 text-center">
                                                         Checked Out Successfully
                                                     </div>

@@ -93,6 +93,12 @@ service cloud.firestore {
         (data.keys().hasAll(['cancellationFee']) ? data.cancellationFee is number : true) &&
         (data.keys().hasAll(['deletedByGuest']) ? data.deletedByGuest is bool : true) &&
         (data.keys().hasAll(['paymentIntentId']) ? (data.paymentIntentId is string || data.paymentIntentId == null) : true) &&
+        (data.keys().hasAll(['checkedIn']) ? data.checkedIn is bool : true) &&
+        (data.keys().hasAll(['checkedInAt']) ? data.checkedInAt is string && data.checkedInAt.size() <= 64 : true) &&
+        (data.keys().hasAll(['checkedOut']) ? data.checkedOut is bool : true) &&
+        (data.keys().hasAll(['checkedOutAt']) ? data.checkedOutAt is string && data.checkedOutAt.size() <= 64 : true) &&
+        (data.keys().hasAll(['lateCheckoutFee']) ? data.lateCheckoutFee is number : true) &&
+        (data.keys().hasAll(['overdueHours']) ? data.overdueHours is number : true) &&
         data.createdAt is timestamp &&
         data.updatedAt is timestamp;
     }

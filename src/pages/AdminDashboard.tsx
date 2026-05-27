@@ -1405,13 +1405,32 @@ export const AdminDashboard: React.FC = () => {
                                <td className="px-4 py-4 text-slate-600 text-xs font-mono">
                                   {formatBookedDateTime(b.createdAt)}
                                </td>
-                               <td className="px-4 py-4">
-                                  <span className={cn(
-                                    "px-2 py-1 rounded-md text-[10px] font-bold uppercase",
-                                    b.status === 'confirmed' ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700 shadow-sm"
-                                  )}>
-                                     {b.status}
-                                  </span>
+                               <td className="px-4 py-4 space-y-1.5">
+                                  <div>
+                                     <span className={cn(
+                                       "px-2 py-1 rounded-md text-[10px] font-bold uppercase inline-block",
+                                       b.status === 'confirmed' ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700 shadow-sm"
+                                     )}>
+                                        {b.status}
+                                     </span>
+                                  </div>
+                                  {b.status !== 'cancelled' && (
+                                     <div className="pt-1">
+                                        {b.checkedOut ? (
+                                           <span className="px-2 py-0.5 rounded-md text-[9px] font-extrabold bg-indigo-100 text-indigo-700 uppercase tracking-wider inline-block">
+                                              Checked Out
+                                           </span>
+                                        ) : b.checkedIn ? (
+                                           <span className="px-2 py-0.5 rounded-md text-[9px] font-extrabold bg-emerald-50 text-emerald-600 border border-emerald-200/50 uppercase tracking-wider inline-block animate-pulse">
+                                              Checked In
+                                           </span>
+                                        ) : (
+                                           <span className="px-2 py-0.5 rounded-md text-[9px] font-semibold bg-slate-100 text-slate-500 uppercase tracking-wider inline-block">
+                                              Scheduled
+                                           </span>
+                                        )}
+                                     </div>
+                                  )}
                                </td>
                                <td className="px-4 py-4 text-right space-x-2">
                                   {b.status === 'confirmed' && (

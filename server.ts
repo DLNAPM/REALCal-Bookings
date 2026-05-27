@@ -500,6 +500,172 @@ async function startServer() {
     }
   });
 
+  app.post("/api/checkin-booking", async (req, res) => {
+    console.log("[API] Checkin Booking hit");
+    try {
+      const { bookingId } = req.body;
+      if (!bookingId) {
+        return res.status(400).json({ error: "Booking ID is required." });
+      }
+
+      if (!db) {
+        return res.status(500).json({ error: "Firebase Firestore is not initialized on the server." });
+      }
+
+      const bookingDoc = await db.collection("bookings").doc(bookingId).get();
+      if (!bookingDoc.exists) {
+        return res.status(404).json({ error: "Booking not found." });
+      }
+
+      const booking = bookingDoc.data();
+      if (!booking) {
+        return res.status(404).json({ error: "No data in booking." });
+      }
+
+      if (booking.checkedIn) {
+        return res.status(400).json({ error: "This reservation is already checked in." });
+      }
+
+      if (booking.status === 'cancelled') {
+        return res.status(400).json({ error: "This reservation is cancelled, so you cannot check in." });
+      }
+
+      const propertySnap = await db.collection("properties").doc(booking.propertyId).get();
+      const propertyName = propertySnap.exists ? propertySnap.data().name : "Property";
+
+      const now = new Date();
+
+      // Update the booking document in Firestore
+      await db.collection("bookings").doc(bookingId).update({
+        checkedIn: true,
+        checkedInAt: now.toISOString(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      console.log(`[API] Booking ${bookingId} successfully checked in.`);
+
+      // Prepare guest information
+      let guestName = booking.guestName || "Guest";
+      let guestEmail = booking.guestEmail;
+      let guestPhone = formatPhoneToE164(booking.guestPhone);
+
+      if (!guestEmail || !guestPhone) {
+        try {
+          const userRec = await admin.auth().getUser(booking.userId);
+          if (!guestEmail) guestEmail = userRec.email;
+          if (!guestName || guestName === "Guest") guestName = userRec.displayName || "Guest";
+        } catch (err) {
+          console.error("[API] Firebase Auth user retrieval failed during checkin:", err);
+        }
+      }
+
+      // Setup Notification Services
+      const useSmtpEmail = !!process.env.SMTP_HOST;
+
+      let twilioClient = null;
+      const tSid = process.env.TWILIO_ACCOUNT_SID;
+      const tTok = process.env.TWILIO_AUTH_TOKEN;
+      const tFrom = process.env.TWILIO_PHONE_NUMBER;
+      
+      if (tSid && tTok && tSid.startsWith('AC') && !tSid.includes('PROVIDE_REAL')) {
+        try {
+          const twilioPkg = await import('twilio');
+          const twilio = twilioPkg.default || twilioPkg;
+          twilioClient = (twilio as any)(tSid, tTok);
+        } catch (e) {}
+      }
+
+      const checkinTimeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const checkinDateStr = now.toLocaleDateString();
+
+      let roomsInfo = "";
+      if (booking.selectedBedrooms && booking.selectedBedrooms.length > 0) {
+        roomsInfo = " (Room(s): " + booking.selectedBedrooms.map((r: any) => `${r.roomNumber}`).join(', ') + ")";
+      } else if (booking.selectedBedroom) {
+        roomsInfo = ` (Room: ${booking.selectedBedroom.roomNumber})`;
+      }
+
+      // Guest check-in confirmation message
+      const guestMsg = `Hi ${guestName}, this is to confirm your electronic check-in was completed successfully for your stay at ${propertyName}${roomsInfo} on ${checkinDateStr} at ${checkinTimeStr}.\n\nYour digital keys and PIN are active. We hope you enjoy your stay!`;
+
+      const results = [];
+
+      if (useSmtpEmail && guestEmail) {
+        try {
+          await sendSmtpEmail({
+            to: guestEmail,
+            subject: `Welcome to ${propertyName}! (Checked in)`,
+            text: guestMsg
+          });
+          results.push(`Guest check-in email sent to ${guestEmail}`);
+        } catch (e: any) {
+          results.push(`Guest check-in email failed: ${e.message}`);
+        }
+      }
+
+      if (twilioClient && guestPhone && tFrom) {
+        try {
+          await twilioClient.messages.create({
+            body: guestMsg,
+            from: tFrom,
+            to: guestPhone
+          });
+          results.push(`Guest check-in SMS sent to ${guestPhone}`);
+        } catch (e: any) {
+          results.push(`Guest check-in SMS failed: ${e.message}`);
+        }
+      }
+
+      // Alert Property Managers
+      const managerMsg = `ALERT: Guest ${guestName} has successfully checked into ${propertyName}${roomsInfo} on ${checkinDateStr} at ${checkinTimeStr}. The property/room is now occupied.`;
+
+      try {
+        const managersSnap = await db.collection("property_managers").where("enabled", "==", true).get();
+        if (!managersSnap.empty) {
+          for (const mDoc of managersSnap.docs) {
+            const m = mDoc.data();
+            if (useSmtpEmail && m.email) {
+              try {
+                await sendSmtpEmail({
+                  to: m.email,
+                  subject: `Occupancy Alert: ${propertyName} Checked-in`,
+                  text: managerMsg
+                });
+                results.push(`Manager email alert sent to ${m.email}`);
+              } catch (e: any) {
+                results.push(`Manager email alert failed for ${m.email}: ${e.message}`);
+              }
+            }
+            if (twilioClient && m.phone && tFrom) {
+              try {
+                await twilioClient.messages.create({
+                  body: managerMsg,
+                  from: tFrom,
+                  to: m.phone
+                });
+                results.push(`Manager SMS alert sent to ${m.phone}`);
+              } catch (e: any) {
+                results.push(`Manager SMS alert failed for ${m.phone}: ${e.message}`);
+              }
+            }
+          }
+        }
+      } catch (err: any) {
+        console.error("[API] Manager checkin notifications failed:", err);
+        results.push(`Manager notification query error: ${err.message}`);
+      }
+
+      res.json({
+        success: true,
+        checkedInAt: now.toISOString(),
+        results
+      });
+    } catch (err: any) {
+      console.error("[API] Checkin Error:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.post("/api/checkout-booking", async (req, res) => {
     console.log("[API] Checkout Booking hit");
     try {

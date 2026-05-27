@@ -68,6 +68,12 @@ export interface Booking {
   createdAt: any;
   updatedAt: any;
   priceDetails?: any;
+  checkedIn?: boolean;
+  checkedInAt?: string;
+  checkedOut?: boolean;
+  checkedOutAt?: string;
+  lateCheckoutFee?: number;
+  overdueHours?: number;
 }
 
 export interface GlobalSettings {
