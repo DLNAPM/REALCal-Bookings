@@ -139,7 +139,9 @@ const ModificationPaymentForm: React.FC<{
       </h3>
       <p className="text-sm text-slate-500 mb-6 italic">To confirm your new dates, please pay the difference for the extended stay or higher rate.</p>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <PaymentElement />
+        <div className="max-h-[350px] overflow-y-auto pr-2 border border-slate-100 rounded-xl p-3 bg-slate-50/50">
+          <PaymentElement />
+        </div>
         {error && <div className="text-red-500 text-xs font-medium">{error}</div>}
         <div className="flex gap-3 pt-4 font-black uppercase text-[10px] tracking-widest">
            <button 

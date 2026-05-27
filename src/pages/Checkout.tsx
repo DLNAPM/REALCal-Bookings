@@ -314,7 +314,9 @@ const CheckoutForm: React.FC<{ clientSecret: string, bookingDetails: any, guestE
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      <PaymentElement />
+      <div className="max-h-[350px] overflow-y-auto pr-2 border border-slate-100 rounded-xl p-3 bg-slate-50/50">
+        <PaymentElement />
+      </div>
       {error && <div className="text-red-500 text-sm">{error}</div>}
       <button 
         type="submit" 
