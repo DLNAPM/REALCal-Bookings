@@ -67,6 +67,7 @@ export interface Booking {
   guestName?: string;
   createdAt: any;
   updatedAt: any;
+  priceDetails?: any;
 }
 
 export interface GlobalSettings {

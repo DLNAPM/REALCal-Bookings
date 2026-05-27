@@ -491,17 +491,23 @@ export const MyBookings: React.FC = () => {
             }
 
             // 2. Update Booking
+            const updatedPriceDetails = priceDetails ? { ...priceDetails } : (editingBooking.priceDetails ? { ...editingBooking.priceDetails } : {});
+            // Check if dates have actually changed on the edit
+            const datesChanged = editingBooking.checkIn !== cleanCheckIn || editingBooking.checkOut !== cleanCheckOut;
+            if (datesChanged) {
+                updatedPriceDetails.datesEdited = true;
+                updatedPriceDetails.datesEditedAt = new Date().toISOString();
+            }
+
             const updatePayload: any = {
                 checkIn: cleanCheckIn,
                 checkOut: cleanCheckOut,
                 totalPrice: newTotal,
                 selectedBedrooms: selectedBedrooms.length > 0 ? selectedBedrooms : null,
                 selectedBedroom: null, // Wipe legacy field if exists
-                updatedAt: serverTimestamp()
+                updatedAt: serverTimestamp(),
+                priceDetails: updatedPriceDetails
             };
-            if (priceDetails) {
-                updatePayload.priceDetails = priceDetails;
-            }
             await updateDoc(doc(db, 'bookings', editingBooking.id), updatePayload);
 
             // 3. Create new maintenance blackouts
@@ -580,7 +586,7 @@ export const MyBookings: React.FC = () => {
                 checkOut: cleanCheckOut,
                 totalPrice: newTotal,
                 selectedBedrooms: selectedBedrooms.length > 0 ? selectedBedrooms : null,
-                priceDetails: priceDetails || b.priceDetails
+                priceDetails: updatedPriceDetails
             } : b));
             
             alert("Booking successfully updated! Notifications have been sent.");
@@ -701,6 +707,12 @@ export const MyBookings: React.FC = () => {
                                                      <div className="text-xs text-slate-500 mt-2 flex items-center gap-1.5 flex-wrap">
                                                          <span className="font-semibold text-slate-500">Booked on:</span>
                                                          <span className="font-mono bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded border border-indigo-100/50 font-bold whitespace-nowrap">{formatBookedDateTime(booking.createdAt)}</span>
+                                                     </div>
+                                                 )}
+                                                 {booking.priceDetails?.datesEditedAt && (
+                                                     <div className="text-xs text-slate-500 mt-1 flex items-center gap-1.5 flex-wrap">
+                                                         <span className="font-semibold text-slate-500">Last Edited:</span>
+                                                         <span className="font-mono bg-amber-50 text-amber-800 px-2 py-0.5 rounded border border-amber-200/50 font-bold whitespace-nowrap">{formatBookedDateTime(booking.priceDetails.datesEditedAt)}</span>
                                                      </div>
                                                  )}
                                             </div>
