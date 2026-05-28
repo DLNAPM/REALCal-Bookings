@@ -78,6 +78,8 @@ export interface Booking {
   sent12hReminder?: boolean;
   sent2hReminder?: boolean;
   sent1hReminder?: boolean;
+  invoiceDetails?: any;
+  invoiceEmailed?: boolean;
 }
 
 export interface GlobalSettings {

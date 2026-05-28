@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useLocation, Link, Navigate } from 'react-router-dom';
 import { CheckCircle, Key, Printer, Video } from 'lucide-react';
 import { LegalFooter } from '../components/LegalFooter';
+import { db } from '../lib/firebase';
+import { doc, updateDoc } from 'firebase/firestore';
 
 export const Confirmation: React.FC = () => {
     const location = useLocation();
@@ -12,6 +14,23 @@ export const Confirmation: React.FC = () => {
     const state = location.state || {};
     const bookingId = state.bookingId || queryBookingId;
     const isPaidInvoice = queryStatus === 'paid' || state.status === 'paid';
+
+    useEffect(() => {
+        if (isPaidInvoice && queryBookingId && db) {
+            const updateInvoicePaidStatus = async () => {
+                try {
+                    await updateDoc(doc(db, 'bookings', queryBookingId), {
+                        'invoiceDetails.paid': true,
+                        'invoiceDetails.paidAt': new Date().toISOString()
+                    });
+                    console.log("[Confirmation] Checked out invoice marked as paid successfully.");
+                } catch (err) {
+                    console.error("[Confirmation] Failed to mark invoice as paid in db:", err);
+                }
+            };
+            updateInvoicePaidStatus();
+        }
+    }, [isPaidInvoice, queryBookingId]);
 
     const accessCode = state.accessCode;
     const notificationResults = state.notificationResults;

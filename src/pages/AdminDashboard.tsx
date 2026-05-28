@@ -6,7 +6,7 @@ import { Navigate, useNavigate, Link } from 'react-router-dom';
 import { format, eachDayOfInterval, parseISO, addDays } from 'date-fns';
 import { cn } from '../lib/utils';
 import { BlackoutDate, PricingRule, Booking, Property, PropertyManager } from '../types';
-import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight, RefreshCw, MessageSquare } from 'lucide-react';
+import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight, RefreshCw, MessageSquare, CheckCircle } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 const formatPhoneE164 = (phone: string) => {
@@ -84,6 +84,7 @@ export const AdminDashboard: React.FC = () => {
   const [invoiceDueDate, setInvoiceDueDate] = useState<string>('');
   const [invoiceCustomNotes, setInvoiceCustomNotes] = useState<string>('');
   const [sendingInvoice, setSendingInvoice] = useState<boolean>(false);
+  const [sendingInvoiceId, setSendingInvoiceId] = useState<string | null>(null);
 
   // User profile editing states
   const [editingUser, setEditingUser] = useState<any | null>(null);
@@ -1174,6 +1175,212 @@ C.&S.H. Group Properties, LLC
     }
   };
 
+  const handleResendInvoice = async (b: Booking) => {
+    if (!b.invoiceDetails) return alert("Booking does not have invoice details associated.");
+    
+    const confirmResend = window.confirm(`Are you sure you want to resend Invoice #${b.invoiceDetails.invoiceNumber || 'Manual'} to ${b.invoiceDetails.sponsorEmail}?`);
+    if (!confirmResend) return;
+
+    setSendingInvoiceId(b.id);
+    try {
+      const prop = properties.find(p => p.id === b.propertyId);
+      const propertyName = prop ? prop.name : 'Unknown Property';
+
+      let totalNights = 1;
+      try {
+        const d1 = new Date(b.checkIn);
+        const d2 = new Date(b.checkOut);
+        const diff = d2.getTime() - d1.getTime();
+        totalNights = Math.max(1, Math.round(diff / (1000 * 60 * 60 * 24)));
+      } catch(e) {}
+
+      const manualBookingRooms = b.selectedBedrooms ? b.selectedBedrooms.map(r => r.roomNumber) : (b.selectedBedroom ? [b.selectedBedroom.roomNumber] : []);
+      const totalAmountStr = (b.totalPrice / 100).toFixed(2);
+      const stripePaymentUrl = b.invoiceDetails.stripePaymentUrl || '';
+
+      const invoiceNumber = b.invoiceDetails.invoiceNumber || 'Manual';
+      const invoiceDueDate = b.invoiceDetails.dueDate || '';
+      const invoiceSponsorName = b.invoiceDetails.sponsorName || '';
+      const invoiceSponsorEmail = b.invoiceDetails.sponsorEmail || '';
+      const invoiceSponsorPhone = b.invoiceDetails.sponsorPhone || '';
+      const invoiceSponsorAddress = b.invoiceDetails.sponsorAddress || '';
+      const invoiceCustomNotes = b.invoiceDetails.customNotes || '';
+      const guestName = b.guestName || 'Guest';
+      const checkIn = b.checkIn;
+      const checkOut = b.checkOut;
+
+      const invoiceHtml = `
+<div style="font-family: Arial, sans-serif; max-width: 650px; margin: 0 auto; border: 1px solid #e2e8f0; padding: 24px; border-radius: 12px; color: #1e293b; background-color: #ffffff;">
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
+        <tr>
+            <td style="vertical-align: middle;">
+                <div style="font-size: 26px; font-weight: bold; color: #4f46e5; letter-spacing: -0.05em; display: inline-block;">
+                    REALCal <span style="font-weight: 300; color: #0f172a;">Bookings</span>
+                </div>
+                <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.15em; color: #64748b; font-weight: bold; margin-top: 4px;">
+                    Premium Luxury Lodging & Hospitality
+                </div>
+            </td>
+            <td style="text-align: right; vertical-align: middle;">
+                <div style="font-size: 18px; font-weight: bold; color: #1e293b;">INVOICE</div>
+                <div style="font-size: 13px; color: #64748b; margin-top: 4px;">No: <strong>\${invoiceNumber}</strong></div>
+                <div style="font-size: 12px; color: #64748b;">Due Date: \${invoiceDueDate}</div>
+            </td>
+        </tr>
+    </table>
+    
+    <hr style="border: 0; border-top: 1px solid #e2e8f0; margin-bottom: 20px;" />
+
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
+        <tr>
+            <td style="width: 50%; padding-right: 12px; vertical-align: top;">
+                <div style="font-size: 11px; text-transform: uppercase; font-weight: bold; color: #4f46e5; margin-bottom: 6px;">Bill From</div>
+                <div style="font-size: 14px; font-weight: bold; color: #0f172a;">REALCal Bookings</div>
+                <div style="font-size: 12px; color: #475569; margin-top: 2px;">
+                    C.&S.H. Group Properties, LLC
+                </div>
+                <div style="font-size: 12px; color: #475569;">
+                    billing@cashgroupproperties.com
+                </div>
+            </td>
+            <td style="width: 50%; padding-left: 12px; vertical-align: top;">
+                <div style="font-size: 11px; text-transform: uppercase; font-weight: bold; color: #4f46e5; margin-bottom: 6px;">Bill To (Sponsor / Agency / 3rd Party)</div>
+                <div style="font-size: 14px; font-weight: bold; color: #0f172a;">\${invoiceSponsorName}</div>
+                <div style="font-size: 12px; color: #475569; margin-top: 2px;">\${invoiceSponsorEmail}</div>
+                \${invoiceSponsorPhone ? \`<div style="font-size: 12px; color: #475569;">\${invoiceSponsorPhone}</div>\` : ''}
+                \${invoiceSponsorAddress ? \`<div style="font-size: 12px; color: #475569; white-space: pre-wrap; margin-top: 4px;">\${invoiceSponsorAddress}</div>\` : ''}
+            </td>
+        </tr>
+    </table>
+
+    <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+        <div style="font-size: 11px; text-transform: uppercase; font-weight: bold; color: #475569; margin-bottom: 10px;">Lodging Details & Guest Coverage</div>
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+            <tr>
+                <td style="padding: 4px 0; color: #64748b; font-weight: 500;">Guest Name:</td>
+                <td style="padding: 4px 0; text-align: right; color: #0f172a; font-weight: bold;">\${guestName}</td>
+            </tr>
+            <tr>
+                <td style="padding: 4px 0; color: #64748b; font-weight: 500;">Property:</td>
+                <td style="padding: 4px 0; text-align: right; color: #0f172a; font-weight: bold;">\${propertyName}</td>
+            </tr>
+            \${manualBookingRooms.length > 0 ? \`
+            <tr>
+                <td style="padding: 4px 0; color: #64748b; font-weight: 500;">Room(s):</td>
+                <td style="padding: 4px 0; text-align: right; color: #0f172a; font-weight: bold;">Rooms \${manualBookingRooms.join(', ')}</td>
+            </tr>
+            \` : ''}
+            <tr>
+                <td style="padding: 4px 0; color: #64748b; font-weight: 500;">Stay Dates:</td>
+                <td style="padding: 4px 0; text-align: right; color: #0f172a; font-weight: bold;">\${checkIn} to \${checkOut}</td>
+            </tr>
+            <tr>
+                <td style="padding: 4px 0; color: #64748b; font-weight: 500;">Stay Duration:</td>
+                <td style="padding: 4px 0; text-align: right; color: #0f172a; font-weight: bold;">\${totalNights} Night(s)</td>
+            </tr>
+        </table>
+    </div>
+
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px; font-size: 13px;">
+        <thead>
+            <tr style="border-bottom: 2px solid #cbd5e1;">
+                <th style="text-align: left; padding: 8px 0; color: #475569;">Description</th>
+                <th style="text-align: right; padding: 8px 0; color: #475569;">Amount</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr style="border-bottom: 1px solid #e2e8f0;">
+                <td style="padding: 10px 0; color: #0f172a; font-weight: 500;">
+                    Guest Rental Override Access Fee<br/>
+                    <span style="font-size: 11px; color: #64748b;">Lodging charge for the entire stay interval</span>
+                </td>
+                <td style="padding: 10px 0; text-align: right; color: #0f172a; font-weight: bold; font-family: Courier, monospace;">$ \${Number(totalAmountStr).toFixed(2)}</td>
+            </tr>
+            <tr>
+                <td style="padding: 12px 0 4px 0; font-size: 15px; font-weight: bold; color: #0f172a;">Grand Total:</td>
+                <td style="padding: 12px 0 4px 0; text-align: right; font-size: 16px; font-weight: bold; color: #4f46e5; font-family: Courier, monospace;">$ \${Number(totalAmountStr).toFixed(2)}</td>
+            </tr>
+        </tbody>
+    </table>
+
+    \${stripePaymentUrl ? \`
+    <div style="background-color: #f0fdf4; border: 1.5px solid #bbf7d0; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 24px;">
+        <div style="font-size: 15px; font-weight: bold; color: #166534; margin-bottom: 6px;">
+            Secure Online Payment
+        </div>
+        <div style="font-size: 12px; color: #1e7040; margin-bottom: 14px; line-height: 1.5;">
+            You can pay this invoice safely online using your credit / debit card via Stripe.
+        </div>
+        <a href="\${stripePaymentUrl}" target="_blank" style="display: inline-block; background-color: #4f46e5; color: #ffffff; text-decoration: none; padding: 12px 24px; font-size: 14px; font-weight: bold; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2); transition: background-color 0.2s;">
+            Pay Invoice with Stripe &rarr;
+        </a>
+    </div>
+    \` : ''}
+
+    \${invoiceCustomNotes ? \`
+    <div style="border-left: 3px solid #cbd5e1; padding-left: 12px; margin-bottom: 24px; font-size: 12px; color: #475569; font-style: italic;">
+        \${invoiceCustomNotes}
+    </div>
+    \` : ''}
+
+    <hr style="border: 0; border-top: 1px solid #e2e8f0; margin-bottom: 20px;" />
+
+    <div style="font-size: 11px; text-align: center; color: #94a3b8; line-height: 1.5; margin-top: 24px;">
+        This invoice is generated on behalf of the lodging provider.<br/>
+        <strong>C.&S.H. Group Properties, LLC</strong>
+    </div>
+</div>
+`;
+
+      const invoiceText = `
+INVOICE
+-------
+Invoice Number: \${invoiceNumber}
+Due Date: \${invoiceDueDate}
+From: REALCal Bookings (C.&S.H. Group Properties, LLC)
+To (Sponsor): \${invoiceSponsorName} (\${invoiceSponsorEmail})
+
+Guest Details:
+Guest Name: \${guestName}
+Property: \${propertyName}
+Dates: \${checkIn} to \${checkOut} (\${totalNights} Night(s))
+
+Summary of Charges:
+Guest Rental Override Access Fee: $\${Number(totalAmountStr).toFixed(2)}
+Grand Total Due: $\${Number(totalAmountStr).toFixed(2)}
+
+\${stripePaymentUrl ? \`SECURE ONLINE PAYMENT LINK:\\nClick here to pay this invoice securely via Stripe:\\n\${stripePaymentUrl}\\n\` : ''}
+
+Notes: \${invoiceCustomNotes}
+
+Thank you,
+C.&S.H. Group Properties, LLC
+`;
+
+      const emailRes = await fetch("/api/send-invoice-email", {
+         method: "POST",
+         headers: { "Content-Type": "application/json" },
+         body: JSON.stringify({
+           to: invoiceSponsorEmail.trim(),
+           subject: `Invoice \${invoiceNumber} (Resend): Lodging for \${guestName} at \${propertyName}`,
+           html: invoiceHtml,
+           text: invoiceText
+         })
+      });
+
+      if (!emailRes.ok) {
+         const errText = await emailRes.text();
+         throw new Error(`Failed to send invoice email: \${errText}`);
+      }
+
+      alert("Invoice resent successfully to " + invoiceSponsorEmail);
+    } catch (err: any) {
+      alert("Error resending invoice: " + err.message);
+    } finally {
+      setSendingInvoiceId(null);
+    }
+  };
+
   const handleAdminCancelBooking = async (bookingId: string) => {
     if (!db || !window.confirm("Are you sure you want to cancel this booking?")) return;
     try {
@@ -1883,17 +2090,34 @@ C.&S.H. Group Properties, LLC
                                   )}
                                </td>
                                <td className="px-4 py-4 text-right space-x-2">
+                                  {b.invoiceDetails && (
+                                     <span className="inline-block mr-2 align-middle">
+                                        {b.invoiceDetails.paid ? (
+                                           <span className="px-2.5 py-1 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg inline-flex items-center gap-1 shadow-sm font-sans">
+                                              <CheckCircle size={12} className="text-emerald-500" /> Invoice Paid
+                                           </span>
+                                        ) : (
+                                           <button
+                                              onClick={() => handleResendInvoice(b)}
+                                              disabled={sendingInvoiceId === b.id}
+                                              className="text-[10px] font-bold text-indigo-600 hover:text-indigo-805 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1 rounded-lg transition-all inline-flex items-center gap-1 disabled:opacity-50 cursor-pointer font-sans"
+                                           >
+                                              {sendingInvoiceId === b.id ? 'Sending...' : 'Resend Invoice'}
+                                           </button>
+                                        )}
+                                     </span>
+                                  )}
                                   {b.status === 'confirmed' && (
                                      <button 
                                        onClick={() => handleAdminCancelBooking(b.id)}
-                                       className="text-[10px] font-bold text-amber-600 hover:text-amber-700"
+                                       className="text-[10px] font-bold text-amber-600 hover:text-amber-700 align-middle"
                                      >
                                         Cancel
                                      </button>
                                   )}
                                   <button 
                                     onClick={() => handleAdminDeleteBooking(b.id)}
-                                    className="text-slate-300 hover:text-red-500 transition-colors"
+                                    className="text-slate-300 hover:text-red-500 transition-colors inline-block align-middle"
                                   >
                                      <Trash2 size={16}/>
                                   </button>
