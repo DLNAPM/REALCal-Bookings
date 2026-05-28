@@ -2091,16 +2091,19 @@ C.&S.H. Group Properties, LLC
                                </td>
                                <td className="px-4 py-4 text-right space-x-2">
                                   {b.invoiceDetails && (
-                                     <span className="inline-block mr-2 align-middle">
+                                     <span className="inline-block mr-2 align-middle font-sans">
                                         {b.invoiceDetails.paid ? (
-                                           <span className="px-2.5 py-1 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg inline-flex items-center gap-1 shadow-sm font-sans">
-                                              <CheckCircle size={12} className="text-emerald-500" /> Invoice Paid
-                                           </span>
+                                           <button
+                                              disabled={true}
+                                              className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg inline-flex items-center gap-1 opacity-80 cursor-not-allowed"
+                                           >
+                                              <CheckCircle size={12} className="text-emerald-550" /> Invoice Paid
+                                           </button>
                                         ) : (
                                            <button
                                               onClick={() => handleResendInvoice(b)}
                                               disabled={sendingInvoiceId === b.id}
-                                              className="text-[10px] font-bold text-indigo-600 hover:text-indigo-805 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1 rounded-lg transition-all inline-flex items-center gap-1 disabled:opacity-50 cursor-pointer font-sans"
+                                              className="text-[10px] font-bold text-indigo-600 hover:text-indigo-805 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1 rounded-lg transition-all inline-flex items-center gap-1 disabled:opacity-50 cursor-pointer"
                                            >
                                               {sendingInvoiceId === b.id ? 'Sending...' : 'Resend Invoice'}
                                            </button>

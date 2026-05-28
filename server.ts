@@ -1012,6 +1012,56 @@ async function startServer() {
     }
   });
 
+  app.post("/api/mark-invoice-paid", async (req, res) => {
+    try {
+      const { bookingId } = req.body;
+      if (!bookingId) {
+        return res.status(400).json({ error: "bookingId is required" });
+      }
+
+      let activeDb = db;
+      if (!activeDb) {
+        const configPath = path.resolve(process.cwd(), "firebase-applet-config.json");
+        if (fs.existsSync(configPath)) {
+          const firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+          if (admin.apps.length === 0) {
+            admin.initializeApp({ projectId: firebaseConfig.projectId });
+          }
+          const dbId = firebaseConfig.firestoreDatabaseId || "(default)";
+          activeDb = getFirestore(admin.app(), dbId);
+        }
+      }
+
+      if (!activeDb) {
+        return res.status(500).json({ error: "Database not initialized" });
+      }
+
+      const bookingRef = activeDb.collection('bookings').doc(bookingId);
+      const bookingDoc = await bookingRef.get();
+
+      if (!bookingDoc.exists) {
+        return res.status(404).json({ error: `Booking with ID ${bookingId} not found` });
+      }
+
+      const data = bookingDoc.data() || {};
+      const invoiceDetails = data.invoiceDetails || {};
+
+      invoiceDetails.paid = true;
+      invoiceDetails.paidAt = new Date().toISOString();
+
+      await bookingRef.update({
+        invoiceDetails,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      console.log(`[Server] Marked invoice for booking ${bookingId} as paid successfully.`);
+      res.json({ success: true });
+    } catch (e: any) {
+      console.error("Error setting invoice to paid on server:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   app.post("/api/create-payment-intent", async (req, res) => {
     try {
       const { propertyId, checkIn, checkOut, selectedBedrooms, selectedBedroom, currency = "usd", metadata, amount, dailySelections } = req.body;

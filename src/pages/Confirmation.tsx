@@ -16,16 +16,22 @@ export const Confirmation: React.FC = () => {
     const isPaidInvoice = queryStatus === 'paid' || state.status === 'paid';
 
     useEffect(() => {
-        if (isPaidInvoice && queryBookingId && db) {
+        if (isPaidInvoice && queryBookingId) {
             const updateInvoicePaidStatus = async () => {
                 try {
-                    await updateDoc(doc(db, 'bookings', queryBookingId), {
-                        'invoiceDetails.paid': true,
-                        'invoiceDetails.paidAt': new Date().toISOString()
+                    const res = await fetch('/api/mark-invoice-paid', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ bookingId: queryBookingId })
                     });
-                    console.log("[Confirmation] Checked out invoice marked as paid successfully.");
+                    if (res.ok) {
+                        console.log("[Confirmation] Invoice marked as paid successfully via server.");
+                    } else {
+                        const txt = await res.text();
+                        console.error("[Confirmation] Failed to mark invoice as paid via server:", txt);
+                    }
                 } catch (err) {
-                    console.error("[Confirmation] Failed to mark invoice as paid in db:", err);
+                    console.error("[Confirmation] Failed to call mark-invoice-paid API:", err);
                 }
             };
             updateInvoicePaidStatus();
