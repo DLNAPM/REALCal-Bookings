@@ -767,8 +767,8 @@ export const AdminDashboard: React.FC = () => {
                 <div style="font-size: 11px; text-transform: uppercase; font-weight: bold; color: #4f46e5; margin-bottom: 6px;">Bill To (Sponsor / Agency / 3rd Party)</div>
                 <div style="font-size: 14px; font-weight: bold; color: #0f172a;">${invoiceSponsorName}</div>
                 <div style="font-size: 12px; color: #475569; margin-top: 2px;">${invoiceSponsorEmail}</div>
-                \${invoiceSponsorPhone ? \`<div style="font-size: 12px; color: #475569;">\${invoiceSponsorPhone}</div>\` : ''}
-                \${invoiceSponsorAddress ? \`<div style="font-size: 12px; color: #475569; white-space: pre-wrap; margin-top: 4px;">\${invoiceSponsorAddress}</div>\` : ''}
+                ${invoiceSponsorPhone ? `<div style="font-size: 12px; color: #475569;">${invoiceSponsorPhone}</div>` : ''}
+                ${invoiceSponsorAddress ? `<div style="font-size: 12px; color: #475569; white-space: pre-wrap; margin-top: 4px;">${invoiceSponsorAddress}</div>` : ''}
             </td>
         </tr>
     </table>
@@ -784,19 +784,19 @@ export const AdminDashboard: React.FC = () => {
                 <td style="padding: 4px 0; color: #64748b; font-weight: 500;">Property:</td>
                 <td style="padding: 4px 0; text-align: right; color: #0f172a; font-weight: bold;">${propertyName}</td>
             </tr>
-            \${manualBookingRooms.length > 0 ? \`
+            ${manualBookingRooms.length > 0 ? `
             <tr>
                 <td style="padding: 4px 0; color: #64748b; font-weight: 500;">Room(s):</td>
-                <td style="padding: 4px 0; text-align: right; color: #0f172a; font-weight: bold;">Rooms \${manualBookingRooms.join(', ')}</td>
+                <td style="padding: 4px 0; text-align: right; color: #0f172a; font-weight: bold;">Rooms ${manualBookingRooms.join(', ')}</td>
             </tr>
-            \` : ''}
+            ` : ''}
             <tr>
                 <td style="padding: 4px 0; color: #64748b; font-weight: 500;">Stay Dates:</td>
                 <td style="padding: 4px 0; text-align: right; color: #0f172a; font-weight: bold;">${checkIn} to ${checkOut}</td>
             </tr>
             <tr>
                 <td style="padding: 4px 0; color: #64748b; font-weight: 500;">Stay Duration:</td>
-                <td style="padding: 4px 0; text-align: right; color: #0f172a; font-weight: bold;">\${totalNights} Night(s)</td>
+                <td style="padding: 4px 0; text-align: right; color: #0f172a; font-weight: bold;">${totalNights} Night(s)</td>
             </tr>
         </table>
     </div>
@@ -814,16 +814,16 @@ export const AdminDashboard: React.FC = () => {
                     Guest Rental Override Access Fee<br/>
                     <span style="font-size: 11px; color: #64748b;">Lodging charge for the entire stay interval</span>
                 </td>
-                <td style="padding: 10px 0; text-align: right; color: #0f172a; font-weight: bold; font-family: Courier, monospace;">$ \${Number(totalAmountStr).toFixed(2)}</td>
+                <td style="padding: 10px 0; text-align: right; color: #0f172a; font-weight: bold; font-family: Courier, monospace;">$ ${Number(totalAmountStr).toFixed(2)}</td>
             </tr>
             <tr>
                 <td style="padding: 12px 0 4px 0; font-size: 15px; font-weight: bold; color: #0f172a;">Grand Total:</td>
-                <td style="padding: 12px 0 4px 0; text-align: right; font-size: 16px; font-weight: bold; color: #4f46e5; font-family: Courier, monospace;">$ \${Number(totalAmountStr).toFixed(2)}</td>
+                <td style="padding: 12px 0 4px 0; text-align: right; font-size: 16px; font-weight: bold; color: #4f46e5; font-family: Courier, monospace;">$ ${Number(totalAmountStr).toFixed(2)}</td>
             </tr>
         </tbody>
     </table>
 
-    \${stripePaymentUrl ? \`
+    ${stripePaymentUrl ? `
     <div style="background-color: #f0fdf4; border: 1.5px solid #bbf7d0; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 24px;">
         <div style="font-size: 15px; font-weight: bold; color: #166534; margin-bottom: 6px;">
             Secure Online Payment
@@ -831,17 +831,17 @@ export const AdminDashboard: React.FC = () => {
         <div style="font-size: 12px; color: #1e7040; margin-bottom: 14px; line-height: 1.5;">
             You can pay this invoice safely online using your credit / debit card via Stripe.
         </div>
-        <a href="\${stripePaymentUrl}" target="_blank" style="display: inline-block; background-color: #4f46e5; color: #ffffff; text-decoration: none; padding: 12px 24px; font-size: 14px; font-weight: bold; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2); transition: background-color 0.2s;">
+        <a href="${stripePaymentUrl}" target="_blank" style="display: inline-block; background-color: #4f46e5; color: #ffffff; text-decoration: none; padding: 12px 24px; font-size: 14px; font-weight: bold; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2); transition: background-color 0.2s;">
             Pay Invoice with Stripe &rarr;
         </a>
     </div>
-    \` : ''}
+    ` : ''}
 
-    \${invoiceCustomNotes ? \`
+    ${invoiceCustomNotes ? `
     <div style="border-left: 3px solid #cbd5e1; padding-left: 12px; margin-bottom: 24px; font-size: 12px; color: #475569; font-style: italic;">
-        \${invoiceCustomNotes}
+        ${invoiceCustomNotes}
     </div>
-    \` : ''}
+    ` : ''}
 
     <hr style="border: 0; border-top: 1px solid #e2e8f0; margin-bottom: 20px;" />
 
@@ -870,7 +870,7 @@ Summary of Charges:
 Guest Rental Override Access Fee: $${Number(totalAmountStr).toFixed(2)}
 Grand Total Due: $${Number(totalAmountStr).toFixed(2)}
 
-\${stripePaymentUrl ? \`SECURE ONLINE PAYMENT LINK:\\nClick here to pay this invoice securely via Stripe:\\n\${stripePaymentUrl}\\n\` : ''}
+${stripePaymentUrl ? `SECURE ONLINE PAYMENT LINK:\nClick here to pay this invoice securely via Stripe:\n${stripePaymentUrl}\n` : ''}
 
 Notes: ${invoiceCustomNotes}
 
