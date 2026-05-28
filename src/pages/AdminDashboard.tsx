@@ -2736,7 +2736,7 @@ C.&S.H. Group Properties, LLC
                             <div className="text-center">
                                <div className="text-[10px] text-slate-400 font-bold uppercase">Corporate Management & Invoicing Entity</div>
                                <div className="text-sm font-black text-slate-700 mt-1">C.&S.H. Group Properties, LLC</div>
-                               <div className="text-[9px] text-slate-400 mt-1">REALCal Bookings &bull; Luxury Lodging Solutions &bull; Seattle, WA</div>
+                               <div className="text-[9px] text-slate-400 mt-1">REALCal Bookings &bull; Luxury Lodging Solutions &bull; Atlanta, GA</div>
                             </div>
                          </div>
                       </div>
