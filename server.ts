@@ -951,6 +951,67 @@ async function startServer() {
     }
   });
 
+  app.post("/api/create-invoice-checkout-session", async (req, res) => {
+    try {
+      const { bookingId, amount, invoiceNumber, guestName, propertyName, checkIn, checkOut, sponsorEmail } = req.body;
+      const key = process.env.STRIPE_SECRET_KEY;
+      if (!key || key === "sk_test_...") {
+        return res.status(400).json({ error: "STRIPE_SECRET_KEY is not configured." });
+      }
+
+      const stripe = new Stripe(key);
+      const referer = req.headers.referer || "";
+      let hostUrl = referer;
+      if (referer) {
+         try {
+           const parsed = new URL(referer);
+           hostUrl = parsed.origin;
+         } catch {
+           hostUrl = `${req.protocol}://${req.get('host')}`;
+         }
+      } else {
+        hostUrl = `${req.protocol}://${req.get('host')}`;
+      }
+      
+      if (!hostUrl.endsWith('/')) {
+         hostUrl = hostUrl + '/';
+      }
+
+      console.log(`[Server] Creating checkout session for invoice #${invoiceNumber || 'Manual'} with origin URL: ${hostUrl}`);
+      
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        line_items: [
+          {
+            price_data: {
+              currency: 'usd',
+              product_data: {
+                name: `Invoice #${invoiceNumber || 'Manual'} - Lodging Coverage`,
+                description: `Sponsor payment for guest ${guestName || 'Guest'} at ${propertyName || 'Property'} (${checkIn || ''} to ${checkOut || ''})`,
+              },
+              unit_amount: Math.round(Number(amount) * 100),
+            },
+            quantity: 1,
+          },
+        ],
+        mode: 'payment',
+        success_url: `${hostUrl}confirmation?bookingId=${bookingId || 'manual'}&status=paid`,
+        cancel_url: `${hostUrl}`,
+        customer_email: sponsorEmail || undefined,
+        metadata: {
+          bookingId: bookingId || '',
+          invoiceNumber: invoiceNumber || '',
+          sponsorEmail: sponsorEmail || '',
+        }
+      });
+
+      res.json({ url: session.url });
+    } catch (e: any) {
+      console.error("Error creating invoice checkout session:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   app.post("/api/create-payment-intent", async (req, res) => {
     try {
       const { propertyId, checkIn, checkOut, selectedBedrooms, selectedBedroom, currency = "usd", metadata, amount, dailySelections } = req.body;

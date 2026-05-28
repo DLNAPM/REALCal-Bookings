@@ -5,7 +5,21 @@ import { LegalFooter } from '../components/LegalFooter';
 
 export const Confirmation: React.FC = () => {
     const location = useLocation();
-    const { bookingId, accessCode, notificationResults, bookingRef, selectedBedroom, selectedBedrooms, checkIn, checkOut } = location.state || {};
+    const queryParams = new URLSearchParams(location.search);
+    const queryBookingId = queryParams.get('bookingId');
+    const queryStatus = queryParams.get('status');
+
+    const state = location.state || {};
+    const bookingId = state.bookingId || queryBookingId;
+    const isPaidInvoice = queryStatus === 'paid' || state.status === 'paid';
+
+    const accessCode = state.accessCode;
+    const notificationResults = state.notificationResults;
+    const bookingRef = state.bookingRef || (queryBookingId ? `Invoice ${queryBookingId.substring(0, 8).toUpperCase()}` : '');
+    const selectedBedroom = state.selectedBedroom;
+    const selectedBedrooms = state.selectedBedrooms || [];
+    const checkIn = state.checkIn;
+    const checkOut = state.checkOut;
     const rooms = selectedBedrooms || (selectedBedroom ? [selectedBedroom] : []);
     
     const formatDate = (dateStr: string) => {
@@ -20,6 +34,32 @@ export const Confirmation: React.FC = () => {
     };
 
     if (!bookingId) return <Navigate to="/" />;
+
+    if (isPaidInvoice) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4 font-sans text-slate-900 overflow-y-auto">
+                <div className="max-w-md w-full bg-white p-8 rounded-3xl shadow-xl border border-slate-200 text-center my-8">
+                    <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm">
+                       <CheckCircle className="w-10 h-10 text-emerald-500" />
+                    </div>
+                    <h1 className="text-3xl font-bold mb-2 text-slate-800">Invoice Paid!</h1>
+                    <p className="text-emerald-600 font-bold mb-4">Payment Processed Successfully</p>
+                    <p className="text-slate-500 mb-8 leading-relaxed text-sm">
+                        Thank you! The invoice for booking reference <strong>#{bookingId.substring(0,8).toUpperCase()}</strong> has been settled securely. A receipt has been issued automatically to your billing email address.
+                    </p>
+                    
+                    <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl mb-6 text-xs font-mono text-slate-500 break-all select-all flex justify-between items-center px-6">
+                       <span className="uppercase tracking-widest font-bold text-slate-400">Invoice Ref:</span>
+                       <span className="text-sm font-bold text-indigo-600">{bookingId}</span>
+                    </div>
+
+                    <Link to="/" className="w-full block py-4 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-500 transition-colors shadow-sm text-center">
+                        Return to Portal
+                    </Link>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4 font-sans text-slate-900 overflow-y-auto">

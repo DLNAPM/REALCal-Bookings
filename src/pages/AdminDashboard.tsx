@@ -663,6 +663,32 @@ export const AdminDashboard: React.FC = () => {
       const selectedBedroomObjects = (prop?.bedrooms || []).filter(b => manualBookingRooms.includes(b.roomNumber));
       const finalPriceCents = Math.round(Number(totalAmountStr) * 100);
 
+      let stripePaymentUrl = '';
+      try {
+         const payLinkRes = await fetch('/api/create-invoice-checkout-session', {
+             method: 'POST',
+             headers: { 'Content-Type': 'application/json' },
+             body: JSON.stringify({
+                 bookingId,
+                 amount: Number(totalAmountStr),
+                 invoiceNumber,
+                 guestName,
+                 propertyName,
+                 checkIn,
+                 checkOut,
+                 sponsorEmail: invoiceSponsorEmail
+             })
+         });
+         if (payLinkRes.ok) {
+             const payLinkData = await payLinkRes.json();
+             stripePaymentUrl = payLinkData.url || '';
+         } else {
+             console.warn("Could not create Stripe Checkout Session, status code", payLinkRes.status);
+         }
+      } catch (err) {
+         console.warn("Failed to generate stripe payment checkout session url:", err);
+      }
+
       const invoiceDetails = {
          sponsorName: invoiceSponsorName,
          sponsorEmail: invoiceSponsorEmail,
@@ -671,7 +697,8 @@ export const AdminDashboard: React.FC = () => {
          invoiceNumber: invoiceNumber,
          dueDate: invoiceDueDate,
          customNotes: invoiceCustomNotes,
-         sentAt: new Date().toISOString()
+         sentAt: new Date().toISOString(),
+         stripePaymentUrl: stripePaymentUrl || null
       };
 
       const payload: any = {
@@ -796,6 +823,20 @@ export const AdminDashboard: React.FC = () => {
         </tbody>
     </table>
 
+    \${stripePaymentUrl ? \`
+    <div style="background-color: #f0fdf4; border: 1.5px solid #bbf7d0; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 24px;">
+        <div style="font-size: 15px; font-weight: bold; color: #166534; margin-bottom: 6px;">
+            Secure Online Payment
+        </div>
+        <div style="font-size: 12px; color: #1e7040; margin-bottom: 14px; line-height: 1.5;">
+            You can pay this invoice safely online using your credit / debit card via Stripe.
+        </div>
+        <a href="\${stripePaymentUrl}" target="_blank" style="display: inline-block; background-color: #4f46e5; color: #ffffff; text-decoration: none; padding: 12px 24px; font-size: 14px; font-weight: bold; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2); transition: background-color 0.2s;">
+            Pay Invoice with Stripe &rarr;
+        </a>
+    </div>
+    \` : ''}
+
     \${invoiceCustomNotes ? \`
     <div style="border-left: 3px solid #cbd5e1; padding-left: 12px; margin-bottom: 24px; font-size: 12px; color: #475569; font-style: italic;">
         \${invoiceCustomNotes}
@@ -828,6 +869,8 @@ Dates: ${checkIn} to ${checkOut} (${totalNights} Night(s))
 Summary of Charges:
 Guest Rental Override Access Fee: $${Number(totalAmountStr).toFixed(2)}
 Grand Total Due: $${Number(totalAmountStr).toFixed(2)}
+
+\${stripePaymentUrl ? \`SECURE ONLINE PAYMENT LINK:\\nClick here to pay this invoice securely via Stripe:\\n\${stripePaymentUrl}\\n\` : ''}
 
 Notes: ${invoiceCustomNotes}
 
