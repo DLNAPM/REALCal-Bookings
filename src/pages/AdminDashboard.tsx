@@ -65,6 +65,8 @@ export const AdminDashboard: React.FC = () => {
   // Manual booking states
   const [manualBookingPropId, setManualBookingPropId] = useState<string>('');
   const [manualBookingRooms, setManualBookingRooms] = useState<string[]>([]);
+  const [manualBookingCheckIn, setManualBookingCheckIn] = useState<string>('');
+  const [manualBookingCheckOut, setManualBookingCheckOut] = useState<string>('');
   const [editingAccessCodeId, setEditingAccessCodeId] = useState<string | null>(null);
   const [editHasSmartLock, setEditHasSmartLock] = useState<boolean>(false);
   const [createHasSmartLock, setCreateHasSmartLock] = useState<boolean>(false);
@@ -916,6 +918,8 @@ C.&S.H. Group Properties, LLC
       if (formElement) formElement.reset();
       setManualBookingPropId('');
       setManualBookingRooms([]);
+      setManualBookingCheckIn('');
+      setManualBookingCheckOut('');
       setCreateInvoiceForPayment(false);
       setShowInvoiceTemplate(false);
       setPendingBookingData(null);
@@ -940,6 +944,14 @@ C.&S.H. Group Properties, LLC
     const guestPhone = guestPhoneInput ? formatPhoneE164(guestPhoneInput) : "";
     const totalAmountStr = fd.get('totalPrice') as string;
     const manualAccessCode = fd.get('accessCode') as string || '';
+
+    if (checkIn && checkOut) {
+       const start = parseISO(checkIn);
+       const end = parseISO(checkOut);
+       if (end <= start) {
+          return alert("Check-out date must be after Check-in date.");
+       }
+    }
 
     if (createInvoiceForPayment) {
         if (!formPropId || !checkIn || !checkOut || !guestName || !totalAmountStr) {
@@ -1099,6 +1111,8 @@ C.&S.H. Group Properties, LLC
         (e.target as HTMLFormElement).reset();
         setManualBookingPropId('');
         setManualBookingRooms([]);
+        setManualBookingCheckIn('');
+        setManualBookingCheckOut('');
 
     } catch (err: any) { alert(err.message); }
   }
@@ -1490,11 +1504,36 @@ C.&S.H. Group Properties, LLC
                 )}
                 <div className="lg:col-span-1">
                    <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Check In</label>
-                   <input name="checkIn" type="date" required className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm" />
+                   <input 
+                      name="checkIn" 
+                      type="date" 
+                      required 
+                      value={manualBookingCheckIn}
+                      onChange={(e) => {
+                         const val = e.target.value;
+                         setManualBookingCheckIn(val);
+                         if (manualBookingCheckOut && val && manualBookingCheckOut <= val) {
+                            try {
+                               setManualBookingCheckOut(format(addDays(parseISO(val), 1), 'yyyy-MM-dd'));
+                            } catch (err) {
+                               setManualBookingCheckOut('');
+                            }
+                         }
+                      }}
+                      className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm" 
+                   />
                 </div>
                 <div className="lg:col-span-1">
                    <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Check Out</label>
-                   <input name="checkOut" type="date" required className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm" />
+                   <input 
+                      name="checkOut" 
+                      type="date" 
+                      required 
+                      value={manualBookingCheckOut}
+                      onChange={(e) => setManualBookingCheckOut(e.target.value)}
+                      min={manualBookingCheckIn ? format(addDays(parseISO(manualBookingCheckIn), 1), 'yyyy-MM-dd') : undefined}
+                      className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm" 
+                   />
                 </div>
                 <div className="lg:col-span-1">
                    <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Guest Name</label>

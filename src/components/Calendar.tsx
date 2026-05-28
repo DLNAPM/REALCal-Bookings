@@ -520,6 +520,12 @@ export const Calendar: React.FC<{
   };
 
   const handleBook = () => {
+    if (checkIn && checkOut) {
+       if (isBefore(checkOut, checkIn) || isSameDay(checkIn, checkOut)) {
+           alert("Check-out date must be after Check-in date.");
+           return;
+       }
+    }
     if (checkIn && checkOut && priceDetails) {
        if (rentalMode === 'room' && selectedRooms.length === 0) {
            alert("Please select at least one room.");
@@ -829,6 +835,10 @@ if (false) setSelectedRooms(prev =>
             
             <button 
               onClick={() => {
+                  if (checkIn && checkOut && (isBefore(checkOut, checkIn) || isSameDay(checkIn, checkOut))) {
+                      alert("Check-out date must be after Check-in date.");
+                      return;
+                  }
                   if (isEditMode && onSaveEdit && checkIn && checkOut && priceDetails) {
                       onSaveEdit(format(checkIn, 'yyyy-MM-dd'), format(checkOut, 'yyyy-MM-dd'), priceDetails, selectedRooms, rentalMode, dailySelections);
                   } else {
