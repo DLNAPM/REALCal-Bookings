@@ -500,6 +500,35 @@ async function startServer() {
     }
   });
 
+  app.post("/api/send-invoice-email", async (req, res) => {
+    console.log("[API] Send Invoice Email hit");
+    try {
+      const { to, subject, html, text } = req.body;
+      const smtpHost = process.env.SMTP_HOST;
+
+      if (!smtpHost) {
+        return res.status(400).json({ error: "SMTP_HOST environment variable is not configured." });
+      }
+
+      if (!to) {
+        return res.status(400).json({ error: "Sponsor email 'to' address is required." });
+      }
+
+      const result = await sendSmtpEmail({
+        to,
+        subject: subject || "Invoice from REALCal Bookings",
+        text: text || "Please check the attached HTML email for details.",
+        html: html
+      });
+
+      console.log("[API] Invoice Email Success:", result);
+      res.json({ success: true, result });
+    } catch (err: any) {
+      console.error("[API] Invoice Email Error:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.post("/api/checkin-booking", async (req, res) => {
     console.log("[API] Checkin Booking hit");
     try {

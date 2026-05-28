@@ -69,6 +69,20 @@ export const AdminDashboard: React.FC = () => {
   const [editHasSmartLock, setEditHasSmartLock] = useState<boolean>(false);
   const [createHasSmartLock, setCreateHasSmartLock] = useState<boolean>(false);
 
+  // Invoice-related states for Manual Booking
+  const [createInvoiceForPayment, setCreateInvoiceForPayment] = useState<boolean>(false);
+  const [showInvoiceTemplate, setShowInvoiceTemplate] = useState<boolean>(false);
+  const [pendingBookingData, setPendingBookingData] = useState<any | null>(null);
+  
+  const [invoiceSponsorName, setInvoiceSponsorName] = useState<string>('');
+  const [invoiceSponsorEmail, setInvoiceSponsorEmail] = useState<string>('');
+  const [invoiceSponsorPhone, setInvoiceSponsorPhone] = useState<string>('');
+  const [invoiceSponsorAddress, setInvoiceSponsorAddress] = useState<string>('');
+  const [invoiceNumber, setInvoiceNumber] = useState<string>('');
+  const [invoiceDueDate, setInvoiceDueDate] = useState<string>('');
+  const [invoiceCustomNotes, setInvoiceCustomNotes] = useState<string>('');
+  const [sendingInvoice, setSendingInvoice] = useState<boolean>(false);
+
   // User profile editing states
   const [editingUser, setEditingUser] = useState<any | null>(null);
   const [editUserRole, setEditUserRole] = useState<'user' | 'admin'>('user');
@@ -602,6 +616,317 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
+  const handleSendInvoiceAndCompleteBooking = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!db) return alert("Firebase not configured");
+    if (!pendingBookingData) return alert("No pending reservation data");
+    if (!invoiceSponsorName.trim() || !invoiceSponsorEmail.trim()) {
+      return alert("Please fill in Sponsor Name and Sponsor Billing Email");
+    }
+
+    setSendingInvoice(true);
+
+    try {
+      const { propertyId, checkIn, checkOut, guestName, guestEmail, guestPhone, totalPrice: totalAmountStr, accessCode: manualAccessCode, manualBookingRooms, formElement } = pendingBookingData;
+      const bookingId = uuidv4();
+      const payloadUserId = user?.uid || 'admin-override';
+
+      const prop = properties.find(p => p.id === propertyId);
+      const propertyName = prop ? prop.name : "Premium Villa";
+      let accessCode = manualAccessCode.trim();
+
+      if (!accessCode) {
+          if (prop?.hasSmartLock && prop?.frontDoorCode) {
+              accessCode = prop.frontDoorCode;
+          } else {
+              try {
+                  const lockRes = await fetch('/api/provision-lock', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ checkIn, checkOut, name: guestName })
+                  });
+                  if (lockRes.ok) {
+                     const text = await lockRes.text();
+                     if (text) {
+                        const data = JSON.parse(text);
+                        accessCode = data.accessCode || '';
+                     }
+                  }
+              } catch (err) {
+                  console.warn("API lock provisioning failed:", err);
+              }
+          }
+      }
+
+      const selectedBedroomObjects = (prop?.bedrooms || []).filter(b => manualBookingRooms.includes(b.roomNumber));
+      const finalPriceCents = Math.round(Number(totalAmountStr) * 100);
+
+      const invoiceDetails = {
+         sponsorName: invoiceSponsorName,
+         sponsorEmail: invoiceSponsorEmail,
+         sponsorPhone: invoiceSponsorPhone,
+         sponsorAddress: invoiceSponsorAddress,
+         invoiceNumber: invoiceNumber,
+         dueDate: invoiceDueDate,
+         customNotes: invoiceCustomNotes,
+         sentAt: new Date().toISOString()
+      };
+
+      const payload: any = {
+         userId: payloadUserId,
+         propertyId,
+         checkIn,
+         checkOut,
+         status: 'confirmed',
+         totalPrice: finalPriceCents,
+         guestName: guestName || '',
+         guestEmail: guestEmail,
+         guestPhone: guestPhone,
+         guests: 1,
+         selectedBedrooms: selectedBedroomObjects.length > 0 ? selectedBedroomObjects : null,
+         createdAt: serverTimestamp(),
+         updatedAt: serverTimestamp(),
+         invoiceDetails,
+         invoiceEmailed: true
+      };
+
+      if (accessCode) payload.accessCode = accessCode;
+
+      let totalNights = 1;
+      try {
+        const d1 = new Date(checkIn);
+        const d2 = new Date(checkOut);
+        const diff = d2.getTime() - d1.getTime();
+        totalNights = Math.max(1, Math.round(diff / (1000 * 60 * 60 * 24)));
+      } catch(e) {}
+
+      const invoiceHtml = `
+<div style="font-family: Arial, sans-serif; max-width: 650px; margin: 0 auto; border: 1px solid #e2e8f0; padding: 24px; border-radius: 12px; color: #1e293b; background-color: #ffffff;">
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
+        <tr>
+            <td style="vertical-align: middle;">
+                <div style="font-size: 26px; font-weight: bold; color: #4f46e5; letter-spacing: -0.05em; display: inline-block;">
+                    REALCal <span style="font-weight: 300; color: #0f172a;">Bookings</span>
+                </div>
+                <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.15em; color: #64748b; font-weight: bold; margin-top: 4px;">
+                    Premium Luxury Lodging & Hospitality
+                </div>
+            </td>
+            <td style="text-align: right; vertical-align: middle;">
+                <div style="font-size: 18px; font-weight: bold; color: #1e293b;">INVOICE</div>
+                <div style="font-size: 13px; color: #64748b; margin-top: 4px;">No: <strong>${invoiceNumber}</strong></div>
+                <div style="font-size: 12px; color: #64748b;">Due Date: ${invoiceDueDate}</div>
+            </td>
+        </tr>
+    </table>
+    
+    <hr style="border: 0; border-top: 1px solid #e2e8f0; margin-bottom: 20px;" />
+
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
+        <tr>
+            <td style="width: 50%; padding-right: 12px; vertical-align: top;">
+                <div style="font-size: 11px; text-transform: uppercase; font-weight: bold; color: #4f46e5; margin-bottom: 6px;">Bill From</div>
+                <div style="font-size: 14px; font-weight: bold; color: #0f172a;">REALCal Bookings</div>
+                <div style="font-size: 12px; color: #475569; margin-top: 2px;">
+                    C.&S.H. Group Properties, LLC
+                </div>
+                <div style="font-size: 12px; color: #475569;">
+                    billing@cashgroupproperties.com
+                </div>
+            </td>
+            <td style="width: 50%; padding-left: 12px; vertical-align: top;">
+                <div style="font-size: 11px; text-transform: uppercase; font-weight: bold; color: #4f46e5; margin-bottom: 6px;">Bill To (Sponsor / Agency / 3rd Party)</div>
+                <div style="font-size: 14px; font-weight: bold; color: #0f172a;">${invoiceSponsorName}</div>
+                <div style="font-size: 12px; color: #475569; margin-top: 2px;">${invoiceSponsorEmail}</div>
+                \${invoiceSponsorPhone ? \`<div style="font-size: 12px; color: #475569;">\${invoiceSponsorPhone}</div>\` : ''}
+                \${invoiceSponsorAddress ? \`<div style="font-size: 12px; color: #475569; white-space: pre-wrap; margin-top: 4px;">\${invoiceSponsorAddress}</div>\` : ''}
+            </td>
+        </tr>
+    </table>
+
+    <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+        <div style="font-size: 11px; text-transform: uppercase; font-weight: bold; color: #475569; margin-bottom: 10px;">Lodging Details & Guest Coverage</div>
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+            <tr>
+                <td style="padding: 4px 0; color: #64748b; font-weight: 500;">Guest Name:</td>
+                <td style="padding: 4px 0; text-align: right; color: #0f172a; font-weight: bold;">${guestName}</td>
+            </tr>
+            <tr>
+                <td style="padding: 4px 0; color: #64748b; font-weight: 500;">Property:</td>
+                <td style="padding: 4px 0; text-align: right; color: #0f172a; font-weight: bold;">${propertyName}</td>
+            </tr>
+            \${manualBookingRooms.length > 0 ? \`
+            <tr>
+                <td style="padding: 4px 0; color: #64748b; font-weight: 500;">Room(s):</td>
+                <td style="padding: 4px 0; text-align: right; color: #0f172a; font-weight: bold;">Rooms \${manualBookingRooms.join(', ')}</td>
+            </tr>
+            \` : ''}
+            <tr>
+                <td style="padding: 4px 0; color: #64748b; font-weight: 500;">Stay Dates:</td>
+                <td style="padding: 4px 0; text-align: right; color: #0f172a; font-weight: bold;">${checkIn} to ${checkOut}</td>
+            </tr>
+            <tr>
+                <td style="padding: 4px 0; color: #64748b; font-weight: 500;">Stay Duration:</td>
+                <td style="padding: 4px 0; text-align: right; color: #0f172a; font-weight: bold;">\${totalNights} Night(s)</td>
+            </tr>
+        </table>
+    </div>
+
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px; font-size: 13px;">
+        <thead>
+            <tr style="border-bottom: 2px solid #cbd5e1;">
+                <th style="text-align: left; padding: 8px 0; color: #475569;">Description</th>
+                <th style="text-align: right; padding: 8px 0; color: #475569;">Amount</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr style="border-bottom: 1px solid #e2e8f0;">
+                <td style="padding: 10px 0; color: #0f172a; font-weight: 500;">
+                    Guest Rental Override Access Fee<br/>
+                    <span style="font-size: 11px; color: #64748b;">Lodging charge for the entire stay interval</span>
+                </td>
+                <td style="padding: 10px 0; text-align: right; color: #0f172a; font-weight: bold; font-family: Courier, monospace;">$ \${Number(totalAmountStr).toFixed(2)}</td>
+            </tr>
+            <tr>
+                <td style="padding: 12px 0 4px 0; font-size: 15px; font-weight: bold; color: #0f172a;">Grand Total:</td>
+                <td style="padding: 12px 0 4px 0; text-align: right; font-size: 16px; font-weight: bold; color: #4f46e5; font-family: Courier, monospace;">$ \${Number(totalAmountStr).toFixed(2)}</td>
+            </tr>
+        </tbody>
+    </table>
+
+    \${invoiceCustomNotes ? \`
+    <div style="border-left: 3px solid #cbd5e1; padding-left: 12px; margin-bottom: 24px; font-size: 12px; color: #475569; font-style: italic;">
+        \${invoiceCustomNotes}
+    </div>
+    \` : ''}
+
+    <hr style="border: 0; border-top: 1px solid #e2e8f0; margin-bottom: 20px;" />
+
+    <div style="text-align: center; font-size: 11px; color: #94a3b8; font-weight: 500;">
+        This invoice is generated on behalf of the lodging provider.
+        <br />
+        <strong style="color: #64748b; margin-top: 4px; display: inline-block;">C.&S.H. Group Properties, LLC</strong>
+    </div>
+</div>
+`;
+
+      const invoiceText = `
+INVOICE
+-------
+Invoice Number: ${invoiceNumber}
+Due Date: ${invoiceDueDate}
+From: REALCal Bookings (C.&S.H. Group Properties, LLC)
+To (Sponsor): ${invoiceSponsorName} (${invoiceSponsorEmail})
+
+Guest Details:
+Guest Name: ${guestName}
+Property: ${propertyName}
+Dates: ${checkIn} to ${checkOut} (${totalNights} Night(s))
+
+Summary of Charges:
+Guest Rental Override Access Fee: $${Number(totalAmountStr).toFixed(2)}
+Grand Total Due: $${Number(totalAmountStr).toFixed(2)}
+
+Notes: ${invoiceCustomNotes}
+
+Thank you,
+C.&S.H. Group Properties, LLC
+`;
+
+      console.log("[Admin] Sending Email to Sponsor:", invoiceSponsorEmail);
+      const emailRes = await fetch("/api/send-invoice-email", {
+         method: "POST",
+         headers: { "Content-Type": "application/json" },
+         body: JSON.stringify({
+           to: invoiceSponsorEmail.trim(),
+           subject: `Invoice ${invoiceNumber}: Lodging for ${guestName} at ${propertyName}`,
+           html: invoiceHtml,
+           text: invoiceText
+         })
+      });
+
+      if (!emailRes.ok) {
+         const errText = await emailRes.text();
+         throw new Error(`Failed to send invoice email: ${errText}`);
+      }
+
+      await setDoc(doc(db, 'bookings', bookingId), payload);
+
+      try {
+          const checkOutDate = new Date(checkOut + 'T12:00:00');
+          const dayAfterDate = new Date(checkOutDate);
+          dayAfterDate.setDate(dayAfterDate.getDate() + 1);
+          const blackoutDateString = dayAfterDate.toISOString().split('T')[0];
+          
+          if (manualBookingRooms.length > 0) {
+              const batch = writeBatch(db);
+              manualBookingRooms.forEach(roomNum => {
+                  batch.set(doc(db, 'blackout_dates', `maint-${bookingId}-${roomNum}`), {
+                      propertyId,
+                      date: blackoutDateString,
+                      targetType: 'room',
+                      roomNumber: roomNum,
+                      reason: `Maintenance/Cleaning for Booking Override (Room ${roomNum})`,
+                      createdAt: serverTimestamp()
+                  });
+              });
+              await batch.commit();
+          } else {
+              await setDoc(doc(db, 'blackout_dates', `maint-${bookingId}`), {
+                  propertyId,
+                  date: blackoutDateString,
+                  targetType: 'property',
+                  roomNumber: null,
+                  reason: `Maintenance/Cleaning for Booking Override`,
+                  createdAt: serverTimestamp()
+              });
+          }
+      } catch (blackoutErr) {
+          console.warn("Failed to create auto-blackout on invoice create", blackoutErr);
+      }
+
+      try {
+         const managers = propertyManagers.filter(m => m.enabled);
+         if (managers.length > 0 || guestPhone || guestEmail) {
+            await fetch('/api/notify-managers', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                 managers,
+                 bookingDetails: {
+                    checkIn: checkIn,
+                    checkOut: checkOut,
+                    totalAmount: finalPriceCents,
+                    propertyName: propertyName,
+                    guestName: guestName,
+                    guestPhone: guestPhone,
+                    guestEmail: guestEmail,
+                    accessCode: accessCode,
+                    selectedBedrooms: selectedBedroomObjects
+                 }
+              })
+            });
+         }
+      } catch (notifyErr) {
+         console.error("Manager notification failed, but booking succeeded", notifyErr);
+      }
+
+      alert(`Success! Invoice ${invoiceNumber} sent automatically to ${invoiceSponsorEmail}. Manual booking is now Completely Booked!`);
+      
+      if (formElement) formElement.reset();
+      setManualBookingPropId('');
+      setManualBookingRooms([]);
+      setCreateInvoiceForPayment(false);
+      setShowInvoiceTemplate(false);
+      setPendingBookingData(null);
+
+    } catch(err: any) {
+      alert("Error generating invoice or creating booking: " + err.message);
+    } finally {
+      setSendingInvoice(false);
+    }
+  };
+
   const handleAdminCreateBooking = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!db) return alert("Firebase not configured");
@@ -615,9 +940,36 @@ export const AdminDashboard: React.FC = () => {
     const guestPhone = guestPhoneInput ? formatPhoneE164(guestPhoneInput) : "";
     const totalAmountStr = fd.get('totalPrice') as string;
     const manualAccessCode = fd.get('accessCode') as string || '';
+
+    if (createInvoiceForPayment) {
+        if (!formPropId || !checkIn || !checkOut || !guestName || !totalAmountStr) {
+            return alert("Please fill out all required manual booking fields before creating an invoice.");
+        }
+        setPendingBookingData({
+            propertyId: formPropId,
+            checkIn,
+            checkOut,
+            guestName,
+            guestEmail,
+            guestPhone,
+            totalPrice: totalAmountStr,
+            accessCode: manualAccessCode,
+            manualBookingRooms,
+            formElement: e.target as HTMLFormElement
+        });
+
+        setInvoiceSponsorName('');
+        setInvoiceSponsorEmail('');
+        setInvoiceSponsorPhone('');
+        setInvoiceSponsorAddress('');
+        setInvoiceNumber('REALCAL-INV-' + Math.floor(100000 + Math.random() * 900000));
+        setInvoiceDueDate(checkIn);
+        setInvoiceCustomNotes(`Lodging for ${guestName} at REALCal Bookings. Standard payment responsibility by sponsor.`);
+        setShowInvoiceTemplate(true);
+        return;
+    }
+
     const bookingId = uuidv4();
-    
-    // For manual booking we mock a userId (admin uid or placeholder)
     const payloadUserId = user?.uid || 'admin-override';
 
     try {
@@ -1164,9 +1516,25 @@ export const AdminDashboard: React.FC = () => {
                    <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">SmartLock Code</label>
                    <input name="accessCode" placeholder="Auto / Custom" className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm font-mono focus:ring-2 focus:ring-indigo-200 outline-none" />
                 </div>
-                <div className="md:col-span-2 lg:col-span-8 flex justify-end">
-                   <button type="submit" className="w-full bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-indigo-500 transition-colors">
-                      Create Override Booking
+                <div className="md:col-span-2 lg:col-span-8 flex flex-col md:flex-row justify-between items-center gap-4 mt-2">
+                   <div className="flex items-center gap-3">
+                      <label className="flex items-center gap-2 cursor-pointer bg-white hover:bg-slate-100 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold transition-all select-none shadow-sm">
+                         <input 
+                            type="checkbox" 
+                            checked={createInvoiceForPayment} 
+                            onChange={(e) => setCreateInvoiceForPayment(e.target.checked)} 
+                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-slate-300 rounded cursor-pointer" 
+                         />
+                         <span className="text-slate-700">Create Invoice for Payment</span>
+                      </label>
+                      {createInvoiceForPayment && (
+                         <span className="text-xs text-indigo-600 font-bold bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-lg animate-pulse">
+                            ⚡ Submission will open Invoice Template Customizer
+                         </span>
+                      )}
+                   </div>
+                   <button type="submit" className="w-full md:w-auto bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-indigo-500 transition-colors shadow-sm">
+                      {createInvoiceForPayment ? "Create & Open Invoice Template" : "Create Override Booking"}
                    </button>
                 </div>
              </form>
@@ -2126,6 +2494,291 @@ export const AdminDashboard: React.FC = () => {
               </div>
             </div>
           )}
+
+          {showInvoiceTemplate && pendingBookingData && (
+             <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+                <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                   {/* Header Row */}
+                   <div className="px-8 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                      <div>
+                         <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                            <span className="p-1.5 bg-indigo-100 text-indigo-700 rounded-lg"><FileDown size={18}/></span>
+                            Admin Invoice Customizer Template Page
+                         </h3>
+                         <p className="text-xs text-slate-500 mt-1 flex items-center gap-1.5 text-left">
+                            Review and update billing details below. The invoice will be automatically emailed to the responsible party to complete this booking override.
+                         </p>
+                      </div>
+                      <button 
+                         onClick={() => {
+                            setShowInvoiceTemplate(false);
+                            setPendingBookingData(null);
+                         }} 
+                         className="text-slate-400 hover:text-slate-600 transition-colors bg-white border border-slate-200 hover:border-slate-300 px-3 py-1.5 rounded-xl text-xs font-bold"
+                      >
+                         Cancel Override
+                      </button>
+                   </div>
+
+                   {/* Main Content (Split Side-by-Side: Left fields, Right Preview) */}
+                   <div className="flex-1 overflow-y-auto p-8 grid grid-cols-1 lg:grid-cols-12 gap-8 bg-slate-100/40">
+                      
+                      {/* Left: Input Customizer fields */}
+                      <form id="invoiceCustForm" onSubmit={handleSendInvoiceAndCompleteBooking} className="lg:col-span-5 space-y-6">
+                         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                            <h4 className="text-sm font-bold text-indigo-900 border-b border-indigo-50 pb-2 mb-2 flex items-center gap-2">
+                               Sponsor / Billing Party Info
+                            </h4>
+                            <div>
+                               <label className="text-[11px] font-bold text-slate-500 uppercase tracking-tight text-left block">Sponsor Name <span className="text-red-500">*</span></label>
+                               <input 
+                                  type="text" 
+                                  required 
+                                  value={invoiceSponsorName || ''} 
+                                  onChange={e => setInvoiceSponsorName(e.target.value)}
+                                  placeholder="e.g. FEMA, Department of Defense, King County Sponsor" 
+                                  className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm" 
+                               />
+                            </div>
+                            <div>
+                               <label className="text-[11px] font-bold text-slate-500 uppercase tracking-tight text-left block">Sponsor Billing Email <span className="text-red-500">*</span></label>
+                               <input 
+                                  type="email" 
+                                  required 
+                                  value={invoiceSponsorEmail || ''} 
+                                  onChange={e => setInvoiceSponsorEmail(e.target.value)}
+                                  placeholder="finance@agency.gov" 
+                                  className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm" 
+                               />
+                            </div>
+                            <div>
+                               <label className="text-[11px] font-bold text-slate-500 uppercase tracking-tight text-left block">Sponsor Phone (Optional)</label>
+                               <input 
+                                  type="text" 
+                                  value={invoiceSponsorPhone || ''} 
+                                  onChange={e => setInvoiceSponsorPhone(e.target.value)}
+                                  placeholder="+1 (555) 012-3456" 
+                                  className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm" 
+                               />
+                            </div>
+                            <div>
+                               <label className="text-[11px] font-bold text-slate-500 uppercase tracking-tight text-left block">Sponsor Billing Address (Optional)</label>
+                               <textarea 
+                                  rows={2}
+                                  value={invoiceSponsorAddress || ''} 
+                                  onChange={e => setInvoiceSponsorAddress(e.target.value)}
+                                  placeholder="123 Gov Plaza, Suite 400&#10;Seattle, WA 98101" 
+                                  className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm resize-none" 
+                               />
+                            </div>
+                         </div>
+
+                         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                            <h4 className="text-sm font-bold text-indigo-900 border-b border-indigo-50 pb-2 mb-2">
+                               Invoice Configuration
+                            </h4>
+                            <div className="grid grid-cols-2 gap-4">
+                               <div>
+                                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-tight text-left block">Invoice No.</label>
+                                  <input 
+                                     type="text" 
+                                     required 
+                                     value={invoiceNumber || ''} 
+                                     onChange={e => setInvoiceNumber(e.target.value)}
+                                     className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-slate-50 shadow-sm text-sm font-mono text-slate-600" 
+                                  />
+                               </div>
+                               <div>
+                                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-tight text-left block">Payment Due</label>
+                                  <input 
+                                     type="date" 
+                                     required 
+                                     value={invoiceDueDate || ''} 
+                                     onChange={e => setInvoiceDueDate(e.target.value)}
+                                     className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm" 
+                                  />
+                               </div>
+                            </div>
+                            <div>
+                               <label className="text-[11px] font-bold text-slate-500 uppercase tracking-tight text-left block">Custom Notes / Letterhead Message</label>
+                               <textarea 
+                                  rows={3}
+                                  value={invoiceCustomNotes || ''} 
+                                  onChange={e => setInvoiceCustomNotes(e.target.value)}
+                                  className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm resize-none" 
+                               />
+                            </div>
+                         </div>
+                      </form>
+
+                      {/* Right: Live Interactive Layout Letter/Invoice Preview */}
+                      <div className="lg:col-span-7 flex flex-col">
+                         <div className="text-xs font-bold text-slate-400 uppercase mb-2 tracking-wider flex items-center justify-between">
+                            <span>Live Email Letterhead Preview</span>
+                            <span className="text-indigo-600">REALCal Bookings System Template</span>
+                         </div>
+                         <div className="flex-1 bg-white p-8 rounded-3xl border border-slate-200 shadow-lg overflow-y-auto max-h-[500px] text-left">
+                            {/* REALCal Logo Letterhead */}
+                            <div className="flex flex-col md:flex-row justify-between items-start mb-6">
+                               <div>
+                                  <div className="text-2xl font-black text-indigo-600 tracking-tight">
+                                     REALCal <span className="font-light text-slate-800">Bookings</span>
+                                  </div>
+                                  <div className="text-[10px] uppercase tracking-widest text-slate-400 font-bold mt-1">
+                                     Premium Lodging & Luxury Residential Housing
+                                  </div>
+                               </div>
+                               <div className="mt-4 md:mt-0 text-right">
+                                  <div className="text-lg font-black text-slate-800">INVOICE</div>
+                                  <div className="text-xs font-mono text-slate-500">No: <strong className="text-slate-800">{invoiceNumber || 'NEW-INV'}</strong></div>
+                                  <div className="text-xs text-slate-500">Date: {format(new Date(), 'yyyy-MM-dd')}</div>
+                               </div>
+                            </div>
+
+                            <hr className="border-slate-100 my-4" />
+
+                            <div className="grid grid-cols-2 gap-4 mb-6 text-sm">
+                               <div>
+                                  <div className="text-[10px] uppercase font-extrabold text-indigo-600 mb-1">Bill From</div>
+                                  <div className="font-bold text-slate-800">REALCal Bookings</div>
+                                  <div className="text-xs text-slate-500 mt-1">
+                                     C.&S.H. Group Properties, LLC
+                                  </div>
+                                  <div className="text-xs text-slate-500">
+                                     billing@cashgroupproperties.com
+                                  </div>
+                               </div>
+                               <div>
+                                  <div className="text-[10px] uppercase font-extrabold text-indigo-600 mb-1">Bill To (Sponsor)</div>
+                                  {invoiceSponsorName ? (
+                                     <>
+                                        <div className="font-bold text-slate-800">{invoiceSponsorName}</div>
+                                        <div className="text-xs text-slate-500 mt-0.5">{invoiceSponsorEmail}</div>
+                                        {invoiceSponsorPhone && <div className="text-xs text-slate-500">{invoiceSponsorPhone}</div>}
+                                        {invoiceSponsorAddress && <div className="text-xs text-slate-500 mt-2 bg-slate-50 p-2 rounded-lg border border-slate-100 whitespace-pre-wrap">{invoiceSponsorAddress}</div>}
+                                     </>
+                                  ) : (
+                                     <div className="text-xs italic text-red-400 bg-red-50 p-3 rounded-xl border border-dashed border-red-200">
+                                        ⚠️ Please specify Sponsor Name first to preview live
+                                     </div>
+                                  )}
+                               </div>
+                            </div>
+
+                            {/* Main booking content recap */}
+                            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 mb-6 text-sm space-y-2">
+                               <div className="text-[10px] uppercase font-extrabold text-slate-400">Covered Guest Reservation Details</div>
+                               <div className="grid grid-cols-2 gap-y-2 gap-x-4">
+                                  <div>
+                                     <span className="text-xs text-slate-400">Guest Name:</span>
+                                     <div className="font-bold text-slate-800">{pendingBookingData.guestName}</div>
+                                  </div>
+                                  <div>
+                                     <span className="text-xs text-slate-400">Destination:</span>
+                                     <div className="font-bold text-slate-800">
+                                        {properties.find(p => p.id === pendingBookingData.propertyId)?.name || 'REALCal Property'}
+                                     </div>
+                                  </div>
+                                  {pendingBookingData.manualBookingRooms && pendingBookingData.manualBookingRooms.length > 0 && (
+                                     <div>
+                                        <span className="text-xs text-slate-400">Allocated Room(s):</span>
+                                        <div className="font-mono text-xs font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded w-max">
+                                           Rooms {pendingBookingData.manualBookingRooms.join(', ')}
+                                        </div>
+                                     </div>
+                                  )}
+                                  <div>
+                                     <span className="text-xs text-slate-400">Stay Interval:</span>
+                                     <div className="font-bold text-slate-800 text-xs">
+                                        {pendingBookingData.checkIn} to {pendingBookingData.checkOut}
+                                     </div>
+                                  </div>
+                               </div>
+                            </div>
+
+                            {/* Line items pricing */}
+                            <table className="w-full text-sm mb-6">
+                               <thead>
+                                  <tr className="border-b-2 border-slate-100 text-slate-400 text-xs text-left">
+                                     <th className="py-2 font-bold uppercase">Description</th>
+                                     <th className="py-2 text-right font-bold uppercase">Amount</th>
+                                  </tr>
+                               </thead>
+                               <tbody>
+                                  <tr className="border-b border-slate-100">
+                                     <td className="py-3">
+                                        <div className="font-bold text-slate-800">Guest Rental Override Access Fee</div>
+                                        <div className="text-xs text-slate-400 mt-1">Lodging coverage override booked manually by Administrator</div>
+                                     </td>
+                                     <td className="py-3 text-right font-mono font-bold text-slate-800">
+                                        ${Number(pendingBookingData.totalPrice).toFixed(2)}
+                                     </td>
+                                  </tr>
+                                  <tr>
+                                     <td className="py-4 text-base font-black text-slate-800">Grand Total Due:</td>
+                                     <td className="py-4 text-right text-lg font-black text-indigo-600 font-mono">
+                                        ${Number(pendingBookingData.totalPrice).toFixed(2)}
+                                     </td>
+                                  </tr>
+                                </tbody>
+                            </table>
+
+                            {/* Custom notes box preview */}
+                            {invoiceCustomNotes && (
+                               <div className="border-l-4 border-indigo-400 bg-indigo-50/50 p-3.5 rounded-r-2xl text-xs text-slate-600 italic whitespace-pre-wrap mb-6 text-left">
+                                  {invoiceCustomNotes}
+                                </div>
+                            )}
+
+                            <hr className="border-slate-100 my-4" />
+
+                            {/* Footer Branding required! C.&S.H. Group Properties, LLC */}
+                            <div className="text-center">
+                               <div className="text-[10px] text-slate-400 font-bold uppercase">Corporate Management & Invoicing Entity</div>
+                               <div className="text-sm font-black text-slate-700 mt-1">C.&S.H. Group Properties, LLC</div>
+                               <div className="text-[9px] text-slate-400 mt-1">REALCal Bookings &bull; Luxury Lodging Solutions &bull; Seattle, WA</div>
+                            </div>
+                         </div>
+                      </div>
+
+                   </div>
+
+                   {/* Footer Actions */}
+                   <div className="px-8 py-5 border-t border-slate-100 flex justify-end gap-3 bg-slate-50 items-center">
+                      <span className="text-xs text-slate-500 font-bold mr-auto flex items-center gap-1.5 pb-0.5">
+                         <span className="h-2.5 w-2.5 rounded-full bg-green-500 animate-pulse inline-block"></span> Complete booking & emit automatically on click
+                      </span>
+                      <button 
+                         type="button"
+                         onClick={() => {
+                            setShowInvoiceTemplate(false);
+                            setPendingBookingData(null);
+                         }} 
+                         className="px-5 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-sm transition-all"
+                      >
+                         Cancel
+                      </button>
+                      <button 
+                         type="submit"
+                         form="invoiceCustForm"
+                         disabled={sendingInvoice}
+                         className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-400 text-white px-8 py-2.5 rounded-xl font-bold flex items-center gap-2 text-sm transition-colors shadow-md shadow-indigo-100"
+                      >
+                         {sendingInvoice ? (
+                            <>
+                               <RefreshCw className="animate-spin" size={16}/> Sending & Booking...
+                            </>
+                         ) : (
+                            <>
+                               <Mail size={16}/> Email Invoice & Complete Booking
+                            </>
+                         )}
+                      </button>
+                   </div>
+                </div>
+             </div>
+          )}
+
        </div>
     </div>
   )
