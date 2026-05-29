@@ -73,6 +73,21 @@ export const Confirmation: React.FC = () => {
                         Thank you! The invoice for booking reference <strong>#{bookingId.substring(0,8).toUpperCase()}</strong> has been settled securely. A receipt has been issued automatically to your billing email address.
                     </p>
                     
+                    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-left text-xs mb-6 space-y-2">
+                        <p className="font-bold text-amber-800 flex items-center gap-1">
+                           ⚠️ House Rules & Zero Tolerance Policy
+                        </p>
+                        <p className="text-slate-600">
+                           • Properties supported by this application are <strong>NOT Pet Friendly</strong>. No pets are allowed.
+                        </p>
+                        <p className="text-slate-600">
+                           • There is <strong>ZERO tolerance</strong> for Drugs, Smoking, and Weapons on all premises.
+                        </p>
+                        <p className="text-slate-600">
+                           • Responsible consumption of <strong>alcohol is OK</strong>.
+                        </p>
+                    </div>
+
                     <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl mb-6 text-xs font-mono text-slate-500 break-all select-all flex justify-between items-center px-6">
                        <span className="uppercase tracking-widest font-bold text-slate-400">Invoice Ref:</span>
                        <span className="text-sm font-bold text-indigo-600">{bookingId}</span>
@@ -107,6 +122,21 @@ export const Confirmation: React.FC = () => {
                     </div>
                 )}
                 <p className="text-slate-500 mb-8">Your reservation has been successfully booked.</p>
+
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 text-left text-xs mb-8 space-y-2.5">
+                    <p className="font-bold text-amber-800 flex items-center gap-1 text-sm">
+                       ⚠️ House Rules & Conduct Statement
+                    </p>
+                    <p className="text-slate-600">
+                       • Please be reminded that properties supported by this application are <strong>NOT Pet Friendly</strong>. Absolutely no pets are permitted on premises.
+                    </p>
+                    <p className="text-slate-600">
+                       • We maintain a strict **ZERO Tolerance** policy for Drugs, Smoking, and Weapons on the properties. Violators will face immediate eviction.
+                    </p>
+                    <p className="text-slate-600">
+                       • Responsible and legal consumption of **alcohol is OK**.
+                    </p>
+                </div>
 
                 {rooms.length > 0 && (
                     <div className="space-y-2 mb-4">

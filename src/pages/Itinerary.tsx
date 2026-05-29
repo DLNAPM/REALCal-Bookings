@@ -228,6 +228,23 @@ export const Itinerary: React.FC = () => {
               </div>
             </section>
 
+            {/* House Rules & Zero Tolerance Policies */}
+            <section className="print:border-t print:border-slate-200 print:pt-6">
+              <h2 className="text-xl font-bold mb-6 flex items-center gap-2 text-slate-800">
+                <AlertCircle className="text-indigo-600" /> House Rules & Zero Tolerance Statement
+              </h2>
+              <div className="bg-amber-50/55 border border-amber-200/60 rounded-3xl p-6 md:p-8 text-slate-700 font-medium space-y-3">
+                <p className="text-amber-850 font-bold mb-1">
+                  Compliance is required for all guests staying at this property:
+                </p>
+                <ul className="list-disc pl-5 text-slate-600 space-y-2 text-sm leading-relaxed">
+                  <li><strong>Not Pet Friendly:</strong> All properties supported by this application are strictly **not pet-friendly**. No pets are permitted on the premises under any circumstances.</li>
+                  <li><strong>Zero Tolerance Policy:</strong> There is **ZERO tolerance** for drugs, smoking, and weapons on all premises. Violation of this rule will result in immediate termination of stay without a refund.</li>
+                  <li><strong>Alcohol Policy:</strong> Responsible and legal consumption of **alcohol is OK**.</li>
+                </ul>
+              </div>
+            </section>
+
             {/* Policies Section */}
             <section className="print:hidden">
                 <h2 className="text-xl font-bold mb-6 flex items-center gap-2 text-slate-800">

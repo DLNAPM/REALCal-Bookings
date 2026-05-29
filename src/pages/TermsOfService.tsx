@@ -63,6 +63,21 @@ export const TermsOfService: React.FC = () => {
             <section>
               <h3 className="text-2xl font-bold text-slate-900 mb-4 flex items-center gap-3">
                 <span className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center text-sm font-black">3</span>
+                Property House Rules & Zero Tolerance Policies
+              </h3>
+              <div className="bg-amber-50/50 border border-amber-200/60 rounded-2xl p-6 text-slate-700 space-y-3 font-medium">
+                <p className="text-amber-800 font-bold">Please observe the following strict conditions during your stay:</p>
+                <ul className="list-disc pl-5 text-slate-600 space-y-2">
+                  <li><strong>Not Pet Friendly:</strong> All properties supported by this application are strictly **not pet-friendly**. No pets of any kind are permitted.</li>
+                  <li><strong>Zero Tolerance Policy:</strong> There is a strict **ZERO Tolerance policy** for drugs, smoking, and weapons on all premises. Violations will result in immediate reservation cancellation and eviction without refund.</li>
+                  <li><strong>Alcohol Policy:</strong> Responsible and legal consumption of **alcohol is permitted** on the properties.</li>
+                </ul>
+              </div>
+            </section>
+
+            <section>
+              <h3 className="text-2xl font-bold text-slate-900 mb-4 flex items-center gap-3">
+                <span className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center text-sm font-black">4</span>
                 Liability
               </h3>
               <p className="text-slate-600 leading-relaxed font-medium">

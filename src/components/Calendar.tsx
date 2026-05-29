@@ -64,6 +64,7 @@ export const Calendar: React.FC<{
   const [blackoutDates, setBlackoutDates] = useState<BlackoutDate[]>([]);
   const [bookings, setBookings] = useState<any[]>([]);
   const [globalSettings, setGlobalSettings] = useState<any>(null);
+  const [agreedToHouseRules, setAgreedToHouseRules] = useState<boolean>(false);
   
   const navigate = useNavigate();
 
@@ -833,6 +834,26 @@ if (false) setSelectedRooms(prev =>
                </div>
             )}
             
+            {!isEditMode && checkIn && checkOut && (
+               <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl mb-4 text-xs">
+                  <label className="flex items-start gap-3 cursor-pointer select-none text-slate-300">
+                     <input 
+                       type="checkbox" 
+                       id="agree-rules-checkbox"
+                       checked={agreedToHouseRules}
+                       onChange={(e) => setAgreedToHouseRules(e.target.checked)}
+                       className="mt-0.5 w-4 h-4 rounded border-slate-700 bg-slate-800 text-indigo-600 focus:ring-indigo-500 focus:text-indigo-600 accent-indigo-600 cursor-pointer"
+                     />
+                     <div className="leading-relaxed">
+                        <span className="font-bold text-slate-100 block mb-1 uppercase tracking-wider text-[10px] text-amber-400">House Rules Agreement</span>
+                        <span className="text-slate-300 text-[11px]">
+                          I agree that properties are <strong>NOT Pet Friendly</strong> and there is <strong>ZERO tolerance</strong> for Drugs, Smoking, and Weapons. (Alcohol is OK).
+                        </span>
+                     </div>
+                  </label>
+               </div>
+            )}
+            
             <button 
               onClick={() => {
                   if (checkIn && checkOut && (isBefore(checkOut, checkIn) || isSameDay(checkIn, checkOut))) {
@@ -845,7 +866,7 @@ if (false) setSelectedRooms(prev =>
                       handleBook();
                   }
               }}
-              disabled={!checkIn || !checkOut || (user && user.tollFreeAccept !== true && !isEditMode)}
+              disabled={!checkIn || !checkOut || (user && user.tollFreeAccept !== true && !isEditMode) || (!agreedToHouseRules && !isEditMode)}
               className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-2xl transition-colors flex items-center justify-center gap-2 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed"
             >
               {isEditMode ? 'Save Changes' : 'Proceed to Checkout'}

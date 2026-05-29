@@ -661,7 +661,22 @@ export const MyBookings: React.FC = () => {
             </header>
 
             <main className="flex-1 max-w-5xl mx-auto w-full px-6">
-                <h1 className="text-3xl font-bold tracking-tight text-slate-900 mb-8">Your Travel Itineraries</h1>
+                <h1 className="text-3xl font-bold tracking-tight text-slate-900 mb-6">Your Travel Itineraries</h1>
+
+                <div className="bg-amber-50/50 border border-amber-200/60 rounded-3xl p-6 mb-8 text-sm font-medium text-slate-700 space-y-2.5">
+                    <p className="text-amber-850 font-bold flex items-center gap-1.5 text-base">
+                       ⚠️ Important Rental Conduct & House Rules
+                    </p>
+                    <p className="text-slate-600 leading-relaxed">
+                       • <strong>Not Pet Friendly:</strong> Properties supported by this application are strictly **not pet-friendly**. No pets or animals of any kind are brandished or allowed.
+                    </p>
+                    <p className="text-slate-600 leading-relaxed">
+                       • <strong>Zero Tolerance Policy:</strong> There is **ZERO tolerance** for drugs, smoking, and weapons of any type on property grounds. Violations will lead to immediate cancellation of stay.
+                    </p>
+                    <p className="text-slate-600 leading-relaxed">
+                       • <strong>Alcohol Permitted:</strong> Responsible consumption of **alcohol is OK**.
+                    </p>
+                </div>
 
                 <div className="flex gap-4 mb-6">
                     <button 
