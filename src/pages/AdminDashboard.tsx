@@ -100,6 +100,15 @@ export const AdminDashboard: React.FC = () => {
   const [uploadingProperty, setUploadingProperty] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [previewImages, setPreviewImages] = useState<string[]>([]);
+  const [selectedCreateImageIndex, setSelectedCreateImageIndex] = useState<number | null>(null);
+  const [selectedEditImageIndex, setSelectedEditImageIndex] = useState<number | null>(null);
+
+  const moveImageInArray = (arr: string[], fromIndex: number, toIndex: number): string[] => {
+      const result = [...arr];
+      const [removed] = result.splice(fromIndex, 1);
+      result.splice(toIndex, 0, removed);
+      return result;
+  };
   
   if (loading) return <div>Loading...</div>;
   if (!user || (user.role !== 'admin' && user.email !== 'dlaniger.napm.consulting@gmail.com')) return <Navigate to="/" />;
@@ -251,9 +260,9 @@ export const AdminDashboard: React.FC = () => {
   const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
       if (!e.target.files) return;
       const files = Array.from(e.target.files);
-      const remainingSlots = 15 - previewImages.length;
+      const remainingSlots = 35 - previewImages.length;
       if (files.length > remainingSlots) {
-          alert(`You can only upload up to 15 images. (\${remainingSlots} slots remaining)`);
+          alert(`You can only upload up to 35 images. (\${remainingSlots} slots remaining)`);
       }
       
       const allowedFiles = files.slice(0, remainingSlots);
@@ -2301,10 +2310,10 @@ C.&S.H. Group Properties, LLC
                      
                      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                          <div className="flex justify-between items-center mb-2">
-                             <span className="font-medium text-slate-700">Images ({previewImages.length}/15)</span>
+                             <span className="font-medium text-slate-700">Images ({previewImages.length}/35)</span>
                              <label className="bg-slate-100 hover:bg-slate-200 text-slate-800 px-4 py-2 rounded-lg cursor-pointer text-sm font-bold flex gap-2 items-center transition-colors">
                                  <ImageIcon size={16} /> Upload Photos
-                                 <input type="file" multiple accept="image/*" className="hidden" onChange={handleImageSelect} disabled={uploadingProperty || previewImages.length >= 15} />
+                                 <input type="file" multiple accept="image/*" className="hidden" onChange={handleImageSelect} disabled={uploadingProperty || previewImages.length >= 35} />
                              </label>
                          </div>
                          <div className="flex flex-wrap gap-2">
@@ -2537,14 +2546,14 @@ C.&S.H. Group Properties, LLC
                          </div>
                          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm">
                              <div className="flex justify-between items-center mb-4">
-                                 <span className="font-medium text-slate-700">Images ({p.images.length}/15)</span>
+                                 <span className="font-medium text-slate-700">Images ({p.images.length}/35)</span>
                                  <label className="bg-white border border-slate-200 hover:bg-slate-100 text-slate-800 px-3 py-1.5 rounded-lg cursor-pointer text-sm font-bold flex gap-2 items-center transition-colors">
                                      <ImageIcon size={14} /> Add Photos
-                                     <input type="file" multiple accept="image/*" className="hidden" disabled={uploadingProperty || p.images.length >= 15} onChange={async (e) => {
+                                     <input type="file" multiple accept="image/*" className="hidden" disabled={uploadingProperty || p.images.length >= 35} onChange={async (e) => {
                                          if (!e.target.files) return;
                                          setUploadingProperty(true);
                                          try {
-                                             const files = Array.from(e.target.files).slice(0, 15 - p.images.length);
+                                             const files = Array.from(e.target.files).slice(0, 35 - p.images.length);
                                              const compressed = await Promise.all(files.map(f => compressImage(f as File)));
                                              await handleUpdatePropertyImages([...p.images, ...compressed]);
                                          } catch (err) { console.error(err); }
@@ -2552,28 +2561,105 @@ C.&S.H. Group Properties, LLC
                                      }} />
                                  </label>
                              </div>
-                             <div className="flex flex-wrap gap-2 max-h-[160px] overflow-y-auto pr-2">
-                                 {p.images.map((src, i) => (
-                                     <div key={i} className="relative w-20 h-20 group">
-                                         <img src={src} className="w-full h-full object-cover rounded-lg border border-slate-200" />
-                                         <button type="button" onClick={() => handleUpdatePropertyImages(p.images.filter((_, idx)=>idx!==i))} className="absolute hidden group-hover:flex top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 items-center justify-center text-xs shadow-sm">x</button>
-                                         <div className="absolute hidden group-hover:flex bottom-1 left-0 right-0 justify-center gap-1">
-                                             {i > 0 && (
-                                                <button type="button" onClick={() => handleMoveImage(p, i, 'left')} className="bg-slate-800/80 text-white p-1 rounded hover:bg-slate-800 transition-colors">
-                                                    <ArrowLeft size={12} />
-                                                </button>
-                                             )}
-                                             {i < p.images.length - 1 && (
-                                                <button type="button" onClick={() => handleMoveImage(p, i, 'right')} className="bg-slate-800/80 text-white p-1 rounded hover:bg-slate-800 transition-colors">
-                                                    <ArrowRight size={12} />
-                                                </button>
-                                             )}
-                                         </div>
-                                     </div>
-                                 ))}
-                                 {uploadingProperty && <div className="w-20 h-20 flex items-center justify-center bg-white border border-slate-200 rounded-lg text-xs text-slate-500">Wait...</div>}
+                             {p.images.length > 0 && (
+                                  <p className="text-[11px] text-slate-500 mb-2 font-medium">
+                                      💡 Click on an image to select it, then click another space/image to move it. Or drag and drop to reorder.
+                                  </p>
+                              )}
+                              <div className="flex flex-wrap gap-2 max-h-[160px] overflow-y-auto pr-2">
+                                  {p.images.map((src, i) => {
+                                      const isSelected = selectedEditImageIndex === i;
+                                      return (
+                                          <div 
+                                              key={i} 
+                                              draggable
+                                              onDragStart={(e) => {
+                                                  e.dataTransfer.setData("text/plain", i.toString());
+                                                  setSelectedEditImageIndex(i);
+                                              }}
+                                              onDragOver={(e) => e.preventDefault()}
+                                              onDrop={async (e) => {
+                                                  e.preventDefault();
+                                                  const fromIdxStr = e.dataTransfer.getData("text/plain");
+                                                  if (fromIdxStr !== "") {
+                                                      const fromIdx = parseInt(fromIdxStr, 10);
+                                                      if (fromIdx !== i) {
+                                                          const newImages = moveImageInArray(p.images, fromIdx, i);
+                                                          await handleUpdatePropertyImages(newImages);
+                                                      }
+                                                  }
+                                                  setSelectedEditImageIndex(null);
+                                              }}
+                                              onClick={async () => {
+                                                  if (selectedEditImageIndex === null) {
+                                                      setSelectedEditImageIndex(i);
+                                                  } else if (selectedEditImageIndex === i) {
+                                                      setSelectedEditImageIndex(null);
+                                                  } else {
+                                                      const newImages = moveImageInArray(p.images, selectedEditImageIndex, i);
+                                                      await handleUpdatePropertyImages(newImages);
+                                                      setSelectedEditImageIndex(null);
+                                                  }
+                                              }}
+                                              className={cn(
+                                                  "relative w-20 h-20 group rounded-lg border cursor-pointer overflow-hidden transition-all duration-200 select-none",
+                                                  isSelected 
+                                                      ? "ring-4 ring-indigo-600 ring-offset-1 scale-105 border-transparent z-10 shadow-md"
+                                                      : "border-slate-200 hover:scale-105 hover:border-indigo-300"
+                                              )}
+                                          >
+                                              <img src={src} className="w-full h-full object-cover" />
+                                              <button 
+                                                  type="button" 
+                                                  onClick={async (e) => {
+                                                      e.stopPropagation();
+                                                      await handleUpdatePropertyImages(p.images.filter((_, idx)=>idx!==i));
+                                                      if (selectedEditImageIndex === i) setSelectedEditImageIndex(null);
+                                                      else if (selectedEditImageIndex !== null && selectedEditImageIndex > i) {
+                                                          setSelectedEditImageIndex(selectedEditImageIndex - 1);
+                                                      }
+                                                  }} 
+                                                  className="absolute top-1 right-1 bg-red-500/90 hover:bg-red-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] shadow-sm transition-colors z-20"
+                                              >
+                                                  x
+                                              </button>
+                                              {isSelected && (
+                                                  <div className="absolute inset-0 bg-indigo-600/20 flex items-center justify-center">
+                                                      <span className="bg-indigo-600 text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded shadow">SELECTED</span>
+                                                  </div>
+                                              )}
+                                              <div className="absolute hidden group-hover:flex bottom-1 left-0 right-0 justify-center gap-1 z-20">
+                                                  {i > 0 && (
+                                                     <button 
+                                                         type="button" 
+                                                         onClick={async (e) => { 
+                                                             e.stopPropagation(); 
+                                                             await handleMoveImage(p, i, "left"); 
+                                                         }} 
+                                                         className="bg-slate-800/80 text-white p-1 rounded hover:bg-slate-800 transition-colors"
+                                                     >
+                                                         <ArrowLeft size={12} />
+                                                     </button>
+                                                  )}
+                                                  {i < p.images.length - 1 && (
+                                                     <button 
+                                                         type="button" 
+                                                         onClick={async (e) => { 
+                                                             e.stopPropagation(); 
+                                                             await handleMoveImage(p, i, "right"); 
+                                                         }} 
+                                                         className="bg-slate-800/80 text-white p-1 rounded hover:bg-slate-800 transition-colors"
+                                                     >
+                                                         <ArrowRight size={12} />
+                                                     </button>
+                                                  )}
+                                              </div>
+                                          </div>
+                                      );
+                                  })}
+                                  {uploadingProperty && <div className="w-20 h-20 flex items-center justify-center bg-white border border-slate-200 rounded-lg text-xs text-slate-500 animate-pulse">Wait...</div>}
+                              </div>
                              </div>
-                         </div>
                       </form>
                    </div>
                  );
