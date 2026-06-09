@@ -491,6 +491,7 @@ export const YamiryLockGuide: React.FC<YamiryLockGuideProps> = ({ accessCode, ro
                 <li>Always ensure the lock turns <strong>Green</strong> before trying to depress the lever handle.</li>
                 <li>If the lock flashes <strong>Red</strong>, you typed a wrong code. Simply wait 3 seconds for the screen to clear and key in again.</li>
                 <li>Your key code is active starting <strong>exactly at Check-in (04:00 PM)</strong>.</li>
+                <li><strong>Locking the Front Door Deadbolt:</strong> When locking the deadbolt on the front door, press any key for 3-4 seconds, then press the <strong>YAMIRY</strong> key.</li>
               </ul>
             </div>
           </div>

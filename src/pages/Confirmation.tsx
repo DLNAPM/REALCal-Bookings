@@ -178,6 +178,17 @@ export const Confirmation: React.FC = () => {
                   </div>
                 )}
 
+                {accessCode && (
+                  <div className="bg-slate-900 border border-slate-800 text-white p-5 rounded-3xl mb-8 text-left text-xs space-y-1.5 shadow-md">
+                      <div className="text-amber-400 font-extrabold text-[10px] uppercase tracking-wider flex items-center gap-1.5">
+                          <span>🔒 FRONT DOOR DEADBOLT LOCKING</span>
+                      </div>
+                      <p className="text-slate-300 leading-relaxed font-semibold">
+                          Please note that when locking the deadbolt on the front door, you need to press any key for 3-4 seconds, then press the <span className="text-indigo-400 font-bold uppercase">YAMIRY</span> key.
+                      </p>
+                  </div>
+                )}
+
                 <div className="bg-slate-900 text-white p-6 rounded-2xl mb-8 text-left relative overflow-hidden border border-slate-800 shadow-md">
                     <div className="absolute -top-3 -right-3 p-4 opacity-10">
                         <Video size={80} className="text-indigo-400" />

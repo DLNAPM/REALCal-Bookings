@@ -183,6 +183,17 @@ export const Itinerary: React.FC = () => {
                          </div>
                     </div>
                 </div>
+
+                {booking.accessCode && (
+                    <div className="mt-4 bg-slate-900 border border-slate-800 text-white p-5 rounded-3xl text-xs space-y-1.5 shadow-md print:bg-white print:text-slate-900 print:border-slate-200">
+                        <div className="text-amber-400 font-extrabold text-[10px] uppercase tracking-wider flex items-center gap-1.5 print:text-indigo-600">
+                            <span>🔒 FRONT DOOR DEADBOLT LOCKING</span>
+                        </div>
+                        <p className="text-slate-300 leading-relaxed font-semibold print:text-slate-600">
+                            Please note that when locking the deadbolt on the front door, you need to press any key for 3-4 seconds, then press the <span className="text-indigo-400 print:text-indigo-600 font-bold uppercase">YAMIRY</span> key.
+                        </p>
+                    </div>
+                )}
                 
                 {rooms.length > 0 && (
                   <div className="mt-8 space-y-4">

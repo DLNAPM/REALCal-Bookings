@@ -892,6 +892,18 @@ export const MyBookings: React.FC = () => {
                                                         ))}
                                                     </div>
                                                 )}
+
+                                                {/* Front Door Lock Note */}
+                                                {!booking.checkedOut && (
+                                                    <div className="pt-2.5 border-t border-indigo-100/70 text-xs text-indigo-950 bg-indigo-50/50 p-2.5 rounded-lg space-y-1">
+                                                        <span className="font-bold block text-indigo-900 flex items-center gap-1">
+                                                            🔒 FRONT DOOR DEADBOLT LOCKING:
+                                                        </span>
+                                                        <p className="text-slate-600 leading-relaxed font-semibold">
+                                                            When locking the deadbolt on the front door, please press any key for 3-4 seconds then press the <span className="font-black text-indigo-750 uppercase">YAMIRY</span> key.
+                                                        </p>
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
 
