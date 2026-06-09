@@ -600,8 +600,8 @@ export const Checkout: React.FC = () => {
                                            <span className="text-[10px] text-slate-400 font-bold ml-1.5 font-mono">Room {b.roomNumber}</span>
                                        </div>
                                        <div className="flex items-center gap-2">
-                                           <span className="text-[9px] font-bold uppercase tracking-wide text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">Private Code</span>
-                                           <span className="font-mono text-xs font-black text-slate-700 bg-slate-50 px-2 py-1 rounded border border-slate-200">{b.roomLockNumber}</span>
+                                            <span className="text-[9px] font-bold uppercase tracking-wide text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100">Hidden until paid</span>
+                                            <span className="font-mono text-xs font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded border border-slate-200" title="Revealed after payment">🔒 ••••</span>
                                        </div>
                                    </div>
                                ))}
@@ -634,7 +634,7 @@ export const Checkout: React.FC = () => {
                                         />
                                         <div>
                                             <div className="font-bold text-sm text-slate-800">{b.type} - Room {b.roomNumber}</div>
-                                            <div className="text-[10px] text-slate-500 font-medium">{b.sqFt} sq ft • Lock: {b.roomLockNumber}</div>
+                                            <div className="text-[10px] text-slate-500 font-medium">{b.sqFt} sq ft • Private Code: <span className="font-mono bg-slate-50 text-slate-400 px-1 py-0.5 rounded border border-slate-150 inline-flex items-center gap-0.5" title="Revealed after payment">🔒 ••••</span></div>
                                         </div>
                                     </div>
                                     <div className="font-mono font-bold text-indigo-600">${b.fee}</div>
@@ -648,8 +648,16 @@ export const Checkout: React.FC = () => {
              
              {property?.hasSmartLock && property?.isTestProperty && (
                  <div className="mb-6 p-4 bg-indigo-50 border border-indigo-200 rounded-xl text-indigo-900 border-dashed">
-                     <p className="font-bold text-sm">Simulated SmartLock Code</p>
-                     <p className="text-3xl font-mono font-bold tracking-widest mt-1">123456</p>
+                      <p className="font-bold text-xs text-indigo-950 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> Smart Lock Code Status
+                      </p>
+                      <p className="text-xs text-slate-500 mt-1 leading-relaxed font-semibold">
+                          Your custom front door smart key will be automatically provisioned and sent as soon as checkout payment is verified.
+                      </p>
+                      <div className="mt-3 flex items-center gap-2 bg-white/65 px-3 py-2 rounded-lg border border-indigo-100 h-10">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Front Door Lock PIN</span>
+                          <span className="text-xs font-mono font-black text-slate-400 tracking-wider">🔒 CODES HIDDEN UNTIL PAID</span>
+                      </div>
                  </div>
              )}
              
