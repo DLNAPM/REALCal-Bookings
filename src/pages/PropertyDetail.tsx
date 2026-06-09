@@ -4,7 +4,7 @@ import { Calendar } from '../components/Calendar';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
-import { ChevronLeft, Calendar as CalendarIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Calendar as CalendarIcon } from 'lucide-react';
 import { Property } from '../types';
 
 import { LegalFooter } from '../components/LegalFooter';
@@ -14,10 +14,36 @@ export const PropertyDetail: React.FC = () => {
     const { user, loading: authLoading } = useAuth();
     const [property, setProperty] = useState<Property | null>(null);
     const [loading, setLoading] = useState(true);
+    const [enlargedImageIndex, setEnlargedImageIndex] = useState<number | null>(null);
 
     if (user && user.tollFreeAccept === undefined && !authLoading) {
         return <Navigate to="/opt-in" replace />;
     }
+
+    useEffect(() => {
+        if (enlargedImageIndex === null || !property) return;
+
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                setEnlargedImageIndex(null);
+            } else if (e.key === 'ArrowLeft') {
+                setEnlargedImageIndex((prev) => 
+                    prev !== null 
+                        ? (prev === 0 ? property.images.length - 1 : prev - 1) 
+                        : null
+                );
+            } else if (e.key === 'ArrowRight') {
+                setEnlargedImageIndex((prev) => 
+                    prev !== null 
+                        ? (prev === property.images.length - 1 ? 0 : prev + 1) 
+                        : null
+                );
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [enlargedImageIndex, property]);
 
     useEffect(() => {
         if (!id || !db) return;
@@ -77,11 +103,11 @@ export const PropertyDetail: React.FC = () => {
                    <p className="text-xl text-slate-500 mb-8 max-w-3xl">{property.description}</p>
                    
                    <div className="h-[460px] w-full rounded-3xl overflow-hidden mb-12 flex gap-4 p-2 bg-white border border-slate-200 shadow-sm">
-                       <img src={topImage} alt="Main Image" className={`${property.images.length === 1 ? 'w-full' : 'w-2/3'} h-full object-cover rounded-2xl shadow-sm`} referrerPolicy="no-referrer" />
+                       <img src={topImage} alt="Main Image" onClick={() => { if (property.images.length > 0) { setEnlargedImageIndex(0); } }} className={`${property.images.length === 1 ? 'w-full' : 'w-2/3'} h-full object-cover rounded-2xl shadow-sm cursor-pointer hover:opacity-95 transition-opacity duration-200`} referrerPolicy="no-referrer" />
                        {property.images.length > 1 && (
                          <div className="w-1/3 flex flex-col gap-4">
-                            <img src={subImages[0]} alt="Sub Image 1" className="w-full h-[calc(50%-0.5rem)] object-cover rounded-2xl shadow-sm" referrerPolicy="no-referrer" />
-                            {property.images.length > 2 && <img src={subImages[1]} alt="Sub Image 2" className="w-full h-[calc(50%-0.5rem)] object-cover rounded-2xl shadow-sm" referrerPolicy="no-referrer" />}
+                            <img src={subImages[0]} alt="Sub Image 1" onClick={() => setEnlargedImageIndex(1)} className="w-full h-[calc(50%-0.5rem)] object-cover rounded-2xl shadow-sm cursor-pointer hover:opacity-95 transition-opacity duration-200" referrerPolicy="no-referrer" />
+                            {property.images.length > 2 && <img src={subImages[1]} alt="Sub Image 2" onClick={() => setEnlargedImageIndex(2)} className="w-full h-[calc(50%-0.5rem)] object-cover rounded-2xl shadow-sm cursor-pointer hover:opacity-95 transition-opacity duration-200" referrerPolicy="no-referrer" />}
                          </div>
                        )}
                    </div>
@@ -90,7 +116,7 @@ export const PropertyDetail: React.FC = () => {
                    {property.images.length > 3 && (
                        <div className="flex gap-4 overflow-x-auto pb-4 mb-8 snap-x px-2">
                            {property.images.slice(3).map((img, idx) => (
-                               <img key={idx} src={img} className="h-32 w-48 rounded-2xl object-cover snap-start border border-slate-200 shadow-sm" referrerPolicy="no-referrer" />
+                               <img key={idx} src={img} onClick={() => setEnlargedImageIndex(idx + 3)} className="h-32 w-48 rounded-2xl object-cover snap-start border border-slate-200 shadow-sm cursor-pointer hover:opacity-95 transition-opacity duration-200 flex-shrink-0" referrerPolicy="no-referrer" />
                            ))}
                        </div>
                    )}
@@ -99,6 +125,96 @@ export const PropertyDetail: React.FC = () => {
                <Calendar propertyId={property.id} property={property} />
             </main>
             <LegalFooter />
-        </div>
+        
+             {/* Lightbox / Enlarged View Modal */}
+             {enlargedImageIndex !== null && property.images.length > 0 && (
+                 <div 
+                     className="fixed inset-0 bg-slate-950/95 z-50 flex flex-col justify-between items-center p-4 md:p-8 backdrop-blur-sm animate-in fade-in duration-200"
+                     onClick={() => setEnlargedImageIndex(null)}
+                 >
+                     {/* Header */}
+                     <div className="w-full max-w-7xl flex justify-between items-center text-white py-2 z-10 select-none">
+                         <span className="text-sm font-semibold tracking-wide text-slate-300">
+                             Image {enlargedImageIndex + 1} of {property.images.length}
+                         </span>
+                         <button 
+                             onClick={() => setEnlargedImageIndex(null)}
+                             className="bg-white/10 hover:bg-white/20 hover:scale-105 active:scale-95 text-white p-2.5 rounded-full transition-all duration-200 cursor-pointer shadow-lg"
+                             title="Close (Esc)"
+                         >
+                             <X size={20} />
+                         </button>
+                     </div>
+
+                     {/* Image Body / Main Content with Navigation Side Buttons */}
+                     <div className="flex-1 w-full flex items-center justify-between gap-4 max-w-7xl relative my-auto">
+                         {/* Previous Indicator / Button */}
+                         <button 
+                             disabled={property.images.length <= 1}
+                             onClick={(e) => {
+                                 e.stopPropagation();
+                                 setEnlargedImageIndex((prev) => 
+                                     prev !== null 
+                                         ? (prev === 0 ? property.images.length - 1 : prev - 1) 
+                                         : null
+                                 );
+                             }}
+                             className="bg-white/10 hover:bg-indigo-650/90 hover:bg-white/20 active:scale-95 text-white p-3 md:p-4 rounded-full transition-all duration-200 cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed z-10 shadow-lg"
+                             title="Previous"
+                         >
+                             <ChevronLeft size={24} />
+                         </button>
+
+                         {/* Enlarged image */}
+                         <div className="flex-1 h-full max-h-[70vh] flex items-center justify-center p-2">
+                             <img 
+                                 src={property.images[enlargedImageIndex]} 
+                                 alt={`Enlarged property display ${enlargedImageIndex + 1}`} 
+                                 className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl select-none animate-in zoom-in-95 duration-200"
+                                 onClick={(e) => e.stopPropagation()}
+                                 referrerPolicy="no-referrer"
+                             />
+                         </div>
+
+                         {/* Next Indicator / Button */}
+                         <button 
+                             disabled={property.images.length <= 1}
+                             onClick={(e) => {
+                                 e.stopPropagation();
+                                 setEnlargedImageIndex((prev) => 
+                                     prev !== null 
+                                         ? (prev === property.images.length - 1 ? 0 : prev + 1) 
+                                         : null
+                                 );
+                             }}
+                             className="bg-white/10 hover:bg-indigo-650/90 hover:bg-white/20 active:scale-95 text-white p-3 md:p-4 rounded-full transition-all duration-200 cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed z-10 shadow-lg"
+                             title="Next"
+                         >
+                             <ChevronRight size={24} />
+                         </button>
+                     </div>
+
+                     {/* Thumbnail Slider Navigation */}
+                     <div className="w-full max-w-4xl py-4 overflow-x-auto flex gap-3.5 justify-start md:justify-center items-center px-4 custom-scrollbar">
+                         {property.images.map((img, i) => (
+                             <button
+                                 key={i}
+                                 onClick={(e) => {
+                                     e.stopPropagation();
+                                     setEnlargedImageIndex(i);
+                                 }}
+                                 className={`relative h-14 w-20 rounded-xl overflow-hidden border-2 transition-all duration-200 flex-shrink-0 cursor-pointer shadow-sm ${
+                                     enlargedImageIndex === i 
+                                         ? "border-indigo-500 scale-105 ring-2 ring-indigo-500/20" 
+                                         : "border-transparent opacity-50 hover:opacity-100"
+                                 }`}
+                             >
+                                 <img src={img} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                             </button>
+                         ))}
+                     </div>
+                 </div>
+             )}
+</div>
     )
 }
