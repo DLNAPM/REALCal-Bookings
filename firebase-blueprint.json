@@ -62,6 +62,7 @@
         "description": { "type": "string" },
         "images": { "type": "array", "items": { "type": "string" } },
         "hasSmartLock": { "type": "boolean" },
+        "frontDoorCode": { "type": "string" },
         "allowIndividualRoomRental": { "type": "boolean" },
         "bedrooms": { "type": "array" },
         "isTestProperty": { "type": "boolean" },

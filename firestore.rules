@@ -55,11 +55,12 @@ service cloud.firestore {
         data.keys().size() >= 4 && data.keys().size() <= 15 &&
         data.name is string && data.name.size() <= 128 &&
         data.description is string && data.description.size() <= 2048 &&
-        data.images is list && data.images.size() <= 15 &&
+        data.images is list && data.images.size() <= 35 &&
         (data.images.size() == 0 || data.images[0] is string) &&
         (data.keys().hasAll(['isTestProperty']) ? data.isTestProperty is bool : true) &&
         (data.keys().hasAll(['location']) ? data.location is string : true) &&
         (data.keys().hasAll(['hasSmartLock']) ? data.hasSmartLock is bool : true) &&
+        (data.keys().hasAll(['frontDoorCode']) ? data.frontDoorCode is string : true) &&
         (data.keys().hasAll(['allowIndividualRoomRental']) ? data.allowIndividualRoomRental is bool : true) &&
         (data.keys().hasAll(['bedrooms']) ? data.bedrooms is list : true) &&
         data.createdAt is timestamp;
