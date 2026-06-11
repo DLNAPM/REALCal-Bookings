@@ -299,6 +299,56 @@ export const Calendar: React.FC<{
     return getNightlyRate(date, pricingRules, null, 'entire');
   };
 
+  const validateExtendedBookingDates = (selectedCheckIn: Date, selectedCheckOut: Date): { isValid: boolean; message?: string } => {
+    if (!isEditMode || !initialCheckIn || !initialCheckOut) {
+      return { isValid: true };
+    }
+
+    const origStart = startOfDay(parseLocalDate(initialCheckIn)!);
+    const origEnd = startOfDay(parseLocalDate(initialCheckOut)!);
+    const newStart = startOfDay(selectedCheckIn);
+    const newEnd = startOfDay(selectedCheckOut);
+
+    // Check if they are actually extending the stay (earlier checkin or later checkout)
+    const isExtendedBefore = newStart < origStart;
+    const isExtendedAfter = newEnd > origEnd;
+
+    if (!isExtendedBefore && !isExtendedAfter) {
+      return { isValid: true };
+    }
+
+    const newInterval = eachDayOfInterval({ start: newStart, end: addDays(newEnd, -1) });
+    const oldInterval = eachDayOfInterval({ start: origStart, end: addDays(origEnd, -1) }).map(d => format(d, 'yyyy-MM-dd'));
+
+    const extendedNights = newInterval.filter(day => !oldInterval.includes(format(day, 'yyyy-MM-dd')));
+
+    // Check conflicts for each extended stay night
+    for (const night of extendedNights) {
+      if (isUnavailable(night)) {
+        return { 
+          isValid: false, 
+          message: `The extended stay night of ${format(night, 'MMMM d, yyyy')} is not available because it conflicts with another guest's booking or maintenance window.` 
+        };
+      }
+    }
+
+    // Also check the REQUIRED Cleaning/Maintenance day after the new checkout
+    const checkOutDateDate = new Date(format(newEnd, 'yyyy-MM-dd') + 'T12:00:00');
+    const cleaningDayDate = new Date(checkOutDateDate);
+    cleaningDayDate.setDate(cleaningDayDate.getDate() + 1);
+    const cleaningDay = startOfDay(cleaningDayDate);
+
+    // Verify if this cleaning day is available (does not conflict with another Guest's booking or other blackouts)
+    if (isUnavailable(cleaningDay)) {
+      return {
+        isValid: false,
+        message: `The required Cleaning/Maintenance day after your extended stay (${format(cleaningDay, 'MMMM d, yyyy')}) conflicts with another guest's booking or maintenance window.`
+      };
+    }
+
+    return { isValid: true };
+  };
+
   const handleDateClick = (day: Date) => {
     if (isUnavailable(day) || isBefore(day, startOfDay(new Date()))) return;
 
@@ -338,94 +388,111 @@ export const Calendar: React.FC<{
     const origCheckOut = initialCheckOut ? parseLocalDate(initialCheckOut) : null;
     const currentCheckIn = checkIn || origCheckIn;
 
+    let proposedCheckIn: Date | null = checkIn;
+    let proposedCheckOut: Date | null = checkOut;
+    let ranAssign = false;
+
     if (isEditMode && origCheckIn && origCheckOut && currentCheckIn && isBefore(day, currentCheckIn)) {
        if (!hasConflictBetween(day, currentCheckIn)) {
-          setCheckIn(day);
-          setCheckOut(checkOut || origCheckOut);
-          return;
+          proposedCheckIn = day;
+          proposedCheckOut = checkOut || origCheckOut;
+          ranAssign = true;
        }
     }
 
-    // If no selection OR clicking a boundary OR starting a fresh range
-    if (!checkIn || !checkOut || isSameDay(day, checkIn) || isSameDay(day, checkOut)) {
-      if (checkIn && checkOut && (isSameDay(day, checkIn) || isSameDay(day, checkOut))) {
-        // Toggling a boundary: clear it to start new selection from here
-        setCheckIn(day);
-        setCheckOut(null);
-      } else if (!checkIn) {
-        setCheckIn(day);
-        setCheckOut(null);
-      } else if (isSameDay(day, checkIn)) {
-        setCheckIn(null);
-        setCheckOut(null);
-      } else if (isBefore(day, checkIn)) {
-        setCheckIn(day);
-      } else {
-        // Forming a range from Check-in
-        if (hasConflictBetween(checkIn, day)) {
-          setCheckIn(day);
-          setCheckOut(null);
+    if (!ranAssign) {
+      // If no selection OR clicking a boundary OR starting a fresh range
+      if (!checkIn || !checkOut || isSameDay(day, checkIn) || isSameDay(day, checkOut)) {
+        if (checkIn && checkOut && (isSameDay(day, checkIn) || isSameDay(day, checkOut))) {
+          // Toggling a boundary: clear it to start new selection from here
+          proposedCheckIn = day;
+          proposedCheckOut = null;
+        } else if (!checkIn) {
+          proposedCheckIn = day;
+          proposedCheckOut = null;
+        } else if (isSameDay(day, checkIn)) {
+          proposedCheckIn = null;
+          proposedCheckOut = null;
+        } else if (isBefore(day, checkIn)) {
+          proposedCheckIn = day;
         } else {
-           // check min nights
-           const interval = eachDayOfInterval({ start: checkIn, end: day });
-           const nights = interval.length - 1;
-           let minRequired = globalSettings?.minDaysDefault || 1;
-           if (interval.some(d => getDay(d) === 5 || getDay(d) === 6)) minRequired = globalSettings?.minDaysWeekend || 1;
-           
-           if (nights < minRequired) {
-             alert(`Your dates include a requirement of at least ${minRequired} nights. Please extend your checkout date.`);
-             return;
-           }
-           setCheckOut(day);
+          // Forming a range from Check-in
+          if (hasConflictBetween(checkIn, day)) {
+            proposedCheckIn = day;
+            proposedCheckOut = null;
+          } else {
+             // check min nights
+             const interval = eachDayOfInterval({ start: checkIn, end: day });
+             const nights = interval.length - 1;
+             let minRequired = globalSettings?.minDaysDefault || 1;
+             if (interval.some(d => getDay(d) === 5 || getDay(d) === 6)) minRequired = globalSettings?.minDaysWeekend || 1;
+             
+             if (nights < minRequired) {
+               alert(`Your dates include a requirement of at least ${minRequired} nights. Please extend your checkout date.`);
+               return;
+             }
+             proposedCheckOut = day;
+          }
+        }
+      } else {
+        // RANGE IS ALREADY SET (checkIn && checkOut && not same day as boundary)
+        // We arrive here if the user clicked a date different from existing checkIn/checkOut
+        if (isBefore(day, checkIn)) {
+          // 1. Expand range BEFORE
+          if (hasConflictBetween(day, checkIn)) {
+            // Reset if conflict
+            proposedCheckIn = day;
+            proposedCheckOut = null;
+          } else {
+            proposedCheckIn = day;
+          }
+        } else if (day > checkOut) {
+          // 2. Expand range AFTER
+          if (hasConflictBetween(checkOut, day)) {
+            proposedCheckIn = day;
+            proposedCheckOut = null;
+          } else {
+            proposedCheckOut = day;
+          }
+        } else {
+          // 3. Clicked BETWEEN checkIn and checkOut
+          // Determine which end to move to the clicked day
+          const distIn = Math.abs(day.getTime() - checkIn.getTime());
+          const distOut = Math.abs(day.getTime() - checkOut.getTime());
+          
+          if (distIn < distOut) {
+            // Closer to Check-in, Move checkIn forward (shorten from start)
+            if (checkMinNights(day, checkOut)) {
+              proposedCheckIn = day;
+            } else {
+              // If shortening violates min nights, just start over from here
+              proposedCheckIn = day;
+              proposedCheckOut = null;
+            }
+          } else {
+            // Closer to Check-out, Move checkOut back (shorten from end)
+            if (checkMinNights(checkIn, day)) {
+              proposedCheckOut = day;
+            } else {
+              proposedCheckIn = day;
+              proposedCheckOut = null;
+            }
+          }
         }
       }
-      return;
     }
 
-    // RANGE IS ALREADY SET (checkIn && checkOut && not same day as boundary)
-    // We arrive here if the user clicked a date different from existing checkIn/checkOut
-    if (isBefore(day, checkIn)) {
-      // 1. Expand range BEFORE
-      if (hasConflictBetween(day, checkIn)) {
-        // Reset if conflict
-        setCheckIn(day);
-        setCheckOut(null);
-      } else {
-        setCheckIn(day);
-      }
-    } else if (day > checkOut) {
-      // 2. Expand range AFTER
-      if (hasConflictBetween(checkOut, day)) {
-        setCheckIn(day);
-        setCheckOut(null);
-      } else {
-        setCheckOut(day);
-      }
-    } else {
-      // 3. Clicked BETWEEN checkIn and checkOut
-      // Determine which end to move to the clicked day
-      const distIn = Math.abs(day.getTime() - checkIn.getTime());
-      const distOut = Math.abs(day.getTime() - checkOut.getTime());
-      
-      if (distIn < distOut) {
-        // Closer to Check-in, Move checkIn forward (shorten from start)
-        if (checkMinNights(day, checkOut)) {
-          setCheckIn(day);
-        } else {
-          // If shortening violates min nights, just start over from here
-          setCheckIn(day);
-          setCheckOut(null);
+    // Now, run validation BEFORE applying state changes
+    if (isEditMode && proposedCheckIn && proposedCheckOut && origCheckIn && origCheckOut) {
+        const val = validateExtendedBookingDates(proposedCheckIn, proposedCheckOut);
+        if (!val.isValid) {
+            alert(val.message);
+            return; // Prevent date selection
         }
-      } else {
-        // Closer to Check-out, Move checkOut back (shorten from end)
-        if (checkMinNights(checkIn, day)) {
-          setCheckOut(day);
-        } else {
-          setCheckIn(day);
-          setCheckOut(null);
-        }
-      }
     }
+
+    setCheckIn(proposedCheckIn);
+    setCheckOut(proposedCheckOut);
   };
 
   const calculatePrice = () => {
@@ -861,6 +928,11 @@ if (false) setSelectedRooms(prev =>
                       return;
                   }
                   if (isEditMode && onSaveEdit && checkIn && checkOut && priceDetails) {
+                      const val = validateExtendedBookingDates(checkIn, checkOut);
+                      if (!val.isValid) {
+                          alert(val.message);
+                          return;
+                      }
                       onSaveEdit(format(checkIn, 'yyyy-MM-dd'), format(checkOut, 'yyyy-MM-dd'), priceDetails, selectedRooms, rentalMode, dailySelections);
                   } else {
                       handleBook();
