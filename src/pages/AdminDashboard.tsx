@@ -1999,6 +1999,7 @@ C.&S.H. Group Properties, LLC
                 <table className="w-full text-sm text-left">
                    <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-y border-slate-100">
                       <tr>
+                         <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest">Ref#</th>
                          <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest">Guest</th>
                          <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest">Property / Rooms</th>
                          <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest">Dates</th>
@@ -2016,6 +2017,15 @@ C.&S.H. Group Properties, LLC
                          
                          return (
                             <tr key={b.id} className="hover:bg-slate-50 transition-colors">
+                               <td className="px-4 py-4">
+                                  <Link 
+                                     to={`/itinerary/${b.id}`}
+                                     className="font-mono text-xs font-bold text-indigo-600 hover:text-indigo-800 hover:underline bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-100 inline-flex items-center gap-1 transition-all hover:scale-[1.03] shadow-sm"
+                                     title="Click to view full Guest itinerary"
+                                  >
+                                     🎫 {b.bookingRef || 'View'}
+                                  </Link>
+                               </td>
                                <td className="px-4 py-4">
                                   <p className="font-semibold text-slate-800">{userObj?.displayName || 'Unknown Guest'}</p>
                                   <p className="text-xs text-slate-500">{userObj?.email || b.guestPhone || ''}</p>

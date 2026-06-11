@@ -196,23 +196,29 @@ export const MyBookings: React.FC = () => {
         const fetchBookings = async () => {
             setFetching(true);
             try {
-                const q1 = query(collection(db, 'bookings'), where('userId', '==', user.uid));
-                const snap1 = await getDocs(q1);
-                const fetchedBookings = snap1.docs.map(d => ({ id: d.id, ...d.data() } as Booking));
+                let fetchedBookings: Booking[] = [];
+                if (user.role === 'admin') {
+                    const snap = await getDocs(collection(db, 'bookings'));
+                    fetchedBookings = snap.docs.map(d => ({ id: d.id, ...d.data() } as Booking));
+                } else {
+                    const q1 = query(collection(db, 'bookings'), where('userId', '==', user.uid));
+                    const snap1 = await getDocs(q1);
+                    fetchedBookings = snap1.docs.map(d => ({ id: d.id, ...d.data() } as Booking));
 
-                if (user.email) {
-                    const q2 = query(collection(db, 'bookings'), where('guestEmail', '==', user.email));
-                    const snap2 = await getDocs(q2);
-                    const list2 = snap2.docs.map(d => ({ id: d.id, ...d.data() } as Booking));
-                    const existingIds = new Set(fetchedBookings.map(b => b.id));
-                    list2.forEach(b => {
-                        if (!existingIds.has(b.id)) {
-                            fetchedBookings.push(b);
-                        }
-                    });
+                    if (user.email) {
+                        const q2 = query(collection(db, 'bookings'), where('guestEmail', '==', user.email));
+                        const snap2 = await getDocs(q2);
+                        const list2 = snap2.docs.map(d => ({ id: d.id, ...d.data() } as Booking));
+                        const existingIds = new Set(fetchedBookings.map(b => b.id));
+                        list2.forEach(b => {
+                            if (!existingIds.has(b.id)) {
+                                fetchedBookings.push(b);
+                            }
+                        });
+                    }
                 }
 
-                const activeBookings = fetchedBookings.filter(b => !b.deletedByGuest);                
+                const activeBookings = user.role === 'admin' ? fetchedBookings : fetchedBookings.filter(b => !b.deletedByGuest);                
                 
                 // Enhance with property details
                 const enhanced = await Promise.all(activeBookings.map(async (b) => {
