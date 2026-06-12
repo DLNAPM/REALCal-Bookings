@@ -3,18 +3,24 @@ import { eachDayOfInterval, format, getDay, addDays } from "date-fns";
 export interface PricingRule {
   id?: string;
   propertyId: string;
-  type: 'default' | 'weekend' | 'holiday' | 'custom';
+  type: 'default' | 'weekend' | 'holiday' | 'custom' | 'daily' | 'five_day' | 'weekly' | 'monthly';
   rate: number;
   startDate?: string;
   endDate?: string;
   targetType?: 'property' | 'room';
-  roomNumber?: number | null;
+  roomNumber?: string | number | null;
 }
 
-export const getNightlyRate = (date: Date, pricingRules: PricingRule[], selectedRoom: any | null, rentalMode: 'entire' | 'room'): number => {
+export const getNightlyRate = (
+  date: Date, 
+  pricingRules: PricingRule[], 
+  selectedRoom: any | null, 
+  rentalMode: 'entire' | 'room',
+  stayNights?: number
+): number => {
   const applicableRules = pricingRules.filter(r => {
     if (rentalMode === 'room') {
-      return r.targetType === 'room' && r.roomNumber === selectedRoom?.roomNumber;
+      return r.targetType === 'room' && String(r.roomNumber) === String(selectedRoom?.roomNumber);
     } else {
       return !r.targetType || r.targetType === 'property';
     }
@@ -31,6 +37,34 @@ export const getNightlyRate = (date: Date, pricingRules: PricingRule[], selected
   // Find rules by priority
   const defaultRule = applicableRules.find(r => r.type === 'default');
   if (defaultRule) rate = defaultRule.rate;
+
+  // Let's resolve the length-of-stay (duration-based) baseline rate if stayNights is provided
+  if (stayNights !== undefined && stayNights > 0) {
+    let stayTypeRule: PricingRule | undefined;
+    if (stayNights >= 30) {
+      stayTypeRule = applicableRules.find(r => r.type === 'monthly')
+        || applicableRules.find(r => r.type === 'weekly')
+        || applicableRules.find(r => r.type === 'five_day')
+        || applicableRules.find(r => r.type === 'daily');
+    } else if (stayNights >= 7) {
+      stayTypeRule = applicableRules.find(r => r.type === 'weekly')
+        || applicableRules.find(r => r.type === 'five_day')
+        || applicableRules.find(r => r.type === 'daily');
+    } else if (stayNights >= 5) {
+      stayTypeRule = applicableRules.find(r => r.type === 'five_day')
+        || applicableRules.find(r => r.type === 'daily');
+    } else {
+      stayTypeRule = applicableRules.find(r => r.type === 'daily');
+    }
+
+    if (stayTypeRule) {
+      rate = stayTypeRule.rate;
+    }
+  } else {
+    // If stayNights is not specified/provided, fallback to looking for 'daily' rules as the default
+    const dailyRule = applicableRules.find(r => r.type === 'daily');
+    if (dailyRule) rate = dailyRule.rate;
+  }
 
   const weekendRule = applicableRules.find(r => r.type === 'weekend');
   if (weekendRule && (getDay(date) === 5 || getDay(date) === 6)) rate = weekendRule.rate;
@@ -74,6 +108,7 @@ export const calculatePriceDetails = (
 
   // Date-fns eachDayOfInterval includes the end date, but checkout day is not charged
   const interval = eachDayOfInterval({ start: checkIn, end: addDays(checkOut, -1) });
+  let nights = interval.length;
   
   let totalNightsRate = 0;
   interval.forEach(day => {
@@ -88,39 +123,32 @@ export const calculatePriceDetails = (
         
         if (roomsToCharge.length > 0) {
           roomsToCharge.forEach((room: any) => {
-            totalNightsRate += getNightlyRate(day, pricingRules, room, 'room');
+            totalNightsRate += getNightlyRate(day, pricingRules, room, 'room', nights);
           });
         } else {
-          totalNightsRate += getNightlyRate(day, pricingRules, null, 'entire');
+          totalNightsRate += getNightlyRate(day, pricingRules, null, 'entire', nights);
         }
       } else {
-        totalNightsRate += getNightlyRate(day, pricingRules, null, 'entire');
+        totalNightsRate += getNightlyRate(day, pricingRules, null, 'entire', nights);
       }
     } else {
       if (rentalMode === 'room' && rooms.length > 0) {
         rooms.forEach(room => {
-          totalNightsRate += getNightlyRate(day, pricingRules, room, 'room');
+          totalNightsRate += getNightlyRate(day, pricingRules, room, 'room', nights);
         });
       } else {
-        totalNightsRate += getNightlyRate(day, pricingRules, null, 'entire');
+        totalNightsRate += getNightlyRate(day, pricingRules, null, 'entire', nights);
       }
     }
   });
   
   let cleaningFee = globalSettings?.cleaningFee || 100;
-  // If renting multiple rooms, maybe cleaning fee is per room? 
-  // Let's assume singular cleaning fee for entire property or per booking for now unless specified.
-  // Actually, let's make it per room if room rental, or a base fee.
-  if (rentalMode === 'room' && rooms.length > 1) {
-     // Optional: adjust cleaning fee for multiple rooms? 
-     // User didn't specify, so I'll keep it simple but maybe multiply by rooms if we want to be realistic.
-     // However, let's stick to the current logic unless it feels wrong.
-  }
-  let nights = interval.length;
   let discount = 0;
   
-  // 10% discount for 7+ days (simplified common logic)
-  if (nights >= 7) {
+  // Check if length-of-stay pricing rules exist for this selection
+  // If there are weekly or monthly explicit rules, we do not double-discount by applying the automatic 10% weekly discount
+  const hasLengthOfStayRules = pricingRules.some(r => r.type === 'weekly' || r.type === 'monthly');
+  if (nights >= 7 && !hasLengthOfStayRules) {
     discount = totalNightsRate * 0.1;
     totalNightsRate -= discount;
   }

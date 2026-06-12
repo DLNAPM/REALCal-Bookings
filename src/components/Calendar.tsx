@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { format, addDays, getDay, isBefore, isSameDay, startOfDay, addMonths, subMonths, eachDayOfInterval } from 'date-fns';
+import { format, addDays, getDay, isBefore, isSameDay, startOfDay, addMonths, subMonths, eachDayOfInterval, differenceInDays } from 'date-fns';
 import { collection, onSnapshot, query, where, doc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
@@ -293,10 +293,11 @@ export const Calendar: React.FC<{
   };
 
   const getRate = (date: Date): number => {
+    const nights = (checkIn && checkOut) ? Math.max(1, differenceInDays(checkOut, checkIn)) : undefined;
     if (rentalMode === 'room' && selectedRooms.length > 0) {
-        return selectedRooms.reduce((acc, room) => acc + getNightlyRate(date, pricingRules, room, 'room'), 0);
+        return selectedRooms.reduce((acc, room) => acc + getNightlyRate(date, pricingRules, room, 'room', nights), 0);
     }
-    return getNightlyRate(date, pricingRules, null, 'entire');
+    return getNightlyRate(date, pricingRules, null, 'entire', nights);
   };
 
   const validateExtendedBookingDates = (selectedCheckIn: Date, selectedCheckOut: Date): { isValid: boolean; message?: string } => {
@@ -720,8 +721,8 @@ export const Calendar: React.FC<{
                       const selection = dailySelections && dailySelections[dateStr] ? dailySelections[dateStr] : { rentalMode: rentalMode, selectedBedrooms: rentalMode === 'room' ? [...selectedRooms] : [] };
                       const isEntireDay = selection.rentalMode === 'entire';
                       const dayRate = isEntireDay 
-                         ? getNightlyRate(day, pricingRules, null, 'entire')
-                         : selection.selectedBedrooms.reduce((acc, r) => acc + getNightlyRate(day, pricingRules, r, 'room'), 0);
+                         ? getNightlyRate(day, pricingRules, null, 'entire', checkIn && checkOut ? differenceInDays(checkOut, checkIn) : undefined)
+                         : selection.selectedBedrooms.reduce((acc, r) => acc + getNightlyRate(day, pricingRules, r, 'room', checkIn && checkOut ? differenceInDays(checkOut, checkIn) : undefined), 0);
                       
                       return (
                          <div key={dateStr} className="p-3 bg-slate-800/40 rounded-xl border border-slate-800/50 space-y-2">
@@ -837,7 +838,7 @@ export const Calendar: React.FC<{
                              <div className="text-[10px] opacity-70 uppercase tracking-tighter">Full access</div>
                          </div>
                          <div className="text-right">
-                             <div className="font-mono font-bold">${getNightlyRate(new Date(), pricingRules, null, 'entire').toFixed(0)}/nt</div>
+                             <div className="font-mono font-bold">${getNightlyRate(new Date(), pricingRules, null, 'entire', priceDetails?.nights).toFixed(0)}/nt</div>
                              <div className="text-[10px] opacity-50">Property Rate</div>
                          </div>
                       </button>
@@ -869,7 +870,7 @@ if (false) setSelectedRooms(prev =>
                                  </div>
                              </div>
                              <div className="text-right">
-                                 <span className="font-mono font-bold">${room.fee}/nt</span>
+                                 <span className="font-mono font-bold">${getNightlyRate(new Date(), pricingRules, room, 'room', priceDetails?.nights).toFixed(0)}/nt</span>
                                  <div className="text-[10px] opacity-50">Room Rate</div>
                              </div>
                           </button>

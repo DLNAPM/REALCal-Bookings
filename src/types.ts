@@ -1,4 +1,4 @@
-export type RuleType = 'default' | 'weekend' | 'holiday' | 'custom';
+export type RuleType = 'default' | 'weekend' | 'holiday' | 'custom' | 'daily' | 'five_day' | 'weekly' | 'monthly';
 
 export interface Property {
   id: string;

@@ -2719,6 +2719,10 @@ C.&S.H. Group Properties, LLC
                             <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Type</label>
                             <select name="type" className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 required bg-white shadow-sm">
                                <option value="default">Default Layer</option>
+                               <option value="daily">Daily Pricing Rule</option>
+                               <option value="five_day">5-Day Pricing Rule</option>
+                               <option value="weekly">Weekly Pricing Rule</option>
+                               <option value="monthly">Monthly Pricing Rule</option>
                                <option value="weekend">Weekend Override</option>
                                <option value="holiday">Holiday Promo/Surge</option>
                                <option value="custom">Custom Range</option>
@@ -2784,7 +2788,9 @@ C.&S.H. Group Properties, LLC
                           <div key={r.id} className="border border-slate-200 p-3 rounded-xl flex justify-between items-center text-sm shadow-sm bg-white group">
                              <div>
                                 <div className="flex items-center gap-2">
-                                    <span className="font-bold capitalize text-slate-800">{r.type}</span>
+                                    <span className="font-bold text-slate-800">
+                                       {r.type === 'five_day' ? '5-Day Rate' : r.type === 'daily' ? 'Daily Rate' : r.type === 'weekly' ? 'Weekly Rate' : r.type === 'monthly' ? 'Monthly Rate' : (r.type === 'default' ? 'Default Layer' : r.type)}
+                                    </span>
                                     {r.targetType === 'room' && (
                                         <span className="text-[10px] bg-slate-100 text-indigo-600 px-1.5 py-0.5 rounded font-bold">Room {r.roomNumber}</span>
                                     )}
