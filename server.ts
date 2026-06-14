@@ -1187,7 +1187,7 @@ async function startServer() {
   app.post("/api/notify-managers", async (req, res) => {
     try {
       const { managers, bookingDetails } = req.body;
-      const { checkIn, checkOut, originalCheckIn, originalCheckOut, propertyName, totalAmount, guestName, guestEmail, guestPhone, isUpdate, accessCode, selectedBedrooms } = bookingDetails;
+      const { checkIn, checkOut, originalCheckIn, originalCheckOut, propertyName, totalAmount, guestName, guestEmail, guestPhone, isUpdate, isCancellation, cancellationFee, accessCode, selectedBedrooms } = bookingDetails;
       const formattedGuestPhone = formatPhoneToE164(guestPhone);
       
       let daysChangedText = "";
@@ -1214,7 +1214,7 @@ async function startServer() {
         }
       }
 
-      const eventType = isUpdate ? 'Booking Update' : 'New Booking';
+      const eventType = isCancellation ? 'Booking CANCELLED 🚨' : (isUpdate ? 'Booking Update' : 'New Booking');
       let roomsInfo = "";
       if (selectedBedrooms && selectedBedrooms.length > 0) {
         roomsInfo = "\nRooms: " + selectedBedrooms.map((r: any) => {
@@ -1224,9 +1224,17 @@ async function startServer() {
         }).join(', ');
       }
       
-      let textMsg = `${eventType} for ${propertyName}!${roomsInfo}\nGuest: ${guestName}\nDates: ${new Date(checkIn).toLocaleDateString()} to ${new Date(checkOut).toLocaleDateString()}`;
-      if (daysChangedText) {
-        textMsg += `\nChange Details: ${daysChangedText}`;
+      let textMsg = "";
+      if (isCancellation) {
+        textMsg = `🚨 BOOKING CANCELLED ALERT 🚨\nProperty: ${propertyName}${roomsInfo}\nGuest: ${guestName}\nDates: ${new Date(checkIn).toLocaleDateString()} to ${new Date(checkOut).toLocaleDateString()}\nStatus: This booking has been CANCELLED. The calendars/rooms have been released.`;
+        if (cancellationFee !== undefined && cancellationFee > 0) {
+          textMsg += `\nCancellation Fee Assessed: $${(cancellationFee / 100).toFixed(2)}`;
+        }
+      } else {
+        textMsg = `${eventType} for ${propertyName}!${roomsInfo}\nGuest: ${guestName}\nDates: ${new Date(checkIn).toLocaleDateString()} to ${new Date(checkOut).toLocaleDateString()}`;
+        if (daysChangedText) {
+          textMsg += `\nChange Details: ${daysChangedText}`;
+        }
       }
       
       const results = [];
@@ -1250,7 +1258,7 @@ async function startServer() {
           try {
             await sendSmtpEmail({
               to: m.email,
-              subject: `Booking Alert: ${propertyName}`,
+              subject: `${isCancellation ? 'Cancellation' : 'Booking'} Alert: ${propertyName}`,
               text: textMsg
             });
             results.push(`Email sent to ${m.email}`);
@@ -1265,26 +1273,31 @@ async function startServer() {
       }
       
       // Guest confirmations
-      const guestSubject = isUpdate ? `Booking Update: ${propertyName}` : `Booking Confirmed: ${propertyName}`;
+      const guestSubject = isCancellation ? `Cancellation Confirmed: ${propertyName}` : (isUpdate ? `Booking Update: ${propertyName}` : `Booking Confirmed: ${propertyName}`);
       const guestDisplayName = guestName || 'Guest';
       
       // Email Content (Single Email for multiple rooms)
-      let emailText = `Hi ${guestDisplayName},\n\nYour booking for ${propertyName} from ${new Date(checkIn).toLocaleDateString()} to ${new Date(checkOut).toLocaleDateString()} is ${isUpdate ? 'updated' : 'confirmed'}.`;
-      if (daysChangedText) {
-        emailText += `\n\nStay Details: ${daysChangedText}`;
+      let emailText = "";
+      if (isCancellation) {
+        emailText = `Hi ${guestDisplayName},\n\nYour reservation for ${propertyName} from ${new Date(checkIn).toLocaleDateString()} to ${new Date(checkOut).toLocaleDateString()} has been successfully cancelled.\n\n${cancellationFee && cancellationFee > 0 ? `Late Cancellation Fee Assessed: $${(cancellationFee / 100).toFixed(2)}` : 'No cancellation fees were assessed.'}\n\nThank you!`;
+      } else {
+        emailText = `Hi ${guestDisplayName},\n\nYour booking for ${propertyName} from ${new Date(checkIn).toLocaleDateString()} to ${new Date(checkOut).toLocaleDateString()} is ${isUpdate ? 'updated' : 'confirmed'}.`;
+        if (daysChangedText) {
+          emailText += `\n\nStay Details: ${daysChangedText}`;
+        }
+        
+        if (selectedBedrooms && selectedBedrooms.length > 0) {
+          emailText += `\n\nRoom Details:`;
+          selectedBedrooms.forEach((r: any) => {
+             emailText += `\n- ${r.type} Room ${r.roomNumber}`;
+             if (r.roomLockNumber) emailText += ` (Lock #: ${r.roomLockNumber})`;
+          });
+        }
+        
+        if (accessCode) emailText += `\n\nYour master access code is: ${accessCode}`;
+        emailText += `\n\nTo view a short animated video and instructions on how to enter the Property and/or Room via our YAMIRY Smart Lock, please go to your "My Bookings" section.`;
+        emailText += `\n\nThank you!`;
       }
-      
-      if (selectedBedrooms && selectedBedrooms.length > 0) {
-        emailText += `\n\nRoom Details:`;
-        selectedBedrooms.forEach((r: any) => {
-           emailText += `\n- ${r.type} Room ${r.roomNumber}`;
-           if (r.roomLockNumber) emailText += ` (Lock #: ${r.roomLockNumber})`;
-        });
-      }
-      
-      if (accessCode) emailText += `\n\nYour master access code is: ${accessCode}`;
-      emailText += `\n\nTo view a short animated video and instructions on how to enter the Property and/or Room via our YAMIRY Smart Lock, please go to your "My Bookings" section.`;
-      emailText += `\n\nThank you!`;
 
       if (useSmtpEmail && guestEmail) {
         try {
@@ -1296,7 +1309,14 @@ async function startServer() {
       // SMS Notifications (Multiple if multiple rooms with locks)
       if (twilioClient && formattedGuestPhone && tFrom) {
         try {
-            if (selectedBedrooms && selectedBedrooms.length > 0) {
+            if (isCancellation) {
+                let cancelSmsText = `Hi ${guestDisplayName}, your reservation for ${propertyName} from ${new Date(checkIn).toLocaleDateString()} to ${new Date(checkOut).toLocaleDateString()} has been cancelled.`;
+                if (cancellationFee && cancellationFee > 0) {
+                    cancelSmsText += ` A late cancellation fee of $${(cancellationFee / 100).toFixed(2)} was applied.`;
+                }
+                await twilioClient.messages.create({ body: cancelSmsText, from: tFrom, to: formattedGuestPhone });
+                results.push(`Guest cancellation SMS sent`);
+            } else if (selectedBedrooms && selectedBedrooms.length > 0) {
                 // Send an SMS for each room that has a Lock number
                 for (const room of selectedBedrooms) {
                     if (room.roomLockNumber) {

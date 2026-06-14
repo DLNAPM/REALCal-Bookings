@@ -400,6 +400,40 @@ export const MyBookings: React.FC = () => {
                 console.warn("Failed to remove maintenance blackout on cancellation", blackoutErr);
             }
             
+            // Notify managers about cancellation
+            try {
+                const managersSnap = await getDocs(query(collection(db, 'property_managers'), where('enabled', '==', true)));
+                const managers = managersSnap.docs.map(d => d.data());
+
+                const propSnap = await getDoc(doc(db, 'properties', booking.propertyId));
+                const isTestProperty = propSnap.exists() && propSnap.data().isTestProperty;
+
+                const rooms = booking.selectedBedrooms || (booking.selectedBedroom ? [booking.selectedBedroom] : []);
+
+                await fetch('/api/notify-managers', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        managers,
+                        bookingDetails: {
+                           isCancellation: true,
+                           cancellationFee: cancellationFee,
+                           checkIn: booking.checkIn,
+                           checkOut: booking.checkOut,
+                           totalAmount: booking.totalPrice,
+                           propertyName: booking.propertyName || 'Property',
+                           guestName: user?.displayName || booking.guestName || 'Guest',
+                           guestEmail: user?.email || booking.guestEmail || '',
+                           guestPhone: booking.guestPhone || '',
+                           selectedBedrooms: rooms,
+                           isTestProperty: isTestProperty
+                        }
+                    })
+                });
+            } catch (notifyErr) {
+                console.error("Failed to notify managers of cancellation:", notifyErr);
+            }
+
             // Refresh list locally
             setBookings(prev => prev.map(b => b.id === booking.id ? { ...b, status: 'cancelled', cancellationFee } : b));
             
