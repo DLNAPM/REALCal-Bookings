@@ -75,49 +75,68 @@ export const Home: React.FC = () => {
     return (
         <div className="min-h-screen bg-white flex flex-col font-sans text-slate-900 pb-12 overflow-x-hidden">
             <header className="pt-6 px-6 max-w-7xl mx-auto w-full z-10 relative">
-                <div className="flex justify-between items-center mb-6">
-                    <Link to="/" className="flex items-center gap-3 hover:opacity-85 transition-opacity">
-                        <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200">
-                            <CalendarIcon size={20} />
+                <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6">
+                    <Link to="/" className="flex items-center gap-2 sm:gap-3 hover:opacity-85 transition-opacity flex-shrink-0">
+                        <div className="w-9 h-9 sm:w-10 sm:h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200">
+                            <CalendarIcon size={18} />
                         </div>
-                        <h1 className="text-2xl font-bold tracking-tight text-slate-800">REALCal <span className="text-indigo-600">Bookings</span></h1>
+                        <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-800">REALCal <span className="text-indigo-600">Bookings</span></h1>
                     </Link>
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-3 sm:gap-4 flex-wrap justify-center sm:justify-end w-full sm:w-auto">
                         {loading ? (
-                            <div className="flex items-center gap-2 px-4 py-2 bg-slate-100 rounded-xl">
-                                <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-                                <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Verifying...</span>
+                            <div className="flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2 bg-slate-100 rounded-xl">
+                                <div className="w-3.5 h-3.5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                                <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-widest">Verifying...</span>
                             </div>
                         ) : user ? (
-                            <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-1.5 sm:gap-3 flex-wrap justify-center sm:justify-end">
                                 {(user.role === 'admin' || user.email === 'dlaniger.napm.consulting@gmail.com') && (
-                                   <Link to="/admin" className="text-slate-600 hover:text-indigo-600 font-bold flex items-center gap-2 text-sm transition-colors rounded-lg px-3 py-2 hover:bg-slate-50">
-                                       <Key size={16}/> Admin
+                                   <Link 
+                                     to="/admin" 
+                                     className="text-slate-600 hover:text-indigo-600 font-bold flex items-center gap-1 text-xs sm:text-sm transition-colors rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 hover:bg-slate-50"
+                                     title="Admin Dashboard"
+                                   >
+                                       <Key size={15}/>
+                                       <span className="hidden md:inline">Admin</span>
                                    </Link>
                                 )}
-                                <Link to="/my-bookings" className="text-slate-600 hover:text-indigo-600 font-bold flex items-center gap-2 text-sm transition-colors rounded-lg px-3 py-2 hover:bg-slate-50">
-                                    <CalendarIcon size={16}/> My Bookings
+                                <Link 
+                                  to="/my-bookings" 
+                                  className="text-slate-600 hover:text-indigo-600 font-bold flex items-center gap-1 text-xs sm:text-sm transition-colors rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 hover:bg-slate-50"
+                                  title="My Bookings"
+                                >
+                                    <CalendarIcon size={15}/>
+                                    <span className="hidden md:inline">My Bookings</span>
                                 </Link>
-                                <Link to="/opt-in" className="text-slate-600 hover:text-indigo-600 font-bold flex items-center gap-2 text-sm transition-colors rounded-lg px-3 py-2 hover:bg-slate-50">
-                                    <MessageSquare size={16}/> Opt-in
+                                <Link 
+                                  to="/opt-in" 
+                                  className="text-slate-600 hover:text-indigo-600 font-bold flex items-center gap-1 text-xs sm:text-sm transition-colors rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 hover:bg-slate-50"
+                                  title="Opt-in Preferences"
+                                >
+                                    <MessageSquare size={15}/>
+                                    <span className="hidden md:inline">Opt-in</span>
                                 </Link>
-                                <div className="flex items-center gap-4 bg-white py-1.5 pl-1.5 pr-4 rounded-full border border-slate-200 shadow-sm">
-                                  {user.photoURL && <img src={user.photoURL} alt="Avatar" className="w-8 h-8 rounded-full" referrerPolicy="no-referrer" />}
-                                  <div className="text-sm">
-                                    <p className="font-semibold leading-none text-slate-800">{user.displayName}</p>
-                                    <p className="text-xs text-indigo-600 font-medium">Welcome back</p>
+                                <div className="flex items-center gap-2 bg-white py-1 pl-1 pr-2 sm:pr-4 rounded-full border border-slate-200 shadow-sm">
+                                  {user.photoURL && <img src={user.photoURL} alt="Avatar" className="w-6 h-6 sm:w-8 sm:h-8 rounded-full" referrerPolicy="no-referrer" />}
+                                  <div className="text-left hidden sm:block">
+                                    <p className="font-semibold text-xs leading-none text-slate-800 truncate max-w-[80px]">{user.displayName ? user.displayName.split(' ')[0] : 'Guest'}</p>
+                                    <p className="text-[9px] text-indigo-600 font-medium leading-none mt-0.5">Welcome</p>
                                   </div>
                                 </div>
-                                <button onClick={handleSignOut} className="text-slate-400 hover:text-red-500 transition-colors p-2 bg-white rounded-full border border-slate-200 shadow-sm">
-                                   <LogOut size={16} />
+                                <button 
+                                  onClick={handleSignOut} 
+                                  className="text-slate-400 hover:text-red-500 transition-colors p-1.5 sm:p-2 bg-white rounded-full border border-slate-200 shadow-sm cursor-pointer"
+                                  title="Logout"
+                                >
+                                   <LogOut size={15} />
                                 </button>
                             </div>
                         ) : (
-                            <div className="flex items-center gap-4">
-                                <Link to="/opt-in" className="text-slate-500 hover:text-indigo-600 font-bold text-xs uppercase tracking-widest transition-colors mr-2">
+                            <div className="flex items-center gap-3 sm:gap-4">
+                                <Link to="/opt-in" className="text-slate-500 hover:text-indigo-600 font-bold text-[10px] sm:text-xs uppercase tracking-widest transition-colors">
                                     Opt-In Preview
                                 </Link>
-                                <button onClick={handleSignIn} className="px-6 py-2.5 bg-slate-900 text-white font-bold rounded-xl hover:bg-indigo-600 transition-colors text-sm shadow-md">
+                                <button onClick={handleSignIn} className="px-4 py-2 sm:px-6 sm:py-2.5 bg-slate-900 text-white font-bold rounded-xl hover:bg-indigo-600 transition-colors text-xs sm:text-sm shadow-md">
                                     Login to Book
                                 </button>
                             </div>

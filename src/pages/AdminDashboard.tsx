@@ -1550,19 +1550,20 @@ C.&S.H. Group Properties, LLC
     <div className="bg-slate-50 min-h-screen p-6 font-sans text-slate-900 overflow-hidden">
        <div className="max-w-7xl mx-auto space-y-5">
           {/* Header Navigation Bento Style */}
-          <header className="flex justify-between items-center mb-6">
-            <Link to="/" className="flex items-center gap-3 hover:opacity-85 transition-opacity">
-              <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200">
-                 <Settings size={20} />
+          <header className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6">
+            <Link to="/" className="flex items-center gap-2 sm:gap-3 hover:opacity-85 transition-opacity flex-shrink-0">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200">
+                 <Settings size={18} />
               </div>
-              <h1 className="text-2xl font-bold tracking-tight text-slate-800">REALCal <span className="text-indigo-600">Admin</span></h1>
+              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-800">REALCal <span className="text-indigo-600">Admin</span></h1>
             </Link>
             
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-4 bg-white py-1.5 pl-3 pr-4 rounded-full border border-slate-200 shadow-sm">
-                  <div className="text-sm text-right leading-tight">
-                    <p className="font-semibold text-slate-800">{user?.displayName || 'Administrator'}</p>
-                    <p className="text-xs text-indigo-600 font-medium">Dashboard Control</p>
+            <div className="flex items-center gap-2 sm:gap-4 flex-wrap justify-center sm:justify-end w-full sm:w-auto">
+              <div className="flex items-center gap-2 bg-white py-1 pl-1 pr-2 sm:pr-4 rounded-full border border-slate-200 shadow-sm">
+                  {user?.photoURL && <img src={user.photoURL} alt="Avatar" className="w-6 h-6 sm:w-8 sm:h-8 rounded-full" referrerPolicy="no-referrer" />}
+                  <div className="text-left hidden xs:block">
+                    <p className="font-semibold text-xs leading-none text-slate-800 truncate max-w-[90px]">{user?.displayName ? user.displayName.split(' ')[0] : 'Admin'}</p>
+                    <p className="text-[9px] text-indigo-600 font-medium leading-none mt-0.5">Control</p>
                   </div>
               </div>
               <button 
@@ -1575,10 +1576,10 @@ C.&S.H. Group Properties, LLC
                     window.location.reload();
                   }
                 }} 
-                className="text-slate-400 hover:text-red-500 transition-colors p-2 bg-white rounded-full border border-slate-200 shadow-sm outline-none w-10 h-10 flex items-center justify-center cursor-pointer"
+                className="text-slate-400 hover:text-red-500 transition-colors p-1.5 sm:p-2 bg-white rounded-full border border-slate-200 shadow-sm outline-none w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center cursor-pointer hover:scale-105 active:scale-95"
                 title="Logout"
               >
-                 <LogOut size={16} />
+                 <LogOut size={15} />
               </button>
             </div>
           </header>
