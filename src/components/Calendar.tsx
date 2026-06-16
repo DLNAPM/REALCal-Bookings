@@ -595,6 +595,10 @@ export const Calendar: React.FC<{
            alert("Check-out date must be after Check-in date.");
            return;
        }
+       if (differenceInDays(checkOut, checkIn) < 2) {
+           alert("A minimum of 2 days is required to Proceed.");
+           return;
+       }
     }
     if (checkIn && checkOut && priceDetails) {
        if (rentalMode === 'room' && selectedRooms.length === 0) {
@@ -950,6 +954,10 @@ if (false) setSelectedRooms(prev =>
               onClick={() => {
                   if (checkIn && checkOut && (isBefore(checkOut, checkIn) || isSameDay(checkIn, checkOut))) {
                       alert("Check-out date must be after Check-in date.");
+                      return;
+                  }
+                  if (checkIn && checkOut && differenceInDays(checkOut, checkIn) < 2) {
+                      alert("A minimum of 2 days is required to Proceed.");
                       return;
                   }
                   if (isEditMode && onSaveEdit && checkIn && checkOut && priceDetails) {
