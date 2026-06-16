@@ -65,6 +65,7 @@ export const Calendar: React.FC<{
   const [bookings, setBookings] = useState<any[]>([]);
   const [globalSettings, setGlobalSettings] = useState<any>(null);
   const [agreedToHouseRules, setAgreedToHouseRules] = useState<boolean>(false);
+  const [agreedToNoKidsUnder10, setAgreedToNoKidsUnder10] = useState<boolean>(false);
   
   const navigate = useNavigate();
 
@@ -919,6 +920,29 @@ if (false) setSelectedRooms(prev =>
                         </span>
                      </div>
                   </label>
+
+                  {rentalMode === 'room' && (
+                     <div className="pt-3 border-t border-slate-800 space-y-2 mt-3 text-left">
+                        <label className="flex items-start gap-3 cursor-pointer select-none text-slate-300">
+                           <input 
+                             type="checkbox" 
+                             id="agree-nokids-checkbox"
+                             checked={agreedToNoKidsUnder10}
+                             onChange={(e) => setAgreedToNoKidsUnder10(e.target.checked)}
+                             className="mt-0.5 w-4 h-4 rounded border-slate-700 bg-slate-800 text-indigo-600 focus:ring-indigo-500 focus:text-indigo-600 accent-indigo-600 cursor-pointer flex-shrink-0"
+                           />
+                           <div className="leading-relaxed">
+                              <span className="font-bold text-slate-100 block mb-1 uppercase tracking-wider text-[10px] text-rose-400">Age Restriction Policy</span>
+                              <span className="text-slate-300 text-[11px]">
+                                I certify that none of the guests in our party are <strong>children under 10 years of age</strong>.
+                              </span>
+                           </div>
+                        </label>
+                        <div className="pl-7 text-[10px] text-slate-400 leading-normal italic text-left">
+                           💡 <strong>SPECIAL Arrangements:</strong> Special arrangements can be made if multiple adults agree to rent rooms during the same time period. Please call the Booking Agent for more information before completing your Booking.
+                        </div>
+                     </div>
+                  )}
                </div>
             )}
             
@@ -939,7 +963,7 @@ if (false) setSelectedRooms(prev =>
                       handleBook();
                   }
               }}
-              disabled={!checkIn || !checkOut || (user && user.tollFreeAccept !== true && !isEditMode) || (!agreedToHouseRules && !isEditMode)}
+              disabled={!checkIn || !checkOut || (user && user.tollFreeAccept !== true && !isEditMode) || (!agreedToHouseRules && !isEditMode) || (rentalMode === 'room' && !agreedToNoKidsUnder10 && !isEditMode)}
               className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-2xl transition-colors flex items-center justify-center gap-2 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed"
             >
               {isEditMode ? 'Save Changes' : 'Proceed to Checkout'}
