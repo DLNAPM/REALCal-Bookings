@@ -92,11 +92,20 @@ export const Calendar: React.FC<{
 
   // Reset and pre-populate lease form whenever checkout dates or rental mode change
   useEffect(() => {
-    setEnteredLeaseCode('');
-    setValidatedLeaseCode(null);
-    setLeaseDetails(null);
-    setLeaseError(null);
-    setLeaseFormSuccess(false);
+    const formattedCheckIn = checkIn ? format(checkIn, 'yyyy-MM-dd') : '';
+    const formattedCheckOut = checkOut ? format(checkOut, 'yyyy-MM-dd') : '';
+
+    const isMatchingLeaseDates = leaseDetails && 
+      leaseDetails.startDate === formattedCheckIn && 
+      leaseDetails.endDate === formattedCheckOut;
+
+    if (!isMatchingLeaseDates) {
+      setEnteredLeaseCode('');
+      setValidatedLeaseCode(null);
+      setLeaseDetails(null);
+      setLeaseError(null);
+      setLeaseFormSuccess(false);
+    }
 
     let roomText = property?.name || "Entire Property";
     if (rentalMode === 'room' && selectedRooms.length > 0) {
@@ -106,12 +115,12 @@ export const Calendar: React.FC<{
     setLeaseRequestForm(prev => ({
       ...prev,
       propertyNameOrRoom: roomText,
-      startDate: checkIn ? format(checkIn, 'yyyy-MM-dd') : '',
-      endDate: checkOut ? format(checkOut, 'yyyy-MM-dd') : '',
+      startDate: formattedCheckIn,
+      endDate: formattedCheckOut,
       tenantName: user?.displayName || '',
       tenantEmail: user?.email || '',
     }));
-  }, [checkIn, checkOut, rentalMode, selectedRooms, user, property]);
+  }, [checkIn, checkOut, rentalMode, selectedRooms, user, property, leaseDetails]);
 
 
   useEffect(() => {
@@ -645,9 +654,16 @@ export const Calendar: React.FC<{
     setLeaseDetails(null);
 
     try {
-      const code = enteredLeaseCode.trim();
-      const leaseRef = doc(db, 'leases', code);
-      const leaseSnap = await getDoc(leaseRef);
+      const originalCode = enteredLeaseCode.trim();
+      let code = originalCode;
+      let leaseRef = doc(db, 'leases', code);
+      let leaseSnap = await getDoc(leaseRef);
+
+      if (!leaseSnap.exists() && originalCode !== originalCode.toUpperCase()) {
+        code = originalCode.toUpperCase();
+        leaseRef = doc(db, 'leases', code);
+        leaseSnap = await getDoc(leaseRef);
+      }
 
       if (leaseSnap.exists()) {
         const data = leaseSnap.data();
