@@ -6,7 +6,7 @@ import { Navigate, useNavigate, Link } from 'react-router-dom';
 import { format, eachDayOfInterval, parseISO, addDays } from 'date-fns';
 import { cn } from '../lib/utils';
 import { BlackoutDate, PricingRule, Booking, Property, PropertyManager } from '../types';
-import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight, RefreshCw, MessageSquare, CheckCircle } from 'lucide-react';
+import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight, RefreshCw, MessageSquare, CheckCircle, Loader2, FileText } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 const formatPhoneE164 = (phone: string) => {
@@ -51,6 +51,10 @@ export const AdminDashboard: React.FC = () => {
   const [blackouts, setBlackouts] = useState<BlackoutDate[]>([]);
   const [pricingRules, setPricingRules] = useState<PricingRule[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
+  const [leaseRequests, setLeaseRequests] = useState<any[]>([]);
+  const [leases, setLeases] = useState<any[]>([]);
+  const [approvingLeaseId, setApprovingLeaseId] = useState<string | null>(null);
+  const [leaseGenerationError, setLeaseGenerationError] = useState<string | null>(null);
   const [activePropertyId, setActivePropertyId] = useState<string | null>(null);
   const [refreshingUsers, setRefreshingUsers] = useState(false);
   const [pricingTarget, setPricingTarget] = useState<'property' | 'room'>('property');
@@ -129,6 +133,16 @@ export const AdminDashboard: React.FC = () => {
     });
     onSnapshot(query(collection(db, 'property_managers')), (snap) => setPropertyManagers(snap.docs.map(d => ({id: d.id, ...d.data() } as PropertyManager))), (error) => {
       console.error("Admin property managers snapshot error:", error);
+    });
+    onSnapshot(query(collection(db, 'lease_requests')), (snap) => {
+      setLeaseRequests(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (error) => {
+      console.error("Admin lease_requests snapshot error:", error);
+    });
+    onSnapshot(query(collection(db, 'leases')), (snap) => {
+      setLeases(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (error) => {
+      console.error("Admin leases snapshot error:", error);
     });
     onSnapshot(doc(db, 'global_settings', 'settings'), (snap) => {
         if (snap.exists()) {
@@ -387,6 +401,54 @@ export const AdminDashboard: React.FC = () => {
       (e.target as HTMLFormElement).reset();
     } catch (e: any) { alert(e.message); }
   }
+
+  const handleApproveLease = async (requestId: string) => {
+    if (!db) return;
+    setApprovingLeaseId(requestId);
+    setLeaseGenerationError(null);
+    try {
+      const response = await fetch('/api/approve-lease', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestId })
+      });
+      
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || 'Approval failed');
+      }
+      
+      alert(`Lease request approved successfully! Code generated: ${data.leaseCode}`);
+    } catch (err: any) {
+      console.error("Error approving lease:", err);
+      setLeaseGenerationError(err.message || 'An error occurred during lease approval');
+      alert(`Error approving lease: ${err.message}`);
+    } finally {
+      setApprovingLeaseId(null);
+    }
+  };
+  
+  const handleDeleteLeaseRequest = async (id: string) => {
+    if (!db) return;
+    if (window.confirm("Are you sure you want to delete this lease request?")) {
+      try {
+        await deleteDoc(doc(db, 'lease_requests', id));
+      } catch (err: any) {
+        alert(`Error: ${err.message}`);
+      }
+    }
+  };
+
+  const handleDeleteActiveLease = async (id: string) => {
+    if (!db) return;
+    if (window.confirm("Are you sure you want to delete this active lease? Doing so will invalidate the lease code.")) {
+      try {
+        await deleteDoc(doc(db, 'leases', id));
+      } catch (err: any) {
+        alert(`Error: ${err.message}`);
+      }
+    }
+  };
 
   const handleCreateManager = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1986,6 +2048,134 @@ C.&S.H. Group Properties, LLC
                     ))}
                  </div>
               </div>
+          </div>
+
+          {/* Lease Agreements & Requests Manager Section */}
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm mt-8">
+             <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-100 text-left">
+                <h2 className="text-xl font-bold flex items-center gap-2 text-slate-800">
+                   <FileText className="text-indigo-600" size={20} /> Lease Agreements & Requests Manager
+                </h2>
+                <div className="flex gap-2 text-xs font-bold">
+                   <span className="bg-amber-100 text-amber-700 px-2.5 py-1 rounded-md uppercase">
+                      {leaseRequests.filter(r => r.status === 'pending').length} Requests Pending
+                   </span>
+                   <span className="bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-md uppercase">
+                      {leases.length} Active Leases
+                   </span>
+                </div>
+             </div>
+
+             <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                {/* Incoming Requests Column */}
+                <div className="space-y-4">
+                   <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400 text-left">Incoming Lease Requests</h3>
+                   {leaseRequests.length === 0 ? (
+                      <div className="p-8 border border-dashed rounded-2xl text-center text-slate-500 text-sm bg-slate-50">
+                         No incoming lease requests found.
+                      </div>
+                   ) : (
+                      <div className="space-y-4 max-h-[500px] overflow-y-auto pr-1">
+                         {leaseRequests.map((req) => {
+                            const isPending = req.status === 'pending';
+                            const durationDays = req.startDate && req.endDate ? 
+                               Math.round((new Date(req.endDate).getTime() - new Date(req.startDate).getTime()) / (1000 * 60 * 60 * 24)) : 0;
+                            const isLongTerm = durationDays > 180;
+
+                            return (
+                               <div key={req.id} className={cn("p-4 rounded-2xl border transition-all relative flex flex-col md:flex-row justify-between gap-4", isPending ? "border-amber-200 bg-amber-50/20" : req.status === 'approved' ? "border-emerald-200 bg-emerald-50/10" : "border-slate-200 bg-slate-50/50")}>
+                                  <div className="flex-1 text-left">
+                                     <div className="flex items-center gap-2 flex-wrap mb-2">
+                                        <span className="font-extrabold text-slate-800 text-sm line-clamp-1">{req.tenantName}</span>
+                                        <span className={cn("text-[10px] px-2 py-0.5 rounded font-black uppercase tracking-wider", isLongTerm ? "bg-purple-100 text-purple-700" : "bg-indigo-100 text-indigo-700")}>
+                                           {isLongTerm ? 'Long-Term' : 'Short-Term'} ({durationDays} Nights)
+                                        </span>
+                                        {req.status === 'approved' && (
+                                           <span className="bg-emerald-100 text-emerald-700 text-[10px] px-2 py-0.5 rounded font-black uppercase tracking-wider">
+                                              Approved
+                                           </span>
+                                        )}
+                                     </div>
+                                     <div className="space-y-1 text-xs text-slate-600">
+                                        <div><strong className="text-slate-400">Unit:</strong> <span className="font-semibold text-slate-700">{req.propertyNameOrRoom}</span></div>
+                                        <div><strong className="text-slate-400">Email:</strong> {req.tenantEmail}</div>
+                                        <div><strong className="text-slate-400">Phone:</strong> {req.tenantPhone}</div>
+                                        <div><strong className="text-slate-400">Term:</strong> <span className="font-mono text-slate-700">{req.startDate} to {req.endDate}</span></div>
+                                        {req.approvedLeaseCode && (
+                                           <div className="mt-2 bg-emerald-50 border border-emerald-100 text-emerald-800 rounded-lg py-1 px-2.5 font-mono text-xs font-bold inline-block">
+                                              Code: {req.approvedLeaseCode}
+                                           </div>
+                                        )}
+                                     </div>
+                                  </div>
+
+                                  <div className="flex md:flex-col justify-end items-end gap-2.5 border-t md:border-t-0 pt-3 md:pt-0 border-slate-100">
+                                     {isPending && (
+                                        <button
+                                           onClick={() => handleApproveLease(req.id)}
+                                           disabled={approvingLeaseId === req.id}
+                                           className="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white font-bold px-4 py-2 rounded-xl transition-all shadow-sm flex items-center justify-center gap-1.5 text-xs cursor-pointer h-9 text-center"
+                                        >
+                                           {approvingLeaseId === req.id ? (
+                                              <Loader2 className="animate-spin" size={13} />
+                                           ) : (
+                                              <CheckCircle size={13} />
+                                           )}
+                                           Approve & Send Code
+                                        </button>
+                                     )}
+                                     <button
+                                        onClick={() => handleDeleteLeaseRequest(req.id)}
+                                        className="text-red-500 hover:bg-red-50 p-2 rounded-xl transition-colors self-end"
+                                        title="Delete Lease Request"
+                                     >
+                                        <Trash2 size={16} />
+                                     </button>
+                                  </div>
+                               </div>
+                            );
+                         })}
+                      </div>
+                   )}
+                </div>
+
+                {/* Active Authorized Leases Column */}
+                <div className="space-y-4 border-t xl:border-t-0 xl:border-l border-slate-100 pt-6 xl:pt-0 xl:pl-6">
+                   <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400 text-left">Active Authorized Leases</h3>
+                   {leases.length === 0 ? (
+                      <div className="p-8 border border-dashed rounded-2xl text-center text-slate-500 text-sm bg-slate-50">
+                         No active authorized leases in database.
+                      </div>
+                   ) : (
+                      <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
+                         {leases.map((l) => (
+                            <div key={l.id} className="p-4 rounded-xl border border-slate-100 hover:border-slate-300 transition-colors bg-white shadow-sm flex justify-between items-center gap-4 text-left">
+                               <div>
+                                  <div className="flex items-center gap-2 flex-wrap mb-1 text-left">
+                                     <span className="font-mono text-sm font-black text-indigo-600 tracking-wider select-all">{l.leaseCode}</span>
+                                     <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded font-bold uppercase select-none">
+                                        {l.bookingType === 'long-term' ? 'Long-Term' : 'Short-Term'}
+                                     </span>
+                                  </div>
+                                  <div className="space-y-0.5 text-xs text-slate-500 text-left">
+                                     <div><strong className="text-slate-400">Tenant:</strong> {l.tenantName}</div>
+                                     <div><strong className="text-slate-400">Email:</strong> {l.tenantEmail}</div>
+                                     <div className="font-mono text-[11px]"><strong className="text-slate-400">Term:</strong> {l.startDate} to {l.endDate}</div>
+                                  </div>
+                               </div>
+                               <button
+                                  onClick={() => handleDeleteActiveLease(l.id)}
+                                  className="text-red-500 hover:bg-red-50 p-2 rounded-xl transition-colors"
+                                  title="Delete Permanent Lease Record"
+                               >
+                                  <Trash2 size={16} />
+                               </button>
+                            </div>
+                         ))}
+                      </div>
+                   )}
+                </div>
+             </div>
           </div>
 
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm mt-8">

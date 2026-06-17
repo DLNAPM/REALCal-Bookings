@@ -83,6 +83,41 @@
         "createdAt": { "type": "string" }
       },
       "required": ["propertyId", "date", "createdAt"]
+    },
+    "lease": {
+      "title": "Lease",
+      "description": "Approved lease codes mapped to property/tenant details.",
+      "type": "object",
+      "properties": {
+        "leaseCode": { "type": "string" },
+        "propertyId": { "type": "string" },
+        "propertyNameOrRoom": { "type": "string" },
+        "startDate": { "type": "string", "format": "date" },
+        "endDate": { "type": "string", "format": "date" },
+        "tenantName": { "type": "string" },
+        "tenantEmail": { "type": "string" },
+        "tenantPhone": { "type": "string" },
+        "status": { "type": "string", "enum": ["approved", "revoked"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["leaseCode", "propertyId", "startDate", "endDate", "tenantName", "tenantEmail", "status", "createdAt"]
+    },
+    "lease_request": {
+      "title": "Lease Request",
+      "description": "User requested long/short term bookings leases awaiting manager approval.",
+      "type": "object",
+      "properties": {
+        "propertyId": { "type": "string" },
+        "propertyNameOrRoom": { "type": "string" },
+        "startDate": { "type": "string", "format": "date" },
+        "endDate": { "type": "string", "format": "date" },
+        "tenantName": { "type": "string" },
+        "tenantEmail": { "type": "string" },
+        "tenantPhone": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["propertyId", "propertyNameOrRoom", "startDate", "endDate", "tenantName", "tenantEmail", "status", "createdAt"]
     }
   },
   "firestore": {
@@ -105,6 +140,14 @@
     "/properties/{propertyId}": {
       "schema": { "$ref": "#/entities/property" },
       "description": "Store property details."
+    },
+    "/leases/{leaseId}": {
+      "schema": { "$ref": "#/entities/lease" },
+      "description": "Store approved leases with codes."
+    },
+    "/lease_requests/{requestId}": {
+      "schema": { "$ref": "#/entities/lease_request" },
+      "description": "Store client lease request forms."
     }
   }
 }

@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { format, addDays, getDay, isBefore, isSameDay, startOfDay, addMonths, subMonths, eachDayOfInterval, differenceInDays } from 'date-fns';
-import { collection, onSnapshot, query, where, doc } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { BlackoutDate, PricingRule } from '../types';
 import { Property } from '../types';
 import { cn } from '../lib/utils';
-import { ChevronLeft, ChevronRight, Lock } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Lock, CheckCircle2, AlertCircle, FileText, Loader2, RefreshCw } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { getNightlyRate, calculatePriceDetails } from '../lib/pricing';
+import { v4 as uuidv4 } from 'uuid';
 
 export const Calendar: React.FC<{ 
     propertyId: string, 
@@ -67,7 +68,51 @@ export const Calendar: React.FC<{
   const [agreedToHouseRules, setAgreedToHouseRules] = useState<boolean>(false);
   const [agreedToNoKidsUnder10, setAgreedToNoKidsUnder10] = useState<boolean>(false);
   
+  // Lease code validation states
+  const [enteredLeaseCode, setEnteredLeaseCode] = useState<string>('');
+  const [validatedLeaseCode, setValidatedLeaseCode] = useState<string | null>(null);
+  const [leaseDetails, setLeaseDetails] = useState<any | null>(null);
+  const [isVerifyingLease, setIsVerifyingLease] = useState<boolean>(false);
+  const [leaseError, setLeaseError] = useState<string | null>(null);
+  const [showLeaseForm, setShowLeaseForm] = useState<boolean>(false);
+
+  // Lease request form states
+  const [leaseRequestForm, setLeaseRequestForm] = useState({
+    propertyNameOrRoom: '',
+    startDate: '',
+    endDate: '',
+    tenantName: '',
+    tenantEmail: '',
+    tenantPhone: ''
+  });
+  const [submittingLeaseForm, setSubmittingLeaseForm] = useState<boolean>(false);
+  const [leaseFormSuccess, setLeaseFormSuccess] = useState<boolean>(false);
+
   const navigate = useNavigate();
+
+  // Reset and pre-populate lease form whenever checkout dates or rental mode change
+  useEffect(() => {
+    setEnteredLeaseCode('');
+    setValidatedLeaseCode(null);
+    setLeaseDetails(null);
+    setLeaseError(null);
+    setLeaseFormSuccess(false);
+
+    let roomText = property?.name || "Entire Property";
+    if (rentalMode === 'room' && selectedRooms.length > 0) {
+      roomText = `${property?.name || "Property"} - Room ${selectedRooms.map(r => r.roomNumber).join(", ")}`;
+    }
+
+    setLeaseRequestForm(prev => ({
+      ...prev,
+      propertyNameOrRoom: roomText,
+      startDate: checkIn ? format(checkIn, 'yyyy-MM-dd') : '',
+      endDate: checkOut ? format(checkOut, 'yyyy-MM-dd') : '',
+      tenantName: user?.displayName || '',
+      tenantEmail: user?.email || '',
+    }));
+  }, [checkIn, checkOut, rentalMode, selectedRooms, user, property]);
+
 
   useEffect(() => {
     if (!propertyId || !db) return;
@@ -589,6 +634,85 @@ export const Calendar: React.FC<{
     return rows;
   };
 
+  const handleVerifyLeaseCode = async () => {
+    if (!enteredLeaseCode.trim()) {
+      setLeaseError("Please enter a Lease Code.");
+      return;
+    }
+    setIsVerifyingLease(true);
+    setLeaseError(null);
+    setValidatedLeaseCode(null);
+    setLeaseDetails(null);
+
+    try {
+      const code = enteredLeaseCode.trim();
+      const leaseRef = doc(db, 'leases', code);
+      const leaseSnap = await getDoc(leaseRef);
+
+      if (leaseSnap.exists()) {
+        const data = leaseSnap.data();
+        if (data.status !== 'approved') {
+          setLeaseError("This Lease Code is no longer active or approved.");
+        } else if (data.propertyId !== propertyId) {
+          setLeaseError("This Lease Code belongs to a different property.");
+        } else {
+          setValidatedLeaseCode(code);
+          setLeaseDetails(data);
+        }
+      } else {
+        setLeaseError("Lease Code not found in REALCal Bookings Database. Please double-check.");
+      }
+    } catch (err: any) {
+      console.error("Error verifying Lease Code:", err);
+      setLeaseError("Failed to check database: " + err.message);
+    } finally {
+      setIsVerifyingLease(false);
+    }
+  };
+
+  const handleLeaseRequestSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!leaseRequestForm.tenantName || !leaseRequestForm.tenantEmail) {
+      alert("Tenant Name and Tenant Email are required.");
+      return;
+    }
+    setSubmittingLeaseForm(true);
+    try {
+      const requestId = uuidv4();
+      const payload = {
+        propertyId,
+        propertyNameOrRoom: leaseRequestForm.propertyNameOrRoom,
+        startDate: leaseRequestForm.startDate,
+        endDate: leaseRequestForm.endDate,
+        tenantName: leaseRequestForm.tenantName,
+        tenantEmail: leaseRequestForm.tenantEmail,
+        tenantPhone: leaseRequestForm.tenantPhone,
+        status: 'pending',
+        createdAt: new Date().toISOString()
+      };
+
+      // Save request to Firestore
+      await setDoc(doc(db, 'lease_requests', requestId), {
+        ...payload,
+        createdAt: serverTimestamp()
+      });
+
+      // Email Property Managers
+      await fetch('/api/submit-lease-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      setLeaseFormSuccess(true);
+    } catch (err: any) {
+      console.error("Lease Request submit error:", err);
+      alert("Failed to submit Lease Request: " + err.message);
+    } finally {
+      setSubmittingLeaseForm(false);
+    }
+  };
+
   const handleBook = () => {
     if (checkIn && checkOut) {
        if (isBefore(checkOut, checkIn) || isSameDay(checkIn, checkOut)) {
@@ -605,13 +729,24 @@ export const Calendar: React.FC<{
            alert("Please select at least one room.");
            return;
        }
+
+       // Require Lease Code if consecutive nights exceed 30
+       if (priceDetails.nights > 30) {
+           if (!validatedLeaseCode) {
+               alert(`A Lease Code is required for ${priceDetails.nights > 180 ? 'long-term' : 'short-term'} bookings. Please verify your code or fill out the Lease Request Form.`);
+               return;
+           }
+       }
+
        navigate('/checkout', { state: { 
          propertyId,
          checkIn: format(checkIn, 'yyyy-MM-dd'), 
          checkOut: format(checkOut, 'yyyy-MM-dd'), 
          priceDetails,
          selectedBedrooms: selectedRooms, dailySelections,
-         rentalMode
+         rentalMode,
+         leaseCode: validatedLeaseCode,
+         bookingType: priceDetails.nights > 180 ? 'long-term' : 'short-term'
        }});
     }
   };
@@ -907,6 +1042,239 @@ if (false) setSelectedRooms(prev =>
                </div>
             )}
             
+             {/* Lease Code and Request Form section */}
+             {priceDetails && priceDetails.nights > 30 && (
+               <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 mb-4 text-xs font-sans text-slate-300">
+                 <div className="flex items-center gap-2 text-indigo-400 font-bold uppercase tracking-wider text-[11px] mb-2">
+                   <FileText size={14} />
+                   <span>{priceDetails.nights > 180 ? 'Long-Term Lease Required' : 'Short-Term Lease Required'} ({priceDetails.nights} Nights)</span>
+                 </div>
+                 
+                 <p className="text-slate-400 text-[11px] mb-4 leading-normal">
+                   Bookings exceeding 30 nights are categorized as {priceDetails.nights > 180 ? 'long-term' : 'short-term'} rentals. An authorized <strong>Lease Code #</strong> is required before checkout.
+                 </p>
+
+                 {validatedLeaseCode ? (
+                   <div className="bg-emerald-950/40 border border-emerald-500/20 rounded-2xl p-4 text-emerald-300 flex flex-col gap-1 mb-2">
+                     <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-[10px] text-emerald-400">
+                       <CheckCircle2 size={13} /> Lease Code Verified
+                     </div>
+                     <p className="font-mono text-sm tracking-wider font-extrabold mt-1 text-white">Code: {validatedLeaseCode}</p>
+                     {leaseDetails && (
+                       <div className="text-[10px] text-emerald-400 mt-2 space-y-0.5 border-t border-emerald-500/10 pt-2 text-left">
+                         <div><strong className="text-slate-400">Tenant:</strong> {leaseDetails.tenantName}</div>
+                         <div><strong className="text-slate-400">Email:</strong> {leaseDetails.tenantEmail}</div>
+                         <div><strong className="text-slate-400">Duration:</strong> {leaseDetails.startDate} to {leaseDetails.endDate}</div>
+                       </div>
+                     )}
+                   </div>
+                 ) : (
+                   <div className="space-y-4">
+                     {/* Verification Input */}
+                     <div>
+                       <label className="block text-[10px] uppercase font-bold tracking-wider text-slate-400 mb-1.5 text-left">Enter Lease Code #</label>
+                       <div className="flex gap-2">
+                         <input
+                           type="text"
+                           placeholder="LC-XXXXXX"
+                           value={enteredLeaseCode}
+                           onChange={(e) => {
+                             setEnteredLeaseCode(e.target.value);
+                             setLeaseError(null);
+                           }}
+                           className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono tracking-wider focus:outline-none focus:border-indigo-500 text-xs"
+                         />
+                         <button
+                           type="button"
+                           onClick={handleVerifyLeaseCode}
+                           disabled={isVerifyingLease}
+                           className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-700 text-white px-4 py-2 rounded-xl font-bold transition-all flex items-center justify-center cursor-pointer text-xs"
+                         >
+                           {isVerifyingLease ? <Loader2 size={13} className="animate-spin" /> : 'Verify'}
+                         </button>
+                       </div>
+                       {leaseError && (
+                         <p className="text-rose-400 mt-1.5 text-[10px] flex items-center gap-1 text-left">
+                           <AlertCircle size={10} /> {leaseError}
+                         </p>
+                       )}
+                     </div>
+
+                     {/* Call to action for those who don't have code */}
+                     <div className="border-t border-slate-800 pt-3 text-left">
+                       <p className="text-[11px] text-slate-400 leading-normal mb-2">
+                         Don't have a Lease Code #? You must fill out our Property Manager Lease Request Form.
+                       </p>
+                       <button
+                         type="button"
+                         onClick={() => setShowLeaseForm(true)}
+                         className="text-xs text-indigo-400 hover:text-indigo-300 underline font-semibold flex items-center gap-1 cursor-pointer"
+                       >
+                         📋 Fill Lease Request Form
+                       </button>
+                     </div>
+                   </div>
+                 )}
+
+                 {/* Modal for Lease Request Form */}
+                 {showLeaseForm && (
+                   <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-[999] flex items-center justify-center p-4">
+                     <div className="bg-slate-900 border border-slate-800 max-w-lg w-full rounded-3xl p-6 shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
+                       <div className="flex justify-between items-center mb-4 border-b border-slate-800 pb-3">
+                         <div className="text-left">
+                           <h3 className="text-base font-bold text-white flex items-center gap-1.5 font-sans">
+                             <FileText className="text-indigo-400" size={18} /> Apply for Lease Code
+                           </h3>
+                           <p className="text-[11px] text-slate-400 mt-0.5">Your request will be routed directly to the property managers.</p>
+                         </div>
+                         <button
+                           type="button"
+                           onClick={() => setShowLeaseForm(false)}
+                           className="text-slate-400 hover:text-white transition-colors p-1 font-bold text-base cursor-pointer"
+                         >
+                           ✕
+                         </button>
+                       </div>
+
+                       {leaseFormSuccess ? (
+                         <div className="text-center py-8 px-4 flex flex-col items-center justify-center">
+                           <div className="bg-emerald-500/10 p-3 rounded-full mb-4">
+                             <CheckCircle2 size={36} className="text-emerald-400" />
+                           </div>
+                           <h4 className="text-sm font-bold text-white mb-2 uppercase tracking-wide">Lease Request Submitted!</h4>
+                           <p className="text-slate-300 text-xs mb-6 max-w-sm leading-relaxed text-center">
+                             Your request is automatically sent to our Property Managers. Once approved, you will receive an email containing your unique <strong>Lease Code #</strong> to finish booking.
+                           </p>
+                           <div className="bg-slate-950 p-4 border border-slate-800 rounded-2xl w-full text-left space-y-1 text-[11.5px] mb-6">
+                             <div><span className="text-slate-500 font-medium">Tenant Name:</span> <span className="text-slate-300 font-semibold">{leaseRequestForm.tenantName}</span></div>
+                             <div><span className="text-slate-500 font-medium">Email Address:</span> <span className="text-slate-300 font-semibold">{leaseRequestForm.tenantEmail}</span></div>
+                             <div><span className="text-slate-500 font-medium">Dates Requested:</span> <span className="text-slate-300 font-semibold">{leaseRequestForm.startDate} to {leaseRequestForm.endDate}</span></div>
+                           </div>
+                           <button
+                             type="button"
+                             onClick={() => setShowLeaseForm(false)}
+                             className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-6 py-2.5 rounded-xl transition-all cursor-pointer"
+                           >
+                             Close & Wait for Email
+                           </button>
+                         </div>
+                       ) : (
+                         <form onSubmit={handleLeaseRequestSubmit} className="space-y-4 overflow-y-auto pr-1">
+                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
+                             {/* Property/Room detail */}
+                             <div className="md:col-span-2">
+                               <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                                 Entire Property or Room number
+                               </label>
+                               <input
+                                 type="text"
+                                 required
+                                 value={leaseRequestForm.propertyNameOrRoom}
+                                 onChange={(e) => setLeaseRequestForm({...leaseRequestForm, propertyNameOrRoom: e.target.value})}
+                                 className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs"
+                                 placeholder="e.g. Entire Cabin, Room 3"
+                               />
+                             </div>
+
+                             {/* Lease Start Date */}
+                             <div>
+                               <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                                 Lease Start Date
+                               </label>
+                               <input
+                                 type="date"
+                                 required
+                                 value={leaseRequestForm.startDate}
+                                 onChange={(e) => setLeaseRequestForm({...leaseRequestForm, startDate: e.target.value})}
+                                 className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs font-mono"
+                               />
+                             </div>
+
+                             {/* Lease End Date */}
+                             <div>
+                               <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                                 Lease End Date
+                               </label>
+                               <input
+                                 type="date"
+                                 required
+                                 value={leaseRequestForm.endDate}
+                                 onChange={(e) => setLeaseRequestForm({...leaseRequestForm, endDate: e.target.value})}
+                                 className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs font-mono"
+                               />
+                             </div>
+
+                             {/* Tenant Full Name */}
+                             <div className="md:col-span-2">
+                               <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                                 Tenant Full Name
+                               </label>
+                               <input
+                                 type="text"
+                                 required
+                                 placeholder="John Doe"
+                                 value={leaseRequestForm.tenantName}
+                                 onChange={(e) => setLeaseRequestForm({...leaseRequestForm, tenantName: e.target.value})}
+                                 className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs"
+                               />
+                             </div>
+
+                             {/* Tenant Email Address */}
+                             <div>
+                               <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                                 Tenant Email Address
+                               </label>
+                               <input
+                                 type="email"
+                                 required
+                                 placeholder="johndoe@example.com"
+                                 value={leaseRequestForm.tenantEmail}
+                                 onChange={(e) => setLeaseRequestForm({...leaseRequestForm, tenantEmail: e.target.value})}
+                                 className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs"
+                                />
+                             </div>
+
+                             {/* Tenant Phone Number */}
+                             <div>
+                               <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                                 Tenant Phone Number
+                               </label>
+                               <input
+                                 type="tel"
+                                 required
+                                 placeholder="(555) 000-0000"
+                                 value={leaseRequestForm.tenantPhone}
+                                 onChange={(e) => setLeaseRequestForm({...leaseRequestForm, tenantPhone: e.target.value})}
+                                 className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs"
+                               />
+                             </div>
+                           </div>
+
+                           <div className="flex gap-3 justify-end pt-4 border-t border-slate-800 mt-6">
+                             <button
+                               type="button"
+                               onClick={() => setShowLeaseForm(false)}
+                               className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold px-4 py-2 rounded-xl transition-all cursor-pointer text-xs"
+                             >
+                               Cancel
+                             </button>
+                             <button
+                               type="submit"
+                               disabled={submittingLeaseForm}
+                               className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-700 text-white font-bold px-6 py-2 rounded-xl transition-all flex items-center gap-1.5 text-xs cursor-pointer"
+                             >
+                               {submittingLeaseForm && <Loader2 size={13} className="animate-spin" />}
+                               Submit Request
+                             </button>
+                           </div>
+                         </form>
+                       )}
+                     </div>
+                   </div>
+                 )}
+               </div>
+             )}
+
             {!isEditMode && checkIn && checkOut && (
                <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl mb-4 text-xs">
                   <label className="flex items-start gap-3 cursor-pointer select-none text-slate-300">
@@ -971,7 +1339,7 @@ if (false) setSelectedRooms(prev =>
                       handleBook();
                   }
               }}
-              disabled={!checkIn || !checkOut || (user && user.tollFreeAccept !== true && !isEditMode) || (!agreedToHouseRules && !isEditMode) || (rentalMode === 'room' && !agreedToNoKidsUnder10 && !isEditMode)}
+              disabled={!checkIn || !checkOut || (user && user.tollFreeAccept !== true && !isEditMode) || (!agreedToHouseRules && !isEditMode) || (rentalMode === 'room' && !agreedToNoKidsUnder10 && !isEditMode) || (priceDetails && priceDetails.nights > 30 && !validatedLeaseCode && !isEditMode)}
               className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-2xl transition-colors flex items-center justify-center gap-2 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed"
             >
               {isEditMode ? 'Save Changes' : 'Proceed to Checkout'}

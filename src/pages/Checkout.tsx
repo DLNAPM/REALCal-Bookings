@@ -142,6 +142,13 @@ const processBooking = async (
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     };
+
+    if (bookingDetails.leaseCode) {
+      payload.leaseCode = bookingDetails.leaseCode;
+    }
+    if (bookingDetails.bookingType) {
+      payload.bookingType = bookingDetails.bookingType;
+    }
     
     if (dailySelections) {
       payload.dailySelections = dailySelections;
@@ -385,6 +392,8 @@ export const Checkout: React.FC = () => {
   const checkIn = location.state?.checkIn;
   const checkOut = location.state?.checkOut;
   const priceDetails = location.state?.priceDetails;
+  const leaseCode = location.state?.leaseCode || null;
+  const bookingType = location.state?.bookingType || null;
   
   const [clientSecret, setClientSecret] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -697,7 +706,7 @@ export const Checkout: React.FC = () => {
 
              {clientSecret && clientSecret !== 'MOCK_TEST_MODE' ? (
                 <Elements stripe={stripePromise} options={{ clientSecret }}>
-                  <CheckoutForm clientSecret={clientSecret} bookingDetails={{ propertyId, checkIn, checkOut, priceDetails: localPriceDetails }} guestEmail={guestEmail} guestPhone={guestPhone} isTestProperty={isTestProperty} selectedBedrooms={selectedBedrooms} dailySelections={dailySelections} />
+                  <CheckoutForm clientSecret={clientSecret} bookingDetails={{ propertyId, checkIn, checkOut, priceDetails: localPriceDetails, leaseCode, bookingType }} guestEmail={guestEmail} guestPhone={guestPhone} isTestProperty={isTestProperty} selectedBedrooms={selectedBedrooms} dailySelections={dailySelections} />
                 </Elements>
              ) : (
                 <div className="p-8 bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl text-center">

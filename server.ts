@@ -1184,6 +1184,154 @@ async function startServer() {
     }
   });
 
+  app.post("/api/submit-lease-request", async (req, res) => {
+    try {
+      const { propertyId, propertyNameOrRoom, startDate, endDate, tenantName, tenantEmail, tenantPhone } = req.body;
+      
+      if (!db) {
+        return res.status(500).json({ error: "Firebase Firestore is not initialized on the server." });
+      }
+
+      // Check if there are any active manager emails to notify
+      const managersSnap = await db.collection("property_managers").get();
+      const managers = managersSnap.docs.map(doc => doc.data()).filter(m => m.enabled);
+      const emailList = managers.map(m => m.email).filter(Boolean);
+      
+      console.log(`[Server] Lease request notification: Tenant ${tenantName} (${tenantEmail}), Property/Room: ${propertyNameOrRoom}`);
+      
+      if (emailList.length > 0 && process.env.SMTP_HOST) {
+        const subject = `New Lease Request: ${propertyNameOrRoom}`;
+        const html = `
+          <div style="font-family: sans-serif; max-width: 600px; color: #334155; line-height: 1.6;">
+            <h2 style="color: #4f46e5; margin-bottom: 20px;">New Lease Request Submitted</h2>
+            <p>A guest has submitted a lease request for a long-term or short-term booking. Please find the details below:</p>
+            <div style="background-color: #f8fafc; border-left: 4px solid #4f46e5; padding: 20px; border-radius: 4px; margin: 20px 0;">
+              <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                  <td style="padding: 6px 0; font-weight: bold; width: 40%;">Entire Property/Room:</td>
+                  <td style="padding: 6px 0;">${propertyNameOrRoom}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 6px 0; font-weight: bold;">Lease Start Date:</td>
+                  <td style="padding: 6px 0;">${startDate}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 6px 0; font-weight: bold;">Lease End Date:</td>
+                  <td style="padding: 6px 0;">${endDate}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 6px 0; font-weight: bold;">Tenant Full Name:</td>
+                  <td style="padding: 6px 0;">${tenantName}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 6px 0; font-weight: bold;">Tenant Email address:</td>
+                  <td style="padding: 6px 0;"><a href="mailto:${tenantEmail}" style="color: #4f46e5; text-decoration: none;">${tenantEmail}</a></td>
+                </tr>
+                <tr>
+                  <td style="padding: 6px 0; font-weight: bold;">Tenant Phone number:</td>
+                  <td style="padding: 6px 0;">${tenantPhone || 'N/A'}</td>
+                </tr>
+              </table>
+            </div>
+            <p>To review and issue an official <strong>Lease Code #</strong>, please open the <strong>Admin Dashboard</strong> inside your REALCal Bookings app, under the "Lease Requests" tab.</p>
+            <p style="font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 20px; margin-top: 30px;">This email was automatically dispatched by REALCal Bookings Engine.</p>
+          </div>
+        `;
+        
+        await sendSmtpEmail({
+          to: emailList.join(", "),
+          subject,
+          text: `New Lease Request for ${propertyNameOrRoom} by ${tenantName}. Review details in the Admin Dashboard.`,
+          html
+        });
+      } else {
+        console.log("[Server] No active manager emails or SMTP_HOST not configured. Skipped sending email, but request successfully stored in Firestore.");
+      }
+
+      res.json({ success: true });
+    } catch (e: any) {
+      console.error("[Server] Error in submit-lease-request:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/approve-lease", async (req, res) => {
+    try {
+      const { requestId, leaseCode, propertyId, propertyNameOrRoom, startDate, endDate, tenantName, tenantEmail, tenantPhone } = req.body;
+      
+      if (!db) {
+        return res.status(500).json({ error: "Firebase Firestore is not initialized on the server." });
+      }
+
+      // Create/over-write the validated Lease Code database record
+      await db.collection("leases").doc(leaseCode).set({
+        leaseCode,
+        propertyId,
+        propertyNameOrRoom,
+        startDate,
+        endDate,
+        tenantName,
+        tenantEmail,
+        tenantPhone: tenantPhone || "",
+        status: "approved",
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      // Update the status of the request if available
+      if (requestId) {
+        await db.collection("lease_requests").doc(requestId).update({
+          status: "approved"
+        });
+      }
+
+      // Send the Lease with generated Lease Code to the Guest's email
+      if (tenantEmail && process.env.SMTP_HOST) {
+        const subject = `Your Lease Request has been Approved! Lease Code: ${leaseCode}`;
+        const html = `
+          <div style="font-family: sans-serif; max-width: 600px; color: #334155; line-height: 1.6;">
+            <h2 style="color: #10b981; margin-bottom: 20px;">Lease Approved!</h2>
+            <p>Hello <strong>${tenantName}</strong>,</p>
+            <p>Your lease request for <strong>${propertyNameOrRoom}</strong> spanning <strong>${startDate} to ${endDate}</strong> has been fully approved by the Property Management Team.</p>
+            
+            <p>To finalize and checkout your booking, please use your unique Lease Code # details provided below:</p>
+            
+            <div style="text-align: center; margin: 30px 0; background-color: #f0fdf4; border: 2px dashed #10b981; border-radius: 12px; padding: 25px;">
+              <span style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #059669; font-weight: bold; display: block; margin-bottom: 5px;">Your Unique Lease Code</span>
+              <span style="font-size: 32px; font-family: monospace; font-weight: 900; color: #047857; letter-spacing: 2px;">${leaseCode}</span>
+            </div>
+            
+            <p><strong>Next Steps:</strong></p>
+            <ol style="padding-left: 20px; margin: 15px 0;">
+              <li>Return to the REALCal booking application.</li>
+              <li>Navigate to the property and pick your approved dates: <strong>${startDate}</strong> to <strong>${endDate}</strong>.</li>
+              <li>Input your code <strong>${leaseCode}</strong> in the Lease Code Verification section.</li>
+              <li>Once successfully verified, Click <strong>"Proceed to Checkout"</strong>.</li>
+            </ol>
+            
+            <p style="margin-top: 30px;">Thank you for booking with us!</p>
+            <p>Warmest regards,<br /><strong>REALCal Property Managers</strong></p>
+            
+            <p style="font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 20px; margin-top: 30px;">This email was automatically dispatched by REALCal Bookings Engine.</p>
+          </div>
+        `;
+
+        await sendSmtpEmail({
+          to: tenantEmail,
+          subject,
+          text: `Your lease request is approved! Use Lease Code: ${leaseCode} to book ${propertyNameOrRoom}.`,
+          html
+        });
+      } else {
+        console.log("[Server] Lease Code approved silently in Firestore. (Either SMTP_HOST is not configured or guest email is omitted)");
+      }
+
+      res.json({ success: true, leaseCode });
+    } catch (e: any) {
+      console.error("[Server] Error in approve-lease:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   app.post("/api/notify-managers", async (req, res) => {
     try {
       const { managers, bookingDetails } = req.body;

@@ -93,3 +93,31 @@ export interface GlobalSettings {
   }[];
   updatedAt?: any;
 }
+
+export interface Lease {
+  id: string;
+  leaseCode: string;
+  propertyId: string;
+  propertyNameOrRoom: string;
+  startDate: string;
+  endDate: string;
+  tenantName: string;
+  tenantEmail: string;
+  tenantPhone: string;
+  status: 'approved' | 'revoked';
+  createdAt: any;
+}
+
+export interface LeaseRequest {
+  id: string;
+  propertyId: string;
+  propertyNameOrRoom: string;
+  startDate: string;
+  endDate: string;
+  tenantName: string;
+  tenantEmail: string;
+  tenantPhone: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: any;
+}
+

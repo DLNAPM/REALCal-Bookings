@@ -133,6 +133,31 @@ service cloud.firestore {
         data.createdAt is timestamp;
     }
 
+    // Leases Collection
+    function isValidLease(data) {
+      return data.keys().hasAll(['leaseCode', 'propertyId', 'propertyNameOrRoom', 'startDate', 'endDate', 'tenantName', 'tenantEmail', 'status', 'createdAt']) && 
+        (data.keys().hasAll(['tenantPhone']) ? data.tenantPhone is string : true) &&
+        data.leaseCode is string && data.leaseCode.size() <= 32 &&
+        data.propertyId is string && data.propertyId.size() <= 128 &&
+        data.propertyNameOrRoom is string && data.propertyNameOrRoom.size() <= 256 &&
+        data.tenantName is string && data.tenantName.size() <= 128 &&
+        data.tenantEmail is string && data.tenantEmail.size() <= 256 &&
+        data.status in ['approved', 'revoked'] &&
+        data.createdAt is timestamp;
+    }
+
+    // Lease Requests Collection
+    function isValidLeaseRequest(data) {
+      return data.keys().hasAll(['propertyId', 'propertyNameOrRoom', 'startDate', 'endDate', 'tenantName', 'tenantEmail', 'status', 'createdAt']) && 
+        (data.keys().hasAll(['tenantPhone']) ? data.tenantPhone is string : true) &&
+        data.propertyId is string && data.propertyId.size() <= 128 &&
+        data.propertyNameOrRoom is string && data.propertyNameOrRoom.size() <= 256 &&
+        data.tenantName is string && data.tenantName.size() <= 128 &&
+        data.tenantEmail is string && data.tenantEmail.size() <= 256 &&
+        data.status in ['pending', 'approved', 'rejected'] &&
+        data.createdAt is timestamp;
+    }
+
     // ---------- MATCH BLOCKS ----------
 
     match /property_managers/{managerId} {
@@ -226,6 +251,22 @@ service cloud.firestore {
       allow create: if isSignedIn() && (isAdmin() || blackoutId.matches('maint-.*')) && isValidBlackoutDate(incoming());
       allow update: if isAdmin();
       allow delete: if isAdmin() || (isSignedIn() && blackoutId.matches('maint-.*'));
+    }
+
+    match /leases/{leaseId} {
+      allow get: if true;
+      allow list: if true;
+      allow create: if isValidId(leaseId) && isValidLease(incoming()) && incoming().createdAt == request.time;
+      allow update: if isValidId(leaseId) && isValidLease(incoming()) && incoming().createdAt == existing().createdAt;
+      allow delete: if isAdmin();
+    }
+
+    match /lease_requests/{requestId} {
+      allow get: if true;
+      allow list: if true;
+      allow create: if isValidId(requestId) && isValidLeaseRequest(incoming()) && incoming().createdAt == request.time;
+      allow update: if isValidId(requestId) && isValidLeaseRequest(incoming());
+      allow delete: if isAdmin();
     }
   }
 }
