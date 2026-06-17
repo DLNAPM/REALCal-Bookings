@@ -1339,6 +1339,42 @@ async function startServer() {
         console.log("[Server] Lease Code approved silently in Firestore. (Either SMTP_HOST is not configured or guest email is omitted)");
       }
 
+      // Send Twilio SMS Notification to Tenant if phone is configured
+      if (tenantPhone) {
+        let twilioClient = null;
+        const tSid = process.env.TWILIO_ACCOUNT_SID;
+        const tTok = process.env.TWILIO_AUTH_TOKEN;
+        const tFrom = process.env.TWILIO_PHONE_NUMBER;
+
+        if (tSid && tTok && tSid.startsWith('AC') && !tSid.includes('PROVIDE_REAL')) {
+          try {
+            const twilioPkg = await import('twilio');
+            const twilio = twilioPkg.default || twilioPkg;
+            twilioClient = (twilio as any)(tSid, tTok);
+          } catch (e) {
+            console.error("[Server] Error instantiating Twilio Client for lease approval SMS:", e);
+          }
+        }
+
+        const formattedPhone = formatPhoneToE164(tenantPhone);
+
+        if (twilioClient && formattedPhone && tFrom) {
+          try {
+            const smsBody = `Hi ${tenantName || 'Tenant'}, your lease request for ${propertyNameOrRoom || 'Property'} (${startDate} to ${endDate}) is approved!\n\nUse Lease Code: ${leaseCode} to book. Verify this code in the app to checkout.`;
+            await twilioClient.messages.create({
+              body: smsBody,
+              from: tFrom,
+              to: formattedPhone
+            });
+            console.log(`[Server] Lease approval SMS sent successfully to ${formattedPhone}`);
+          } catch (err: any) {
+            console.error("[Server] Error sending lease approval SMS via Twilio:", err);
+          }
+        } else {
+          console.log("[Server] Twilio SMS notification skipped for lease approval. (Twilio not configured or phone formatted incorrectly)");
+        }
+      }
+
       res.json({ success: true, leaseCode });
     } catch (e: any) {
       console.error("[Server] Error in approve-lease:", e);
