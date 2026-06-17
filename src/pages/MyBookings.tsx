@@ -1085,7 +1085,77 @@ export const MyBookings: React.FC = () => {
 
                                             <div className="space-y-3 w-full">
                                                 {/* If reservation is active (not cancelled and not checked out) */}
-                                                {booking.status !== 'cancelled' && !booking.checkedOut && (
+                                                {booking.paymentSchedule && booking.paymentSchedule.length > 0 && (
+                                             <div className="mb-6 p-4 bg-indigo-50/40 border border-indigo-100 rounded-2xl text-left font-sans shadow-sm">
+                                                 <h4 className="text-xs font-black uppercase text-indigo-950 tracking-wider mb-2.5 flex items-center gap-1.5">
+                                                     📅 Active Lease Payment Schedule
+                                                 </h4>
+                                                 <div className="text-xs space-y-3">
+                                                     {/* Security Deposit Info */}
+                                                     <div className="flex justify-between items-center bg-white p-2.5 rounded-xl border border-indigo-50 shadow-sm text-[11px]">
+                                                         <span className="font-semibold text-slate-700">Refundable Security Deposit</span>
+                                                         <div className="text-right">
+                                                             <span className="font-mono text-indigo-700 font-bold block">${(booking.securityDeposit || 0).toFixed(2)}</span>
+                                                             <span className="text-[9px] uppercase tracking-wider text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.5 rounded">🔒 Locked & Safe</span>
+                                                         </div>
+                                                     </div>
+
+                                                     {/* Plan Summary */}
+                                                     <div className="flex justify-between items-center text-[11px] px-1 text-slate-650 font-semibold">
+                                                         <span>Lease Payment Mode:</span>
+                                                         <span className="text-indigo-600 uppercase font-black">{booking.paymentOption === 'full' ? 'In Full Upfront' : 'Month-To-Month'}</span>
+                                                     </div>
+
+                                                     {/* Schedule breakdown */}
+                                                     <div className="space-y-2 border-t border-indigo-100/50 pt-2.5">
+                                                         <span className="block text-[10px] uppercase font-bold tracking-wider text-slate-400">Installments Progress:</span>
+                                                         {booking.paymentSchedule.map((p: any, idx: number) => {
+                                                             const dueDateObj = new Date(p.dueDate + 'T12:00:00');
+                                                             const alertDateObj = new Date(dueDateObj);
+                                                             alertDateObj.setDate(alertDateObj.getDate() - 5);
+                                                             const alertDateStr = alertDateObj.toLocaleDateString();
+                                                             
+                                                             return (
+                                                                 <div key={idx} className="flex justify-between items-center bg-white/75 p-2 rounded-xl border border-slate-100 text-[11px] shadow-sm">
+                                                                     <div>
+                                                                         <span className="font-bold text-slate-800 block">{p.description}</span>
+                                                                         <span className="text-[10px] text-slate-400 block font-mono">
+                                                                             Due Date: {p.dueDate}
+                                                                             {p.status !== 'paid' && p.amount > 0 && ` (Alert: ${alertDateStr})`}
+                                                                         </span>
+                                                                     </div>
+                                                                     <div className="text-right">
+                                                                         <span className="font-mono text-slate-800 font-bold block">${p.amount.toFixed(2)}</span>
+                                                                         <span className={`inline-block text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-black mt-0.5 ${
+                                                                             p.status === 'paid' || p.amount === 0
+                                                                                 ? 'text-emerald-700 bg-emerald-50' 
+                                                                                 : 'text-amber-700 bg-amber-50'
+                                                                         }`}>
+                                                                             {p.status === 'paid' || p.amount === 0 ? '✓ Paid' : 'Pending'}
+                                                                         </span>
+                                                                     </div>
+                                                                 </div>
+                                                             );
+                                                         })}
+                                                     </div>
+
+                                                     {/* Remaining Balance Summary */}
+                                                     {booking.paymentOption === 'monthly' && (
+                                                         <div className="pt-2.5 border-t border-indigo-100/50 flex justify-between items-center text-xs font-bold text-slate-800 px-1">
+                                                             <span>Remaining Lease Balance:</span>
+                                                             <span className="font-mono text-indigo-600">
+                                                                 ${booking.paymentSchedule
+                                                                     .filter((p: any) => p.status !== 'paid')
+                                                                     .reduce((sum: number, p: any) => sum + p.amount, 0)
+                                                                     .toFixed(2)}
+                                                             </span>
+                                                         </div>
+                                                     )}
+                                                 </div>
+                                             </div>
+                                         )}
+
+                                         {booking.status !== 'cancelled' && !booking.checkedOut && (
                                                     <div className="flex flex-col gap-3">
                                                          {/* Check-Out Reminders Toggle Settings */}
                                                          <div id={`reminder-prefs-${booking.id}`} className="p-4 bg-slate-50 border border-slate-200/50 rounded-2xl flex flex-col gap-2.5">

@@ -136,7 +136,17 @@ export const AdminDashboard: React.FC = () => {
       console.error("Admin property managers snapshot error:", error);
     });
     onSnapshot(query(collection(db, 'lease_requests')), (snap) => {
-      setLeaseRequests(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const reqs = snap.docs.map(d => ({ id: d.id, ...d.data() })) as any[];
+      setLeaseRequests(reqs);
+      setLeaseCodes(prev => {
+        const copy = { ...prev };
+        reqs.forEach(r => {
+          if (r.status === 'pending' && !copy[r.id]) {
+            copy[r.id] = 'LSE-' + Math.random().toString(36).substring(2, 7).toUpperCase();
+          }
+        });
+        return copy;
+      });
     }, (error) => {
       console.error("Admin lease_requests snapshot error:", error);
     });
@@ -2144,7 +2154,19 @@ C.&S.H. Group Properties, LLC
                                   {isPending && (
                                      <div className="border-t border-slate-100 pt-3 flex flex-col sm:flex-row items-end sm:items-center gap-3 w-full">
                                         <div className="flex-1 w-full text-left">
-                                           <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                                           <div className="flex justify-between items-center mb-1">
+                                              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0">
+                                                 Assign Lease Code #
+                                              </label>
+                                              <button
+                                                 type="button"
+                                                 onClick={() => setLeaseCodes({ ...leaseCodes, [req.id]: 'LSE-' + Math.random().toString(36).substring(2, 7).toUpperCase() })}
+                                                 className="text-[9px] text-indigo-650 hover:text-indigo-850 underline font-bold focus:outline-none"
+                                              >
+                                                 Generate Random Code
+                                              </button>
+                                           </div>
+                                           <label className="hidden block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
                                               Assign Lease Code #
                                            </label>
                                            <input

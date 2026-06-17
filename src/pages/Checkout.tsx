@@ -149,6 +149,49 @@ const processBooking = async (
     if (bookingDetails.bookingType) {
       payload.bookingType = bookingDetails.bookingType;
     }
+
+    const numMonths = bookingDetails.numMonths || 0;
+    const paymentOption = bookingDetails.paymentOption || 'full';
+    const grandTotal = bookingDetails.priceDetails?.grandTotal || 0;
+    const monthlyAmount = bookingDetails.monthlyAmount || 0;
+    const securityDeposit = bookingDetails.securityDeposit || 0;
+
+    let paymentSchedule: any[] = [];
+    if (bookingDetails.priceDetails?.nights > 60) {
+      const checkInDate = new Date(bookingDetails.checkIn);
+      // Month 1 is paid upfront
+      paymentSchedule.push({
+        month: 1,
+        dueDate: bookingDetails.checkIn.split('T')[0],
+        amount: paymentOption === 'full' ? grandTotal : monthlyAmount,
+        status: 'paid',
+        description: paymentOption === 'full' ? 'Entire Lease Amount' : 'First Month Stay',
+        alertSent: false
+      });
+
+      // Future months
+      for (let m = 2; m <= numMonths; m++) {
+        const dueDate = new Date(checkInDate);
+        dueDate.setDate(dueDate.getDate() + (m - 1) * 30);
+        paymentSchedule.push({
+          month: m,
+          dueDate: dueDate.toISOString().split('T')[0],
+          amount: paymentOption === 'full' ? 0 : monthlyAmount,
+          status: paymentOption === 'full' ? 'paid' : 'unpaid',
+          description: `Month ${m} Stay`,
+          alertSent: false
+        });
+      }
+    }
+
+    if (bookingDetails.priceDetails?.nights > 60) {
+      payload.paymentOption = paymentOption;
+      payload.securityDeposit = securityDeposit;
+      payload.numMonths = numMonths;
+      payload.monthlyAmount = monthlyAmount;
+      payload.upfrontAmountPaid = bookingDetails.upfrontAmount || (paymentIntentAmount ? paymentIntentAmount / 100 : 0);
+      payload.paymentSchedule = paymentSchedule;
+    }
     
     if (dailySelections) {
       payload.dailySelections = dailySelections;
@@ -395,6 +438,7 @@ export const Checkout: React.FC = () => {
   const leaseCode = location.state?.leaseCode || null;
   const bookingType = location.state?.bookingType || null;
   
+  const [paymentOption, setPaymentOption] = useState<'full' | 'monthly'>('full');
   const [clientSecret, setClientSecret] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [stripeConfigError, setStripeConfigError] = useState<string | null>(null);
@@ -405,6 +449,16 @@ export const Checkout: React.FC = () => {
   const [pricingRules, setPricingRules] = useState<PricingRule[]>([]);
   const [globalSettings, setGlobalSettings] = useState<any>(null);
   const [localPriceDetails, setLocalPriceDetails] = useState<any>(priceDetails);
+
+  const isLongTermLease = localPriceDetails && localPriceDetails.nights > 60;
+  const numMonths = localPriceDetails ? Math.ceil(localPriceDetails.nights / 30) : 0;
+  const securityDeposit = localPriceDetails?.securityDeposit || 0;
+  const grandTotal = localPriceDetails?.grandTotal || 0;
+  const monthlyAmount = numMonths > 0 ? (grandTotal / numMonths) : 0;
+  
+  const upfrontAmount = isLongTermLease
+    ? (paymentOption === 'full' ? (grandTotal + securityDeposit) : (monthlyAmount + securityDeposit))
+    : grandTotal;
 
   const isTestProperty = !!property?.isTestProperty;
   
@@ -470,7 +524,7 @@ export const Checkout: React.FC = () => {
   if (!propertyId || !checkIn || !checkOut || !priceDetails) return <Navigate to="/" />;
 
   useEffect(() => {
-    if (!propertyId || !checkIn || !checkOut) return;
+    if (!propertyId || !checkIn || !checkOut || !upfrontAmount) return;
     
     setStripeConfigError(null);
     setClientSecret('');
@@ -483,53 +537,54 @@ export const Checkout: React.FC = () => {
         checkIn,
         checkOut,
         selectedBedrooms, // Pass array
-        dailySelections
+        dailySelections,
+        amount: Math.round(upfrontAmount * 100) // exact upfront amount in cents
       })
     })
     .then(async res => {
-      const contentType = res.headers.get("content-type");
-      let data: any = {};
-      
-      try {
-        if (contentType && contentType.includes("application/json")) {
-          data = await res.json();
-        } else {
-          const text = await res.text();
-          console.error(`[Checkout] Expected JSON from server but got ${contentType || 'no content-type'}. Body snippet: ${text.substring(0, 100)}`);
-          if (!res.ok) {
-            setStripeConfigError(`Server Error: ${res.status}. Please ensure the server is running and /api/config is registered.`);
-            setClientSecret('MOCK_TEST_MODE');
-            return;
-          }
-        }
-      } catch (e) {
-        console.error("Error parsing response:", e);
-      }
+       const contentType = res.headers.get("content-type");
+       let data: any = {};
+       
+       try {
+         if (contentType && contentType.includes("application/json")) {
+           data = await res.json();
+         } else {
+           const text = await res.text();
+           console.error(`[Checkout] Expected JSON from server but got ${contentType || 'no content-type'}. Body snippet: ${text.substring(0, 100)}`);
+           if (!res.ok) {
+             setStripeConfigError(`Server Error: ${res.status}. Please ensure the server is running and /api/config is registered.`);
+             setClientSecret('MOCK_TEST_MODE');
+             return;
+           }
+         }
+       } catch (e) {
+         console.error("Error parsing response:", e);
+       }
 
-      if (!res.ok) {
-        console.error("Stripe API Error (Local Server):", data?.error || "Unknown Error");
-        setClientSecret('MOCK_TEST_MODE');
-        setStripeConfigError(data.error || `Server responded with ${res.status}`);
-        return;
-      }
+       if (!res.ok) {
+         console.error("Stripe API Error (Local Server):", data?.error || "Unknown Error");
+         setClientSecret('MOCK_TEST_MODE');
+         setStripeConfigError(data.error || `Server responded with ${res.status}`);
+         return;
+       }
 
-      if (data.clientSecret) {
-        setClientSecret(data.clientSecret);
-      } else {
+       if (data.clientSecret) {
+         setClientSecret(data.clientSecret);
+       } else {
+         setClientSecret('MOCK_TEST_MODE');
+         setStripeConfigError("Server did not return a clientSecret.");
+       }
+       
+       if (!hasPublishableKey) {
+         setStripeConfigError("VITE_STRIPE_PUBLISHABLE_KEY is missing on the client. Please add it to your Secrets.");
+       }
+     })
+     .catch((err) => {
+        console.error("Payment intent fetch error:", err);
         setClientSecret('MOCK_TEST_MODE');
-        setStripeConfigError("Server did not return a clientSecret.");
-      }
-      
-      if (!hasPublishableKey) {
-        setStripeConfigError("VITE_STRIPE_PUBLISHABLE_KEY is missing on the client. Please add it to your Secrets.");
-      }
-    })
-    .catch((err) => {
-       console.error("Payment intent fetch error:", err);
-       setClientSecret('MOCK_TEST_MODE');
-       setStripeConfigError("Network error: Could not reach the payment server.");
-    });
-  }, [propertyId, checkIn, checkOut, selectedBedrooms, hasPublishableKey]);
+        setStripeConfigError("Network error: Could not reach the payment server.");
+     });
+  }, [propertyId, checkIn, checkOut, selectedBedrooms, hasPublishableKey, upfrontAmount]);
 
   const parseLocalDate = (dateStr: string) => {
     if (!dateStr) return new Date();
@@ -574,9 +629,40 @@ export const Checkout: React.FC = () => {
                   <span>Occupancy Taxes</span>
                   <span className="font-mono text-white">${(localPriceDetails.taxes).toFixed(2)}</span>
                </div>
-               <div className="flex justify-between items-end border-t border-slate-800 pt-6 mt-6">
-                  <span>Total Due</span>
-                  <span className="font-mono text-3xl font-bold text-white">${(localPriceDetails.grandTotal).toFixed(2)}</span>
+               <div className="flex justify-between border-b border-slate-800 pb-3 mb-2 font-medium">
+                  <span className="text-white">Lease Booking Subtotal</span>
+                  <span className="font-mono text-white">${(localPriceDetails.grandTotal).toFixed(2)}</span>
+               </div>
+
+               {isLongTermLease && (
+                  <div className="space-y-2 border-b border-slate-800 pb-3 mb-2 text-xs">
+                     <div className="flex justify-between text-indigo-300 font-bold">
+                        <span>Required Security Deposit</span>
+                        <span className="font-mono">${(securityDeposit).toFixed(2)}</span>
+                     </div>
+                     <div className="flex justify-between text-[11px]">
+                        <span>Selected Payment Plan</span>
+                        <span className="text-white font-semibold uppercase">{paymentOption === 'full' ? 'In Full' : 'Month-To-Month'}</span>
+                     </div>
+                     {paymentOption === 'monthly' && (
+                        <div className="space-y-1 bg-slate-800/40 p-2.5 rounded-xl border border-slate-800 text-left text-slate-400 mt-2">
+                           <span className="text-[10px] uppercase font-bold tracking-wider text-slate-300 block mb-1">Month-To-Month Schedule:</span>
+                           <div className="flex justify-between text-[11px]">
+                              <span>Month 1 (Due Upfront)</span>
+                              <span className="font-mono text-white">${(monthlyAmount).toFixed(2)}</span>
+                           </div>
+                           <div className="flex justify-between text-[11px]">
+                              <span>Remaining ({numMonths - 1} months)</span>
+                              <span className="font-mono text-white">${(monthlyAmount).toFixed(2)} / mo</span>
+                           </div>
+                        </div>
+                     )}
+                  </div>
+               )}
+
+               <div className="flex justify-between items-end pt-2">
+                  <span className="text-white font-bold">{isLongTermLease ? "Amt Due Today" : "Total Due"}</span>
+                  <span className="font-mono text-3xl font-black text-indigo-400">${(upfrontAmount).toFixed(2)}</span>
                </div>
             </div>
 
@@ -588,6 +674,80 @@ export const Checkout: React.FC = () => {
           
           <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200 h-fit">
              <h3 className="font-bold text-lg mb-6 text-slate-800">Payment Details</h3>
+             
+             {isLongTermLease && (
+                 <div className="mb-6 p-5 bg-indigo-50/40 border border-indigo-100 rounded-2xl text-left">
+                    <h4 className="font-extrabold text-sm text-indigo-950 mb-3 uppercase tracking-wider flex items-center gap-1.5">
+                       <span>🔒</span> Long Term Lease Options ({localPriceDetails?.nights} Nights)
+                    </h4>
+                    <p className="text-xs text-indigo-900 mb-4 font-semibold leading-relaxed">
+                       A fully-refundable **Security Deposit** of <strong>${securityDeposit.toFixed(2)}</strong> is required upfront. Select your preferred lease payment plan below:
+                    </p>
+                    <div className="grid grid-cols-1 gap-3 font-sans">
+                       <button
+                          type="button"
+                          onClick={() => setPaymentOption('full')}
+                          className={cn(
+                             "w-full p-4 rounded-xl border text-left transition-all flex flex-col gap-1 cursor-pointer",
+                             paymentOption === 'full' 
+                               ? "border-indigo-600 bg-white ring-2 ring-indigo-600/20" 
+                               : "border-slate-200 bg-white hover:border-indigo-300"
+                          )}
+                       >
+                          <div className="flex justify-between items-center w-full">
+                             <span className="font-black text-sm text-slate-800">Pay In Full Upfront</span>
+                             <span className={cn(
+                                "w-4 h-4 rounded-full border flex items-center justify-center",
+                                paymentOption === 'full' ? "border-indigo-600 bg-indigo-600" : "border-slate-300"
+                             )}>
+                                {paymentOption === 'full' && <span className="w-1.5 h-1.5 rounded-full bg-white"></span>}
+                             </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 font-medium">
+                             Pay entire lease amount + security deposit now. No monthly follow-ups.
+                          </p>
+                          <span className="text-indigo-600 text-xs font-mono font-bold mt-1 block">
+                             Total Today: ${(grandTotal + securityDeposit).toFixed(2)}
+                          </span>
+                       </button>
+
+                       <button
+                          type="button"
+                          onClick={() => setPaymentOption('monthly')}
+                          className={cn(
+                             "w-full p-4 rounded-xl border text-left transition-all flex flex-col gap-1 cursor-pointer",
+                             paymentOption === 'monthly' 
+                               ? "border-indigo-600 bg-white ring-2 ring-indigo-600/20" 
+                               : "border-slate-200 bg-white hover:border-indigo-300"
+                          )}
+                       >
+                          <div className="flex justify-between items-center w-full">
+                             <span className="font-black text-sm text-slate-800">Month-to-Month Plan</span>
+                             <span className={cn(
+                                "w-4 h-4 rounded-full border flex items-center justify-center",
+                                paymentOption === 'monthly' ? "border-indigo-600 bg-indigo-600" : "border-slate-300"
+                             )}>
+                                {paymentOption === 'monthly' && <span className="w-1.5 h-1.5 rounded-full bg-white"></span>}
+                             </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 font-medium font-semibold">
+                             Pay Security Deposit + 1st month now. Remaining payments auto-drafted every 30 days.
+                          </p>
+                          <div className="mt-1 flex flex-wrap justify-between items-center gap-1">
+                             <span className="text-indigo-600 text-xs font-mono font-bold">
+                                Total Today: ${(monthlyAmount + securityDeposit).toFixed(2)}
+                             </span>
+                             <span className="text-slate-500 font-bold font-mono text-[10px] bg-slate-150 px-1.5 py-0.5 rounded">
+                                ${(monthlyAmount).toFixed(2)} / mo
+                             </span>
+                          </div>
+                          <div className="mt-2 bg-amber-50/60 p-2 rounded-lg border border-amber-105 text-[10px] text-amber-800 leading-relaxed font-semibold">
+                             💡 Alert sent 5 days prior to each remaining month (balance of ${(grandTotal - monthlyAmount).toFixed(2)} split across remaining {numMonths - 1} months).
+                          </div>
+                       </button>
+                    </div>
+                 </div>
+              )}
              
              {/* Bedroom / SmartLock Section */}
              {property?.bedrooms && property.bedrooms.length > 0 && (
@@ -706,7 +866,7 @@ export const Checkout: React.FC = () => {
 
              {clientSecret && clientSecret !== 'MOCK_TEST_MODE' ? (
                 <Elements stripe={stripePromise} options={{ clientSecret }}>
-                  <CheckoutForm clientSecret={clientSecret} bookingDetails={{ propertyId, checkIn, checkOut, priceDetails: localPriceDetails, leaseCode, bookingType }} guestEmail={guestEmail} guestPhone={guestPhone} isTestProperty={isTestProperty} selectedBedrooms={selectedBedrooms} dailySelections={dailySelections} />
+                  <CheckoutForm clientSecret={clientSecret} bookingDetails={{ propertyId, checkIn, checkOut, priceDetails: localPriceDetails, leaseCode, bookingType, paymentOption, securityDeposit, monthlyAmount, numMonths, upfrontAmount }} guestEmail={guestEmail} guestPhone={guestPhone} isTestProperty={isTestProperty} selectedBedrooms={selectedBedrooms} dailySelections={dailySelections} />
                 </Elements>
              ) : (
                 <div className="p-8 bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl text-center">

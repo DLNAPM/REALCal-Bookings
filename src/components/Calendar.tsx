@@ -658,6 +658,14 @@ export const Calendar: React.FC<{
         } else {
           setValidatedLeaseCode(code);
           setLeaseDetails(data);
+          if (data.startDate && data.endDate) {
+            const startParts = data.startDate.split('-').map(Number);
+            const endParts = data.endDate.split('-').map(Number);
+            const sDate = new Date(startParts[0], startParts[1] - 1, startParts[2], 12, 0, 0);
+            const eDate = new Date(endParts[0], endParts[1] - 1, endParts[2], 12, 0, 0);
+            setCheckIn(sDate);
+            setCheckOut(eDate);
+          }
         }
       } else {
         setLeaseError("Lease Code not found in REALCal Bookings Database. Please double-check.");

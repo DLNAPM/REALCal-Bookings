@@ -155,6 +155,19 @@ export const calculatePriceDetails = (
   
   let taxes = (totalNightsRate + cleaningFee) * 0.12;
 
+  // Calculate 1 month's rate for security deposit if stay is > 60 days
+  // Setup standard base rate context for a 30-day stay to calculate a whole month's rate
+  let oneDayRate = 0;
+  if (rentalMode === 'room' && rooms.length > 0) {
+    rooms.forEach(room => {
+      oneDayRate += getNightlyRate(checkIn, pricingRules, room, 'room', 30);
+    });
+  } else {
+    oneDayRate += getNightlyRate(checkIn, pricingRules, null, 'entire', 30);
+  }
+  const monthlyRate = oneDayRate * 30;
+  const securityDeposit = nights > 60 ? monthlyRate : 0;
+
   return {
     nights,
     baseTotal: totalNightsRate,
@@ -162,6 +175,8 @@ export const calculatePriceDetails = (
     discount,
     taxes,
     sameDayModificationFee,
-    grandTotal: totalNightsRate + cleaningFee + taxes + sameDayModificationFee
+    grandTotal: totalNightsRate + cleaningFee + taxes + sameDayModificationFee,
+    monthlyRate,
+    securityDeposit
   };
 };
