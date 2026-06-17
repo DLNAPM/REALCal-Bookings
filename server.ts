@@ -1263,6 +1263,18 @@ async function startServer() {
         return res.status(500).json({ error: "Firebase Firestore is not initialized on the server." });
       }
 
+      // Calculate isLongTerm / bookingType based on dates
+      let bookingType = "short-term";
+      if (startDate && endDate) {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const diffTime = Math.abs(end.getTime() - start.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        if (diffDays > 180) {
+          bookingType = "long-term";
+        }
+      }
+
       // Create/over-write the validated Lease Code database record
       await db.collection("leases").doc(leaseCode).set({
         leaseCode,
@@ -1274,13 +1286,15 @@ async function startServer() {
         tenantEmail,
         tenantPhone: tenantPhone || "",
         status: "approved",
+        bookingType,
         createdAt: admin.firestore.FieldValue.serverTimestamp()
       });
 
       // Update the status of the request if available
       if (requestId) {
         await db.collection("lease_requests").doc(requestId).update({
-          status: "approved"
+          status: "approved",
+          approvedLeaseCode: leaseCode
         });
       }
 

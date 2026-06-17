@@ -55,6 +55,7 @@ export const AdminDashboard: React.FC = () => {
   const [leases, setLeases] = useState<any[]>([]);
   const [approvingLeaseId, setApprovingLeaseId] = useState<string | null>(null);
   const [leaseGenerationError, setLeaseGenerationError] = useState<string | null>(null);
+  const [leaseCodes, setLeaseCodes] = useState<Record<string, string>>({});
   const [activePropertyId, setActivePropertyId] = useState<string | null>(null);
   const [refreshingUsers, setRefreshingUsers] = useState(false);
   const [pricingTarget, setPricingTarget] = useState<'property' | 'room'>('property');
@@ -402,23 +403,42 @@ export const AdminDashboard: React.FC = () => {
     } catch (e: any) { alert(e.message); }
   }
 
-  const handleApproveLease = async (requestId: string) => {
+  const handleApproveLease = async (reqObj: any, customLeaseCode: string) => {
     if (!db) return;
-    setApprovingLeaseId(requestId);
+    if (!customLeaseCode || !customLeaseCode.trim()) {
+      alert("Please enter a valid Lease Code before approving.");
+      return;
+    }
+    setApprovingLeaseId(reqObj.id);
     setLeaseGenerationError(null);
     try {
       const response = await fetch('/api/approve-lease', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requestId })
+        body: JSON.stringify({
+          requestId: reqObj.id,
+          leaseCode: customLeaseCode.trim(),
+          propertyId: reqObj.propertyId,
+          propertyNameOrRoom: reqObj.propertyNameOrRoom,
+          startDate: reqObj.startDate,
+          endDate: reqObj.endDate,
+          tenantName: reqObj.tenantName,
+          tenantEmail: reqObj.tenantEmail,
+          tenantPhone: reqObj.tenantPhone || ""
+        })
       });
       
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.message || 'Approval failed');
+        throw new Error(data.message || data.error || 'Approval failed');
       }
       
-      alert(`Lease request approved successfully! Code generated: ${data.leaseCode}`);
+      alert(`Lease request approved successfully! Code assigned: ${customLeaseCode}`);
+      setLeaseCodes(prev => {
+        const copy = { ...prev };
+        delete copy[reqObj.id];
+        return copy;
+      });
     } catch (err: any) {
       console.error("Error approving lease:", err);
       setLeaseGenerationError(err.message || 'An error occurred during lease approval');
@@ -2083,38 +2103,62 @@ C.&S.H. Group Properties, LLC
                             const isLongTerm = durationDays > 180;
 
                             return (
-                               <div key={req.id} className={cn("p-4 rounded-2xl border transition-all relative flex flex-col md:flex-row justify-between gap-4", isPending ? "border-amber-200 bg-amber-50/20" : req.status === 'approved' ? "border-emerald-200 bg-emerald-50/10" : "border-slate-200 bg-slate-50/50")}>
-                                  <div className="flex-1 text-left">
-                                     <div className="flex items-center gap-2 flex-wrap mb-2">
-                                        <span className="font-extrabold text-slate-800 text-sm line-clamp-1">{req.tenantName}</span>
-                                        <span className={cn("text-[10px] px-2 py-0.5 rounded font-black uppercase tracking-wider", isLongTerm ? "bg-purple-100 text-purple-700" : "bg-indigo-100 text-indigo-700")}>
-                                           {isLongTerm ? 'Long-Term' : 'Short-Term'} ({durationDays} Nights)
-                                        </span>
-                                        {req.status === 'approved' && (
-                                           <span className="bg-emerald-100 text-emerald-700 text-[10px] px-2 py-0.5 rounded font-black uppercase tracking-wider">
-                                              Approved
+                               <div key={req.id} className={cn("p-4 rounded-2xl border transition-all relative flex flex-col justify-between gap-4", isPending ? "border-amber-200 bg-amber-50/20" : req.status === 'approved' ? "border-emerald-200 bg-emerald-50/10" : "border-slate-200 bg-slate-50/50")}>
+                                  <div className="flex flex-col md:flex-row justify-between gap-4 w-full text-left">
+                                     <div className="flex-1 text-left">
+                                        <div className="flex items-center gap-2 flex-wrap mb-2">
+                                           <span className="font-extrabold text-slate-800 text-sm line-clamp-1">{req.tenantName}</span>
+                                           <span className={cn("text-[10px] px-2 py-0.5 rounded font-black uppercase tracking-wider", isLongTerm ? "bg-purple-100 text-purple-700" : "bg-indigo-100 text-indigo-700")}>
+                                              {isLongTerm ? 'Long-Term' : 'Short-Term'} ({durationDays} Nights)
                                            </span>
-                                        )}
+                                           {req.status === 'approved' && (
+                                              <span className="bg-emerald-100 text-emerald-700 text-[10px] px-2 py-0.5 rounded font-black uppercase tracking-wider">
+                                                 Approved
+                                              </span>
+                                           )}
+                                        </div>
+                                        <div className="space-y-1 text-xs text-slate-600">
+                                           <div><strong className="text-slate-400">Unit:</strong> <span className="font-semibold text-slate-700">{req.propertyNameOrRoom}</span></div>
+                                           <div><strong className="text-slate-400">Email:</strong> {req.tenantEmail}</div>
+                                           <div><strong className="text-slate-400">Phone:</strong> {req.tenantPhone || "N/A"}</div>
+                                           <div><strong className="text-slate-400">Term:</strong> <span className="font-mono text-slate-700">{req.startDate} to {req.endDate}</span></div>
+                                           {req.approvedLeaseCode && (
+                                              <div className="mt-2 bg-emerald-50 border border-emerald-100 text-emerald-800 rounded-lg py-1 px-2.5 font-mono text-xs font-bold inline-block">
+                                                 Code: {req.approvedLeaseCode}
+                                              </div>
+                                           )}
+                                        </div>
                                      </div>
-                                     <div className="space-y-1 text-xs text-slate-600">
-                                        <div><strong className="text-slate-400">Unit:</strong> <span className="font-semibold text-slate-700">{req.propertyNameOrRoom}</span></div>
-                                        <div><strong className="text-slate-400">Email:</strong> {req.tenantEmail}</div>
-                                        <div><strong className="text-slate-400">Phone:</strong> {req.tenantPhone}</div>
-                                        <div><strong className="text-slate-400">Term:</strong> <span className="font-mono text-slate-700">{req.startDate} to {req.endDate}</span></div>
-                                        {req.approvedLeaseCode && (
-                                           <div className="mt-2 bg-emerald-50 border border-emerald-100 text-emerald-800 rounded-lg py-1 px-2.5 font-mono text-xs font-bold inline-block">
-                                              Code: {req.approvedLeaseCode}
-                                           </div>
-                                        )}
+
+                                     <div className="flex md:flex-col justify-end items-end gap-2.5 border-t md:border-t-0 pt-3 md:pt-0 border-slate-100">
+                                        <button
+                                           onClick={() => handleDeleteLeaseRequest(req.id)}
+                                           className="text-red-500 hover:bg-red-50 p-2 rounded-xl transition-colors self-end"
+                                           title="Delete Lease Request"
+                                        >
+                                           <Trash2 size={16} />
+                                        </button>
                                      </div>
                                   </div>
 
-                                  <div className="flex md:flex-col justify-end items-end gap-2.5 border-t md:border-t-0 pt-3 md:pt-0 border-slate-100">
-                                     {isPending && (
+                                  {isPending && (
+                                     <div className="border-t border-slate-100 pt-3 flex flex-col sm:flex-row items-end sm:items-center gap-3 w-full">
+                                        <div className="flex-1 w-full text-left">
+                                           <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                                              Assign Lease Code #
+                                           </label>
+                                           <input
+                                              type="text"
+                                              placeholder="e.g. LSE-7S3J9"
+                                              value={leaseCodes[req.id] || ""}
+                                              onChange={(e) => setLeaseCodes({ ...leaseCodes, [req.id]: e.target.value.toUpperCase() })}
+                                              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 text-xs font-mono uppercase tracking-wider focus:outline-none focus:border-indigo-500 font-bold"
+                                           />
+                                        </div>
                                         <button
-                                           onClick={() => handleApproveLease(req.id)}
-                                           disabled={approvingLeaseId === req.id}
-                                           className="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white font-bold px-4 py-2 rounded-xl transition-all shadow-sm flex items-center justify-center gap-1.5 text-xs cursor-pointer h-9 text-center"
+                                           onClick={() => handleApproveLease(req, leaseCodes[req.id] || "")}
+                                           disabled={approvingLeaseId === req.id || !leaseCodes[req.id]?.trim()}
+                                           className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold px-4 py-2 rounded-xl transition-all shadow-sm flex items-center justify-center gap-1.5 text-xs cursor-pointer h-9 text-center whitespace-nowrap"
                                         >
                                            {approvingLeaseId === req.id ? (
                                               <Loader2 className="animate-spin" size={13} />
@@ -2123,15 +2167,8 @@ C.&S.H. Group Properties, LLC
                                            )}
                                            Approve & Send Code
                                         </button>
-                                     )}
-                                     <button
-                                        onClick={() => handleDeleteLeaseRequest(req.id)}
-                                        className="text-red-500 hover:bg-red-50 p-2 rounded-xl transition-colors self-end"
-                                        title="Delete Lease Request"
-                                     >
-                                        <Trash2 size={16} />
-                                     </button>
-                                  </div>
+                                     </div>
+                                  )}
                                </div>
                             );
                          })}
