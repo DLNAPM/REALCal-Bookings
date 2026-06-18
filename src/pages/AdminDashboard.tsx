@@ -6,7 +6,7 @@ import { Navigate, useNavigate, Link } from 'react-router-dom';
 import { format, eachDayOfInterval, parseISO, addDays } from 'date-fns';
 import { cn } from '../lib/utils';
 import { BlackoutDate, PricingRule, Booking, Property, PropertyManager } from '../types';
-import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight, RefreshCw, MessageSquare, CheckCircle, Loader2, FileText } from 'lucide-react';
+import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight, RefreshCw, MessageSquare, CheckCircle, Loader2, FileText, XCircle } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 const formatPhoneE164 = (phone: string) => {
@@ -465,6 +465,20 @@ export const AdminDashboard: React.FC = () => {
         await deleteDoc(doc(db, 'lease_requests', id));
       } catch (err: any) {
         alert(`Error: ${err.message}`);
+      }
+    }
+  };
+
+  const handleRejectLeaseRequest = async (id: string) => {
+    if (!db) return;
+    if (window.confirm("Are you sure you want to reject this lease request? This will release the blocked dates.")) {
+      try {
+        await updateDoc(doc(db, 'lease_requests', id), {
+          status: 'rejected'
+        });
+        alert("Lease request has been rejected, and the blocked dates are now released.");
+      } catch (err: any) {
+        alert(`Error rejecting lease request: ${err.message}`);
       }
     }
   };
@@ -2126,6 +2140,11 @@ C.&S.H. Group Properties, LLC
                                                  Approved
                                               </span>
                                            )}
+                                           {req.status === 'rejected' && (
+                                              <span className="bg-red-100 text-red-700 text-[10px] px-2 py-0.5 rounded font-black uppercase tracking-wider">
+                                                 Rejected
+                                               </span>
+                                           )}
                                         </div>
                                         <div className="space-y-1 text-xs text-slate-600">
                                            <div><strong className="text-slate-400">Unit:</strong> <span className="font-semibold text-slate-700">{req.propertyNameOrRoom}</span></div>
@@ -2177,18 +2196,28 @@ C.&S.H. Group Properties, LLC
                                               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 text-xs font-mono uppercase tracking-wider focus:outline-none focus:border-indigo-500 font-bold"
                                            />
                                         </div>
-                                        <button
-                                           onClick={() => handleApproveLease(req, leaseCodes[req.id] || "")}
-                                           disabled={approvingLeaseId === req.id || !leaseCodes[req.id]?.trim()}
-                                           className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold px-4 py-2 rounded-xl transition-all shadow-sm flex items-center justify-center gap-1.5 text-xs cursor-pointer h-9 text-center whitespace-nowrap"
-                                        >
-                                           {approvingLeaseId === req.id ? (
-                                              <Loader2 className="animate-spin" size={13} />
-                                           ) : (
-                                              <CheckCircle size={13} />
-                                           )}
-                                           Approve & Send Code
-                                        </button>
+                                        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                                           <button
+                                              type="button"
+                                              onClick={() => handleRejectLeaseRequest(req.id)}
+                                              className="w-full sm:w-auto bg-slate-50 hover:bg-red-50 text-red-605 hover:text-red-700 border border-slate-200 hover:border-red-200 font-bold px-4 py-2 rounded-xl transition-all shadow-sm flex items-center justify-center gap-1.5 text-xs cursor-pointer h-9 text-center whitespace-nowrap"
+                                           >
+                                              <XCircle size={13} />
+                                              Reject Request
+                                           </button>
+                                           <button
+                                              onClick={() => handleApproveLease(req, leaseCodes[req.id] || "")}
+                                              disabled={approvingLeaseId === req.id || !leaseCodes[req.id]?.trim()}
+                                              className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold px-4 py-2 rounded-xl transition-all shadow-sm flex items-center justify-center gap-1.5 text-xs cursor-pointer h-9 text-center whitespace-nowrap"
+                                           >
+                                              {approvingLeaseId === req.id ? (
+                                                 <Loader2 className="animate-spin" size={13} />
+                                              ) : (
+                                                 <CheckCircle size={13} />
+                                              )}
+                                              Approve & Send Code
+                                           </button>
+                                        </div>
                                      </div>
                                   )}
                                </div>

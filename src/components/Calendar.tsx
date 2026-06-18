@@ -64,6 +64,7 @@ export const Calendar: React.FC<{
   const [pricingRules, setPricingRules] = useState<PricingRule[]>([]);
   const [blackoutDates, setBlackoutDates] = useState<BlackoutDate[]>([]);
   const [bookings, setBookings] = useState<any[]>([]);
+  const [leaseRequests, setLeaseRequests] = useState<any[]>([]);
   const [globalSettings, setGlobalSettings] = useState<any>(null);
   const [agreedToHouseRules, setAgreedToHouseRules] = useState<boolean>(false);
   const [agreedToNoKidsUnder10, setAgreedToNoKidsUnder10] = useState<boolean>(false);
@@ -140,12 +141,17 @@ export const Calendar: React.FC<{
     }, (error) => {
       console.error("Calendar bookings snapshot error:", error);
     });
+    const unsubLeaseReqs = onSnapshot(query(collection(db, 'lease_requests'), where('propertyId', '==', propertyId)), (snap) => {
+      setLeaseRequests(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (error) => {
+      console.error("Calendar lease requests snapshot error:", error);
+    });
     const unsubSettings = onSnapshot(doc(db, 'global_settings', 'settings'), (snap) => {
         if(snap.exists()) setGlobalSettings(snap.data());
     }, (error) => {
       console.error("Calendar global settings snapshot error:", error);
     });
-    return () => { unsubRules(); unsubBlackouts(); unsubBookings(); unsubSettings(); };
+    return () => { unsubRules(); unsubBlackouts(); unsubBookings(); unsubLeaseReqs(); unsubSettings(); };
   }, [propertyId]);
 
   // Synchronize and initialize dailySelections when dates change
@@ -308,7 +314,44 @@ export const Calendar: React.FC<{
 
     if (isDateBlackout) return true;
 
-    // 2. Booking Conflicts
+    // 2. Pending Lease Request Conflicts
+    const isDateLeaseBlocked = leaseRequests.some(lr => {
+      if (lr.status !== 'pending') return false;
+
+      const lrStart = parseLocalDate(lr.startDate);
+      const lrEnd = parseLocalDate(lr.endDate);
+      if (!lrStart || !lrEnd) return false;
+
+      const start = startOfDay(lrStart);
+      const end = startOfDay(lrEnd);
+
+      // Date is within [startDate, endDate)
+      const isOverlap = date >= start && date < end;
+      if (!isOverlap) return false;
+
+      // Conflict logic:
+      if (rentalMode === 'entire') {
+        // If booking entire property, ANY pending lease request on those dates (entire or room) blocks it
+        return true;
+      } else {
+        // Room mode: blocked if we are booking rooms and the pending lease request is for 'entire' property,
+        // or if there is any overlap on the selected rooms.
+        const lrMode = lr.rentalMode || 'entire';
+        if (lrMode === 'entire') return true;
+
+        if (selectedRooms.length > 0) {
+          return selectedRooms.some(room => {
+            if (lr.selectedBedrooms && lr.selectedBedrooms.some((lb: any) => lb.roomNumber === room.roomNumber)) return true;
+            return false;
+          });
+        }
+        return false;
+      }
+    });
+
+    if (isDateLeaseBlocked) return true;
+
+    // 3. Booking Conflicts
     return bookings.some(b => {
       if (b.status === 'cancelled') return false;
       // Ignore the booking being edited
@@ -712,6 +755,8 @@ export const Calendar: React.FC<{
         tenantEmail: leaseRequestForm.tenantEmail,
         tenantPhone: leaseRequestForm.tenantPhone,
         status: 'pending',
+        rentalMode,
+        selectedBedrooms: rentalMode === 'room' ? selectedRooms : [],
         createdAt: new Date().toISOString()
       };
 
