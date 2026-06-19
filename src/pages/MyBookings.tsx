@@ -5,13 +5,14 @@ import { YamiryLockGuide } from '../components/YamiryLockGuide';
 import { collection, query, where, getDocs, doc, updateDoc, getDoc, serverTimestamp, deleteDoc, setDoc } from 'firebase/firestore';
 import { Booking, Property } from '../types';
 import { useNavigate, Link } from 'react-router-dom';
-import { ChevronLeft, Calendar as CalendarIcon, XCircle, CheckCircle, Home, MapPin, Edit3, X, Trash2, Printer, CreditCard, Loader2, AlertCircle } from 'lucide-react';
+import { ChevronLeft, Calendar as CalendarIcon, XCircle, CheckCircle, Home, MapPin, Edit3, X, Trash2, Printer, CreditCard, Loader2, AlertCircle, ArrowUpDown } from 'lucide-react';
 import { parseISO, differenceInHours } from 'date-fns';
 import { Calendar } from '../components/Calendar';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 
 import { LegalFooter } from '../components/LegalFooter';
+import { AdminBookings } from '../components/AdminBookings';
 
 // Stripe initialization for modifications
 const stripePromiseBase = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '';
@@ -31,7 +32,7 @@ const getStripe = async () => {
   return dynamicStripePromise;
 };
 
-const getBookingPriceBreakdown = (booking: any, globalSettings: any) => {
+export const getBookingPriceBreakdown = (booking: any, globalSettings: any) => {
   if (booking.priceDetails) {
     return booking.priceDetails;
   }
@@ -73,7 +74,7 @@ const getBookingPriceBreakdown = (booking: any, globalSettings: any) => {
   };
 };
 
-const formatBookedDateTime = (createdAt: any) => {
+export const formatBookedDateTime = (createdAt: any) => {
   if (!createdAt) return 'N/A';
   try {
     let date: Date;
@@ -178,6 +179,9 @@ export const MyBookings: React.FC = () => {
     const [checkoutTargetBooking, setCheckoutTargetBooking] = useState<(Booking & { propertyName?: string; propertyImage?: string; property?: Property | null }) | null>(null);
     const [checkoutProcessing, setCheckoutProcessing] = useState(false);
     const [checkinProcessing, setCheckinProcessing] = useState(false);
+
+    const [adminSortOrder, setAdminSortOrder] = useState<'asc' | 'desc'>('desc');
+    const [selectedAdminBooking, setSelectedAdminBooking] = useState<(Booking & { propertyName?: string; propertyImage?: string; property?: Property | null }) | null>(null);
 
     useEffect(() => {
         getStripe().then(setStripePromise);
@@ -686,6 +690,14 @@ export const MyBookings: React.FC = () => {
         });
     };
 
+    const adminSortedBookings = [...bookings].sort((a, b) => {
+        const dateA = a.checkIn || '';
+        const dateB = b.checkIn || '';
+        return adminSortOrder === 'desc' 
+            ? dateB.localeCompare(dateA)
+            : dateA.localeCompare(dateB);
+    });
+
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900 pb-12">
             <header className="pt-6 px-6 max-w-5xl mx-auto w-full mb-8">
@@ -701,24 +713,30 @@ export const MyBookings: React.FC = () => {
             </header>
 
             <main className="flex-1 max-w-5xl mx-auto w-full px-6">
-                <h1 className="text-3xl font-bold tracking-tight text-slate-900 mb-6">Your Travel Itineraries</h1>
+                <h1 className="text-3xl font-bold tracking-tight text-slate-900 mb-6">
+                    {user?.role === 'admin' ? "Reservations Database Dashboard" : "Your Travel Itineraries"}
+                </h1>
 
-                <div className="bg-amber-50/50 border border-amber-200/60 rounded-3xl p-6 mb-8 text-sm font-medium text-slate-700 space-y-2.5">
-                    <p className="text-amber-850 font-bold flex items-center gap-1.5 text-base">
-                       ⚠️ Important Rental Conduct & House Rules
-                    </p>
-                    <p className="text-slate-600 leading-relaxed">
-                       • <strong>Not Pet Friendly:</strong> Properties supported by this application are strictly **not pet-friendly**. No pets or animals of any kind are brandished or allowed.
-                    </p>
-                    <p className="text-slate-600 leading-relaxed">
-                       • <strong>Zero Tolerance Policy:</strong> There is **ZERO tolerance** for drugs, smoking, and weapons of any type on property grounds. Violations will lead to immediate cancellation of stay.
-                    </p>
-                    <p className="text-slate-600 leading-relaxed">
-                       • <strong>Alcohol Permitted:</strong> Responsible consumption of **alcohol is OK**.
-                    </p>
-                </div>
+                {user?.role === 'admin' ? (
+                    <AdminBookings bookings={bookings} globalSettings={globalSettings} />
+                ) : (
+                    <>
+                        <div className="bg-amber-50/50 border border-amber-200/60 rounded-3xl p-6 mb-8 text-sm font-medium text-slate-700 space-y-2.5">
+                            <p className="text-amber-850 font-bold flex items-center gap-1.5 text-base">
+                               ⚠️ Important Rental Conduct & House Rules
+                            </p>
+                            <p className="text-slate-600 leading-relaxed">
+                               • <strong>Not Pet Friendly:</strong> Properties supported by this application are strictly **not pet-friendly**. No pets or animals of any kind are brandished or allowed.
+                            </p>
+                            <p className="text-slate-600 leading-relaxed">
+                               • <strong>Zero Tolerance Policy:</strong> There is **ZERO tolerance** for drugs, smoking, and weapons of any type on property grounds. Violations will lead to immediate cancellation of stay.
+                            </p>
+                            <p className="text-slate-650 leading-relaxed">
+                               • <strong>Alcohol Permitted:</strong> Responsible consumption of **alcohol is OK**.
+                            </p>
+                        </div>
 
-                <div className="flex gap-4 mb-6">
+                        <div className="flex gap-4 mb-6">
                     <button 
                         id="tab-active"
                         onClick={() => setFilter('active')} 
@@ -1262,6 +1280,8 @@ export const MyBookings: React.FC = () => {
                             );
                         })}
                     </div>
+                )}
+                    </>
                 )}
             </main>
 
