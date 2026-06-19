@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { BlackoutDate, PricingRule } from '../types';
 import { Property } from '../types';
 import { cn } from '../lib/utils';
-import { ChevronLeft, ChevronRight, Lock, CheckCircle2, AlertCircle, FileText, Loader2, RefreshCw } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Lock, CheckCircle2, AlertCircle, FileText, Loader2, RefreshCw, HelpCircle } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { getNightlyRate, calculatePriceDetails } from '../lib/pricing';
 import { v4 as uuidv4 } from 'uuid';
@@ -825,38 +825,54 @@ export const Calendar: React.FC<{
       {/* Main Calendar Section - col-8 */}
       <div className="lg:col-span-8 bg-white rounded-3xl border border-slate-200 shadow-sm p-6 flex flex-col">
         {property?.allowIndividualRoomRental && (
-            <div className="flex gap-4 p-1 bg-slate-100 rounded-2xl mb-6">
-               <button 
-                  type="button"
-                  onClick={handleEntirePropertyClick} 
-                  className={cn(
-                     "flex-1 px-4 py-2 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all", 
-                     rentalMode === 'entire' 
-                        ? "bg-white shadow-sm text-indigo-600" 
-                        : "text-slate-500 hover:text-indigo-600"
-                  )}
-               >
-                  {rentalMode === 'entire' && (
-                     isEntirePropertyLocked 
-                        ? <Lock size={14} className="text-indigo-600" /> 
-                        : <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
-                  )}
-                  Entire Property {rentalMode === 'entire' && (isEntirePropertyLocked ? "(Locked)" : "(Released)")}
-               </button>
-               <button 
-                  type="button"
-                  onClick={() => handleGlobalRentalModeChange('room')} 
-                  disabled={rentalMode === 'entire' && isEntirePropertyLocked}
-                  className={cn(
-                     "flex-1 px-4 py-2 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-1.5", 
-                     rentalMode === 'room' 
-                        ? "bg-white shadow-sm text-indigo-600" 
-                        : (rentalMode === 'entire' && isEntirePropertyLocked ? "text-slate-300 cursor-not-allowed opacity-50" : "text-slate-500 hover:text-indigo-600")
-                  )}
-               >
-                  Select Rooms
-               </button>
-            </div>
+          <>
+             <div className="bg-indigo-50/50 border border-indigo-100/55 rounded-2xl p-4 mb-5">
+                <div className="flex gap-3">
+                   <HelpCircle className="text-indigo-600 shrink-0 mt-0.5" size={17} />
+                   <div className="space-y-1">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-950">How to Book Entire Property vs Individual Rooms</h4>
+                      <p className="text-xs text-slate-700 leading-relaxed font-normal">
+                         To book the <strong>Entire Property</strong>, leave the toggle in <strong>Entire Property</strong> mode.
+                      </p>
+                      <p className="text-xs text-slate-700 leading-relaxed font-normal">
+                         To view or select <strong>Individual or Multiple Rooms</strong>, click on the <strong className="text-indigo-700 font-bold">"Entire Property (Locked)"</strong> button first. This will release the lockdown and allow you to click <strong>"Select Rooms"</strong> to check availability and select specific rooms below.
+                      </p>
+                   </div>
+                </div>
+             </div>
+             <div className="flex gap-4 p-1 bg-slate-100 rounded-2xl mb-6">
+                <button 
+                   type="button"
+                   onClick={handleEntirePropertyClick} 
+                   className={cn(
+                      "flex-1 px-4 py-2 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all", 
+                      rentalMode === 'entire' 
+                         ? "bg-white shadow-sm text-indigo-600" 
+                         : "text-slate-500 hover:text-indigo-600"
+                   )}
+                >
+                   {rentalMode === 'entire' && (
+                      isEntirePropertyLocked 
+                         ? <Lock size={14} className="text-indigo-600" /> 
+                         : <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
+                   )}
+                   Entire Property {rentalMode === 'entire' && (isEntirePropertyLocked ? "(Locked)" : "(Released)")}
+                </button>
+                <button 
+                   type="button"
+                   onClick={() => handleGlobalRentalModeChange('room')} 
+                   disabled={rentalMode === 'entire' && isEntirePropertyLocked}
+                   className={cn(
+                      "flex-1 px-4 py-2 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-1.5", 
+                      rentalMode === 'room' 
+                         ? "bg-white shadow-sm text-indigo-600" 
+                         : (rentalMode === 'entire' && isEntirePropertyLocked ? "text-slate-300 cursor-not-allowed opacity-50" : "text-slate-500 hover:text-indigo-600")
+                   )}
+                >
+                   Select Rooms
+                </button>
+             </div>
+          </>
         )}
         {rentalMode === 'room' && (
             <div className="flex flex-wrap gap-2 mb-6">
