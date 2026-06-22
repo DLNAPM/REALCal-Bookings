@@ -1362,7 +1362,20 @@ export const MyBookings: React.FC = () => {
                             </div>
 
                             {(() => {
-                                const checkoutDeadline = new Date(`${checkoutTargetBooking.checkOut}T11:00:00`);
+                                const getEstCheckoutDeadline = (dateStr: string): Date => {
+                                  const [year, month, day] = dateStr.split("-").map(Number);
+                                  const utcDate = new Date(Date.UTC(year, month - 1, day, 11, 0, 0));
+                                  const formatter = new Intl.DateTimeFormat("en-US", {
+                                    timeZone: "America/New_York",
+                                    hour: "numeric",
+                                    hour12: false,
+                                  });
+                                  const formattedHour = parseInt(formatter.format(utcDate), 10);
+                                  const hourDiff = 11 - formattedHour;
+                                  return new Date(utcDate.getTime() + hourDiff * 60 * 60 * 1000);
+                                };
+
+                                const checkoutDeadline = getEstCheckoutDeadline(checkoutTargetBooking.checkOut);
                                 const now = new Date();
                                 const isLate = now > checkoutDeadline;
                                 let overdueHours = 0;

@@ -147,6 +147,28 @@ function formatPhoneToE164(phone: string | undefined): string {
   return cleaned;
 }
 
+function getCheckoutDeadline(checkOutDate: string): Date {
+  const [year, month, day] = checkOutDate.split("-").map(Number);
+  
+  // Create a UTC date representation for 11:00 AM on that day
+  const utcDate = new Date(Date.UTC(year, month - 1, day, 11, 0, 0));
+  
+  // Format that UTC date in "America/New_York" (EST/EDT) to find its local hour representation
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    hour: "numeric",
+    hour12: false,
+  });
+  
+  const formattedHour = parseInt(formatter.format(utcDate), 10);
+  
+  // The hour difference between 11:00 AM local target and the local representation of the UTC 11:00 AM
+  const hourDiff = 11 - formattedHour;
+  
+  // Return the adjusted UTC date which corresponds exactly to 11:00 AM local Eastern time
+  return new Date(utcDate.getTime() + hourDiff * 60 * 60 * 1000);
+}
+
 async function createInvoicePDF(booking: any, propertyName: string, priceDetails: any, lateFee: number, overdueHours: number): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     try {
@@ -442,6 +464,110 @@ async function startServer() {
     res.json({ status: "ok", uptime: process.uptime() });
   });
 
+  app.get("/api/debug-booking", async (req, res) => {
+    try {
+      // Load environment variables via Vite's loadEnv to match exactly how client gets secrets
+      let viteEnv: any = {};
+      try {
+        const { loadEnv } = await import('vite');
+        viteEnv = loadEnv('development', process.cwd(), '');
+      } catch (e: any) {
+        console.error("Failed to import/loadEnv from vite:", e.message);
+      }
+
+      // Merge viteEnv values into process.env to make them accessible
+      Object.keys(viteEnv).forEach(key => {
+        if (!process.env[key] && viteEnv[key]) {
+          process.env[key] = viteEnv[key];
+        }
+      });
+
+      const pathsToCheck = [
+        path.resolve(process.cwd(), "firebase-applet-config.json"),
+        path.resolve(process.cwd(), "../firebase-applet-config.json"),
+        path.resolve(process.cwd(), "../../firebase-applet-config.json"),
+        "/firebase-applet-config.json",
+        "/app/firebase-applet-config.json",
+        "/app/applet/firebase-applet-config.json"
+      ];
+      
+      let foundPath = "";
+      let foundContent: any = null;
+      for (const p of pathsToCheck) {
+        if (fs.existsSync(p)) {
+          foundPath = p;
+          foundContent = JSON.parse(fs.readFileSync(p, "utf-8"));
+          break;
+        }
+      }
+
+      // Check if we can initialize Firebase Admin using loaded environment variables
+      const projectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID;
+      const dbId = process.env.FIREBASE_DATABASE_ID || process.env.VITE_FIREBASE_DATABASE_ID || "(default)";
+
+      if (!db) {
+        if (foundContent) {
+          console.log(`[Debug DB] Initializing Firestore dynamically using config file ${foundPath}`);
+          if (admin.apps.length === 0) {
+            admin.initializeApp({ projectId: foundContent.projectId });
+          }
+          const fdbId = foundContent.firestoreDatabaseId || "(default)";
+          db = getFirestore(admin.app(), fdbId);
+        } else if (projectId) {
+          console.log(`[Debug DB] Initializing Firestore dynamically using Env Project ID: ${projectId}, DB: ${dbId}`);
+          if (admin.apps.length === 0) {
+            admin.initializeApp({ projectId });
+          }
+          db = getFirestore(admin.app(), dbId);
+        }
+      }
+
+      if (!db) {
+        return res.status(500).json({
+          error: "Firestore db is not initialized",
+          checkedPaths: pathsToCheck,
+          envKeys: Object.keys(process.env).filter(k => k.includes("FIREBASE") || k.includes("VITE")),
+          viteEnvKeys: Object.keys(viteEnv).filter(k => k.includes("FIREBASE") || k.includes("VITE")),
+          processCwd: process.cwd(),
+          parentDirs: fs.existsSync("../") ? fs.readdirSync("../") : null
+        });
+      }
+
+      const bookingsSnap = await db.collection("bookings").get();
+      const docs = bookingsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const matches = docs.filter((b: any) => 
+        b.bookingRef === "RU7JNH" || 
+        b.id === "RU7JNH" || 
+        (b.bookingRef && b.bookingRef.toUpperCase().includes("RU7JNH"))
+      );
+      
+      const settingsSnap = await db.collection("global_settings").doc("settings").get();
+      const settings = settingsSnap.exists ? settingsSnap.data() : null;
+      
+      res.json({
+        totalBookings: docs.length,
+        matches,
+        settings,
+        foundPath,
+        foundProjectId: foundContent?.projectId,
+        projectIdUsed: projectId,
+        dbIdUsed: dbId,
+        firstFewBookings: docs.slice(0, 10).map((b: any) => ({
+          id: b.id,
+          bookingRef: b.bookingRef,
+          guestName: b.guestName,
+          checkIn: b.checkIn,
+          checkOut: b.checkOut,
+          checkedOut: b.checkedOut,
+          status: b.status,
+          lateCheckoutFee: b.lateCheckoutFee
+        }))
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message, stack: err.stack });
+    }
+  });
+
   app.post("/api/test-sms", async (req, res) => {
     console.log("[API] Test SMS hit");
     try {
@@ -730,7 +856,7 @@ async function startServer() {
         ? parseFloat(globalSettings.lateCheckoutFeePercent) 
         : 5.0; // default to 5% if not configured
 
-      const deadline = new Date(`${booking.checkOut}T11:00:00`);
+      const deadline = getCheckoutDeadline(booking.checkOut);
       const now = new Date();
       let lateCheckoutFee = 0;
       let overdueHours = 0;
@@ -1630,7 +1756,7 @@ async function startServer() {
         // Standard checkout deadline is 11:00 AM on the b.checkOut date
         if (!b.checkOut) continue;
 
-        const checkoutDeadline = new Date(`${b.checkOut}T11:00:00`);
+        const checkoutDeadline = getCheckoutDeadline(b.checkOut);
         const diffMs = checkoutDeadline.getTime() - now.getTime();
         const diffHours = diffMs / (1000 * 60 * 60);
 
