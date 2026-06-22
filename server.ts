@@ -730,8 +730,8 @@ async function startServer() {
         } catch (e) {}
       }
 
-      const checkinTimeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      const checkinDateStr = now.toLocaleDateString();
+      const checkinTimeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York' });
+      const checkinDateStr = now.toLocaleDateString('en-US', { timeZone: 'America/New_York' });
 
       let roomsInfo = "";
       if (booking.selectedBedrooms && booking.selectedBedrooms.length > 0) {
@@ -912,8 +912,8 @@ async function startServer() {
         } catch (e) {}
       }
 
-      const checkoutTimeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      const checkoutDateStr = now.toLocaleDateString();
+      const checkoutTimeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York' });
+      const checkoutDateStr = now.toLocaleDateString('en-US', { timeZone: 'America/New_York' });
       
       let priceDetailsObj: any = {};
       let pdfBuffer: Buffer | null = null;
@@ -1550,12 +1550,12 @@ async function startServer() {
       
       let textMsg = "";
       if (isCancellation) {
-        textMsg = `🚨 BOOKING CANCELLED ALERT 🚨\nProperty: ${propertyName}${roomsInfo}\nGuest: ${guestName}\nDates: ${new Date(checkIn).toLocaleDateString()} to ${new Date(checkOut).toLocaleDateString()}\nStatus: This booking has been CANCELLED. The calendars/rooms have been released.`;
+        textMsg = `🚨 BOOKING CANCELLED ALERT 🚨\nProperty: ${propertyName}${roomsInfo}\nGuest: ${guestName}\nDates: ${new Date(checkIn).toLocaleDateString('en-US', { timeZone: 'UTC' })} to ${new Date(checkOut).toLocaleDateString('en-US', { timeZone: 'UTC' })}\nStatus: This booking has been CANCELLED. The calendars/rooms have been released.`;
         if (cancellationFee !== undefined && cancellationFee > 0) {
           textMsg += `\nCancellation Fee Assessed: $${(cancellationFee / 100).toFixed(2)}`;
         }
       } else {
-        textMsg = `${eventType} for ${propertyName}!${roomsInfo}\nGuest: ${guestName}\nDates: ${new Date(checkIn).toLocaleDateString()} to ${new Date(checkOut).toLocaleDateString()}`;
+        textMsg = `${eventType} for ${propertyName}!${roomsInfo}\nGuest: ${guestName}\nDates: ${new Date(checkIn).toLocaleDateString('en-US', { timeZone: 'UTC' })} to ${new Date(checkOut).toLocaleDateString('en-US', { timeZone: 'UTC' })}`;
         if (daysChangedText) {
           textMsg += `\nChange Details: ${daysChangedText}`;
         }
@@ -1603,9 +1603,9 @@ async function startServer() {
       // Email Content (Single Email for multiple rooms)
       let emailText = "";
       if (isCancellation) {
-        emailText = `Hi ${guestDisplayName},\n\nYour reservation for ${propertyName} from ${new Date(checkIn).toLocaleDateString()} to ${new Date(checkOut).toLocaleDateString()} has been successfully cancelled.\n\n${cancellationFee && cancellationFee > 0 ? `Late Cancellation Fee Assessed: $${(cancellationFee / 100).toFixed(2)}` : 'No cancellation fees were assessed.'}\n\nThank you!`;
+        emailText = `Hi ${guestDisplayName},\n\nYour reservation for ${propertyName} from ${new Date(checkIn).toLocaleDateString('en-US', { timeZone: 'UTC' })} to ${new Date(checkOut).toLocaleDateString('en-US', { timeZone: 'UTC' })} has been successfully cancelled.\n\n${cancellationFee && cancellationFee > 0 ? `Late Cancellation Fee Assessed: $${(cancellationFee / 100).toFixed(2)}` : 'No cancellation fees were assessed.'}\n\nThank you!`;
       } else {
-        emailText = `Hi ${guestDisplayName},\n\nYour booking for ${propertyName} from ${new Date(checkIn).toLocaleDateString()} to ${new Date(checkOut).toLocaleDateString()} is ${isUpdate ? 'updated' : 'confirmed'}.`;
+        emailText = `Hi ${guestDisplayName},\n\nYour booking for ${propertyName} from ${new Date(checkIn).toLocaleDateString('en-US', { timeZone: 'UTC' })} to ${new Date(checkOut).toLocaleDateString('en-US', { timeZone: 'UTC' })} is ${isUpdate ? 'updated' : 'confirmed'}.`;
         if (daysChangedText) {
           emailText += `\n\nStay Details: ${daysChangedText}`;
         }
@@ -1634,7 +1634,7 @@ async function startServer() {
       if (twilioClient && formattedGuestPhone && tFrom) {
         try {
             if (isCancellation) {
-                let cancelSmsText = `Hi ${guestDisplayName}, your reservation for ${propertyName} from ${new Date(checkIn).toLocaleDateString()} to ${new Date(checkOut).toLocaleDateString()} has been cancelled.`;
+                let cancelSmsText = `Hi ${guestDisplayName}, your reservation for ${propertyName} from ${new Date(checkIn).toLocaleDateString('en-US', { timeZone: 'UTC' })} to ${new Date(checkOut).toLocaleDateString('en-US', { timeZone: 'UTC' })} has been cancelled.`;
                 if (cancellationFee && cancellationFee > 0) {
                     cancelSmsText += ` A late cancellation fee of $${(cancellationFee / 100).toFixed(2)} was applied.`;
                 }
@@ -1658,9 +1658,9 @@ async function startServer() {
                 // Default SMS for entire property
                 let defaultSmsText = "";
                 if (isUpdate) {
-                  defaultSmsText = `Hi ${guestDisplayName},\nYour booking for ${propertyName} from ${new Date(checkIn).toLocaleDateString()} to ${new Date(checkOut).toLocaleDateString()} is updated. ${daysChangedText}`;
+                  defaultSmsText = `Hi ${guestDisplayName},\nYour booking for ${propertyName} from ${new Date(checkIn).toLocaleDateString('en-US', { timeZone: 'UTC' })} to ${new Date(checkOut).toLocaleDateString('en-US', { timeZone: 'UTC' })} is updated. ${daysChangedText}`;
                 } else {
-                  defaultSmsText = `Hi ${guestDisplayName},\nYour booking for ${propertyName} from ${new Date(checkIn).toLocaleDateString()} to ${new Date(checkOut).toLocaleDateString()} is confirmed.`;
+                  defaultSmsText = `Hi ${guestDisplayName},\nYour booking for ${propertyName} from ${new Date(checkIn).toLocaleDateString('en-US', { timeZone: 'UTC' })} to ${new Date(checkOut).toLocaleDateString('en-US', { timeZone: 'UTC' })} is confirmed.`;
                 }
                 if (accessCode) defaultSmsText += `\nAccess code: ${accessCode}`;
                 defaultSmsText += `\nGo to "My Bookings" to review operating instructions and watch the short video on using the YAMIRY Smart Lock.`;
