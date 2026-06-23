@@ -2,434 +2,25 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { loadStripe } from '@stripe/stripe-js';
-import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
-import { doc, setDoc, serverTimestamp, getDocs, getDoc, query, collection, updateDoc, where } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, getDoc, getDocs, query, collection, where } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { v4 as uuidv4 } from 'uuid'; 
 import { calculatePriceDetails, PricingRule } from '../lib/pricing';
 import { cn } from '../lib/utils';
-
 import { Property } from '../types';
 
-const stripePromiseBase = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '';
-let dynamicStripePromise: Promise<any> | null = null;
-
-const getStripe = async () => {
-  if (dynamicStripePromise) return dynamicStripePromise;
-  
-  let key = stripePromiseBase;
-  
-    // Try to fetch from server for runtime dynamic config (Render.com etc)
-    try {
-      console.log("[Checkout] Fetching /api/config...");
-      const res = await fetch('/api/config');
-      if (res.ok) {
-        const config = await res.json();
-        if (config.stripePublishableKey) {
-          key = config.stripePublishableKey;
-          console.log("[Checkout] Using dynamic Stripe key from server:", key.substring(0, 10) + "...");
-        }
-      } else {
-        console.error(`[Checkout] /api/config failed with status ${res.status}. Response:`, await res.text().catch(() => "no-body"));
-        // Check server-debug if config fails
-        const debugRes = await fetch('/server-debug').catch(() => null);
-        if (debugRes) console.log(`[Checkout] /server-debug status: ${debugRes.status}`);
-      }
-    } catch (e) {
-      console.warn("[Checkout] Failed to fetch dynamic config:", e);
-    }
-  
-  if (!key || key === 'pk_test_placeholder') {
-    return null;
-  }
-  
-  dynamicStripePromise = loadStripe(key);
-  return dynamicStripePromise;
-};
-
 const formatPhoneE164 = (phone: string) => {
-  // Remove all non-numeric characters
   let cleaned = phone.replace(/\D/g, '');
-  
-  // If it starts with 1 and has 11 digits, strip the leading 1 (assume US/Canada 10-digit number)
   if (cleaned.length === 11 && cleaned.startsWith('1')) {
     cleaned = cleaned.substring(1);
   }
-  
   return cleaned;
 };
-
-const processBooking = async (
-  bookingDetails: any,
-  user: any,
-  guestEmail: string,
-  guestPhone: string,
-  navigate: ReturnType<typeof useNavigate>,
-  setError: (err: string) => void,
-  setProcessing: (b: boolean) => void,
-  isTestMode: boolean = false,
-  selectedBedrooms: any[] = [],
-  paymentIntentId?: string,
-  paymentIntentAmount?: number,
-  dailySelections?: any
-) => {
-  const bookingId = uuidv4();
-  const e164Phone = formatPhoneE164(guestPhone);
-  
-  try {
-    let accessCode = '';
-    let bedroomsForNotification = [...selectedBedrooms];
-
-    // Check if property has a manual front door lock code set & lookup bedrooms if empty
-    try {
-      const propSnap = await getDoc(doc(db, 'properties', bookingDetails.propertyId));
-      if (propSnap.exists()) {
-        const propData = propSnap.data() as Property;
-        if (propData.hasSmartLock && propData.frontDoorCode) {
-          accessCode = propData.frontDoorCode.trim();
-        }
-        if (bedroomsForNotification.length === 0 && propData.bedrooms && propData.bedrooms.length > 0) {
-          bedroomsForNotification = propData.bedrooms;
-        }
-      }
-    } catch (err) {
-      console.warn("Failed to fetch property details for manual lock code lookup:", err);
-    }
-
-    if (!accessCode) {
-      // Provision Yale access code via backend
-      const lockRes = await fetch('/api/provision-lock', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          checkIn: bookingDetails.checkIn,
-          checkOut: bookingDetails.checkOut,
-          name: user.displayName,
-        })
-      });
-      
-      if (lockRes.ok) {
-         try {
-             const text = await lockRes.text();
-             if (text) {
-                 const data = JSON.parse(text);
-                 accessCode = data.accessCode || '';
-             }
-         } catch (err) {
-             console.warn("Failed to parse provision-lock response", err);
-         }
-      }
-    }
-
-    const bookingRef = Math.random().toString(36).substring(2, 8).toUpperCase();
-
-    const payload: any = {
-      userId: user.uid,
-      propertyId: bookingDetails.propertyId,
-      checkIn: bookingDetails.checkIn.split('T')[0],
-      checkOut: bookingDetails.checkOut.split('T')[0],
-      status: isTestMode ? 'confirmed' : 'pending', // Auto-confirm test bookings
-      totalPrice: paymentIntentAmount || Math.round(bookingDetails.priceDetails.grandTotal * 100),
-      paymentIntentId, // Save stripe payment intent ID for future modifications/refunds
-      bookingRef,
-      selectedBedrooms, // Save multiple rooms
-      guestPhone: e164Phone, // Save formatted phone
-      guestEmail: guestEmail, // Save guest email
-      guestName: user.displayName || "Guest", // Save guest name
-      guests: 1, // simplified for demo
-      priceDetails: bookingDetails.priceDetails,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    };
-
-    if (bookingDetails.leaseCode) {
-      payload.leaseCode = bookingDetails.leaseCode;
-    }
-    if (bookingDetails.bookingType) {
-      payload.bookingType = bookingDetails.bookingType;
-    }
-
-    const numMonths = bookingDetails.numMonths || 0;
-    const paymentOption = bookingDetails.paymentOption || 'full';
-    const grandTotal = bookingDetails.priceDetails?.grandTotal || 0;
-    const monthlyAmount = bookingDetails.monthlyAmount || 0;
-    const securityDeposit = bookingDetails.securityDeposit || 0;
-
-    let paymentSchedule: any[] = [];
-    if (bookingDetails.priceDetails?.nights > 60) {
-      const checkInDate = new Date(bookingDetails.checkIn);
-      // Month 1 is paid upfront
-      paymentSchedule.push({
-        month: 1,
-        dueDate: bookingDetails.checkIn.split('T')[0],
-        amount: paymentOption === 'full' ? grandTotal : monthlyAmount,
-        status: 'paid',
-        description: paymentOption === 'full' ? 'Entire Lease Amount' : 'First Month Stay',
-        alertSent: false
-      });
-
-      // Future months
-      for (let m = 2; m <= numMonths; m++) {
-        const dueDate = new Date(checkInDate);
-        dueDate.setDate(dueDate.getDate() + (m - 1) * 30);
-        paymentSchedule.push({
-          month: m,
-          dueDate: dueDate.toISOString().split('T')[0],
-          amount: paymentOption === 'full' ? 0 : monthlyAmount,
-          status: paymentOption === 'full' ? 'paid' : 'unpaid',
-          description: `Month ${m} Stay`,
-          alertSent: false
-        });
-      }
-    }
-
-    if (bookingDetails.priceDetails?.nights > 60) {
-      payload.paymentOption = paymentOption;
-      payload.securityDeposit = securityDeposit;
-      payload.numMonths = numMonths;
-      payload.monthlyAmount = monthlyAmount;
-      payload.upfrontAmountPaid = bookingDetails.upfrontAmount || (paymentIntentAmount ? paymentIntentAmount / 100 : 0);
-      payload.paymentSchedule = paymentSchedule;
-    }
-    
-    if (dailySelections) {
-      payload.dailySelections = dailySelections;
-    }
-    
-    // For backward compatibility / display
-    if (selectedBedrooms.length > 0) {
-        payload.selectedBedroom = selectedBedrooms[0];
-    }
-
-    if (accessCode) {
-       payload.accessCode = accessCode;
-    }
-
-    if (db) {
-      await setDoc(doc(db, 'bookings', bookingId), payload);
-
-      // Auto-add Blackout for the day after checkout for maintenance/cleaning
-      try {
-        const checkOutDate = new Date(bookingDetails.checkOut);
-        const dayAfterDate = new Date(checkOutDate);
-        dayAfterDate.setDate(dayAfterDate.getDate() + 1);
-        const blackoutDateString = dayAfterDate.toISOString().split('T')[0];
-        
-        if (selectedBedrooms.length > 0) {
-            // Blackout each room
-            for (const room of selectedBedrooms) {
-                const blackoutId = `maint-${bookingId}-${room.roomNumber}`;
-                await setDoc(doc(db, 'blackout_dates', blackoutId), {
-                  propertyId: bookingDetails.propertyId,
-                  date: blackoutDateString,
-                  targetType: 'room',
-                  roomNumber: room.roomNumber,
-                  reason: `Maintenance/Cleaning for Booking ${bookingRef} (Room ${room.roomNumber})`,
-                  createdAt: serverTimestamp()
-                });
-            }
-        } else {
-            // Blackout entire property
-            await setDoc(doc(db, 'blackout_dates', `maint-${bookingId}`), {
-              propertyId: bookingDetails.propertyId,
-              date: blackoutDateString,
-              targetType: 'property',
-              roomNumber: null,
-              reason: `Maintenance/Cleaning for Booking ${bookingRef}`,
-              createdAt: serverTimestamp()
-            });
-        }
-        console.log(`[Checkout] Auto-blackout(s) created for ${blackoutDateString}`);
-      } catch (blackoutErr) {
-        console.warn("Failed to create auto-blackout", blackoutErr);
-      }
-    }
-    
-    let notificationResults: string[] = [];
-    // Notify Managers
-    try {
-       let managers: any[] = [];
-       let propertyName = "Villa";
-       let isTestProperty = false;
-       if (db) {
-         const managersSnap = await getDocs(query(collection(db, 'property_managers')));
-         managers = managersSnap.docs.map(d => d.data()).filter(m => m.enabled);
-         try {
-            const propSnap = await getDoc(doc(db, 'properties', bookingDetails.propertyId));
-            if(propSnap.exists()) {
-               propertyName = propSnap.data().name;
-               isTestProperty = !!propSnap.data().isTestProperty;
-            }
-         } catch(e) {}
-       }
-
-       if (managers.length > 0 || guestEmail || guestPhone) {
-          const notifyRes = await fetch('/api/notify-managers', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-               managers,
-               bookingDetails: {
-                  checkIn: bookingDetails.checkIn.split('T')[0],
-                  checkOut: bookingDetails.checkOut.split('T')[0],
-                  totalAmount: Math.round(bookingDetails.priceDetails.grandTotal * 100),
-                  propertyName: propertyName,
-                  guestName: user.displayName,
-                  guestEmail: guestEmail,
-                  guestPhone: e164Phone,
-                  accessCode: accessCode,
-                  isTestProperty: isTestProperty,
-                  selectedBedrooms: bedroomsForNotification // Pass multiple rooms
-               }
-            })
-          });
-          if (notifyRes.ok) {
-             try {
-                 const text = await notifyRes.text();
-                 if (text) {
-                     const notifyData = JSON.parse(text);
-                     notificationResults = notifyData.results || [];
-                 }
-             } catch(e) {
-                 console.warn("Failed to parse notify-managers response", e);
-             }
-          }
-       }
-    } catch (notifyErr) {
-       console.error("Manager notification failed, but booking succeeded", notifyErr);
-    }
-
-    navigate('/confirmation', { state: { bookingId, accessCode, notificationResults, bookingRef, selectedBedrooms: bedroomsForNotification, checkIn: bookingDetails.checkIn, checkOut: bookingDetails.checkOut }});
-  } catch (e: any) {
-     console.error("Booking error:", e);
-     setError(`Booking failed: ${e.message}`);
-     setProcessing(false);
-  }
-};
-
-const CheckoutForm: React.FC<{ clientSecret: string, bookingDetails: any, guestEmail: string, guestPhone: string, isTestProperty: boolean, selectedBedrooms: any[], dailySelections: any }> = ({ clientSecret, bookingDetails, guestEmail, guestPhone, isTestProperty, selectedBedrooms, dailySelections }) => {
-  const stripe = useStripe();
-  const elements = useElements();
-  const [error, setError] = useState<string | null>(null);
-  const [processing, setProcessing] = useState(false);
-  const navigate = useNavigate();
-  const { user } = useAuth();
-
-  const [showWarningModal, setShowWarningModal] = useState(false);
-  const [warningConfirmed, setWarningConfirmed] = useState(false);
-
-  const checkIsSameDay = () => {
-    if (!bookingDetails?.checkIn) return false;
-    const checkInYMD = bookingDetails.checkIn.split('T')[0];
-    const today = new Date();
-    const todayYMD = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-    return checkInYMD === todayYMD;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!stripe || !elements || !user) return;
-
-    if (checkIsSameDay() && !warningConfirmed) {
-      setShowWarningModal(true);
-      return;
-    }
-
-    await executePayment();
-  };
-
-  const handleConfirmWarningAndPay = async () => {
-    setShowWarningModal(false);
-    setWarningConfirmed(true);
-    await executePayment();
-  };
-
-  const executePayment = async () => {
-    setProcessing(true);
-
-    const { error: submitError, paymentIntent } = await stripe.confirmPayment({
-      elements,
-      redirect: "if_required"
-    });
-
-    if (submitError) {
-      setError(submitError.message || 'Payment failed');
-      setProcessing(false);
-    } else {
-      // Payment successful, generate lock code and write Booking to firestore
-      await processBooking(bookingDetails, user, guestEmail, guestPhone, navigate, setError, setProcessing, isTestProperty, selectedBedrooms, paymentIntent?.id, paymentIntent?.amount, dailySelections);
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="max-h-[350px] overflow-y-auto pr-2 border border-slate-100 rounded-xl p-3 bg-slate-50/50">
-        <PaymentElement />
-      </div>
-      {error && <div className="text-red-500 text-sm">{error}</div>}
-      <button 
-        type="submit" 
-        disabled={!stripe || processing}
-        className="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-4 rounded-2xl font-bold disabled:bg-slate-400 transition-colors shadow-sm mt-6"
-      >
-        {processing ? 'Processing...' : 'Pay & Confirm Booking'}
-      </button>
-
-      {/* Same-day Booking Policy Agreement Dialog */}
-      {showWarningModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-slate-100 flex flex-col gap-6 animate-in fade-in-50 zoom-in-95 duration-200 text-left">
-            <div className="flex items-center gap-3 text-amber-500">
-              <span className="text-2xl">⚠️</span>
-              <h3 className="text-xl font-extrabold tracking-tight text-slate-800">Same-Day Booking Agreement</h3>
-            </div>
-            
-            <div className="space-y-4 text-slate-600 text-sm leading-relaxed">
-              <p className="font-semibold text-slate-700">
-                You are scheduling a booking that checks in today (<span className="text-indigo-600 font-bold">{bookingDetails.checkIn.split('T')[0]}</span>).
-              </p>
-              <p>
-                Same-day bookings are subject to unique cancellation restrictions. You must understand and accept:
-              </p>
-              <div className="space-y-3 pl-1">
-                <div className="flex gap-2.5">
-                  <span className="text-amber-500 font-extrabold font-mono">1.</span>
-                  <span><strong>Cancellation Forfeited:</strong> Since this booking starts today, you cannot cancel this reservation for a refund.</span>
-                </div>
-                <div className="flex gap-2.5">
-                  <span className="text-amber-500 font-extrabold font-mono">2.</span>
-                  <span><strong>Date Changes Allowed:</strong> You are still allowed to change/edit your dates in the future. However, if you do, <strong>you will still be charged a 50% nightly rate penalty for tonight</strong>, plus the regular pricing for your new dates.</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-3 mt-2">
-              <button
-                type="button"
-                onClick={handleConfirmWarningAndPay}
-                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold py-3.5 px-4 rounded-xl transition-all shadow-md active:scale-95 text-sm"
-              >
-                I Understand & Proceed to Book
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowWarningModal(false)}
-                className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 px-4 rounded-xl transition-all text-sm"
-              >
-                Go Back / Edit Dates
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </form>
-  )
-}
 
 export const Checkout: React.FC = () => {
   const location = useLocation();
   const { user, loading } = useAuth();
+  const navigate = useNavigate();
   
   const propertyId = location.state?.propertyId;
   const checkIn = location.state?.checkIn;
@@ -439,9 +30,7 @@ export const Checkout: React.FC = () => {
   const bookingType = location.state?.bookingType || null;
   
   const [paymentOption, setPaymentOption] = useState<'full' | 'monthly'>('full');
-  const [clientSecret, setClientSecret] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [stripeConfigError, setStripeConfigError] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
   const [guestEmail, setGuestEmail] = useState('');
   const [guestPhone, setGuestPhone] = useState('');
@@ -462,24 +51,12 @@ export const Checkout: React.FC = () => {
 
   const isTestProperty = !!property?.isTestProperty;
   
-  const [stripePromise, setStripePromise] = useState<any>(null);
-  const [hasPublishableKey, setHasPublishableKey] = useState(false);
-
   const [selectedBedrooms, setSelectedBedrooms] = useState<any[]>(location.state?.selectedBedrooms || []);
   const dailySelections = location.state?.dailySelections || null;
-  const navigate = useNavigate();
-  
-  useEffect(() => {
-    getStripe().then(sp => {
-      if (sp) {
-        setStripePromise(sp);
-        setHasPublishableKey(true);
-      } else {
-        setHasPublishableKey(false);
-      }
-    });
-  }, []);
-  
+
+  const [showWarningModal, setShowWarningModal] = useState(false);
+  const [warningConfirmed, setWarningConfirmed] = useState(false);
+
   useEffect(() => {
     if (user?.email && !guestEmail) {
        setGuestEmail(user.email);
@@ -495,7 +72,6 @@ export const Checkout: React.FC = () => {
             }
         });
 
-        // Fetch rules for local recalc
         getDocs(query(collection(db, 'pricing_rules'), where('propertyId', '==', propertyId))).then(snap => {
            setPricingRules(snap.docs.map(d => ({ id: d.id, ...d.data() } as PricingRule)));
         });
@@ -523,68 +99,151 @@ export const Checkout: React.FC = () => {
 
   if (!propertyId || !checkIn || !checkOut || !priceDetails) return <Navigate to="/" />;
 
-  useEffect(() => {
-    if (!propertyId || !checkIn || !checkOut || !upfrontAmount) return;
-    
-    setStripeConfigError(null);
-    setClientSecret('');
-    
-    fetch('/api/create-payment-intent', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        propertyId,
-        checkIn,
-        checkOut,
-        selectedBedrooms, // Pass array
-        dailySelections,
-        amount: Math.round(upfrontAmount * 100) // exact upfront amount in cents
-      })
-    })
-    .then(async res => {
-       const contentType = res.headers.get("content-type");
-       let data: any = {};
-       
-       try {
-         if (contentType && contentType.includes("application/json")) {
-           data = await res.json();
-         } else {
-           const text = await res.text();
-           console.error(`[Checkout] Expected JSON from server but got ${contentType || 'no content-type'}. Body snippet: ${text.substring(0, 100)}`);
-           if (!res.ok) {
-             setStripeConfigError(`Server Error: ${res.status}. Please ensure the server is running and /api/config is registered.`);
-             setClientSecret('MOCK_TEST_MODE');
-             return;
-           }
-         }
-       } catch (e) {
-         console.error("Error parsing response:", e);
-       }
+  const checkIsSameDay = () => {
+    if (!checkIn) return false;
+    const checkInYMD = checkIn.split('T')[0];
+    const today = new Date();
+    const todayYMD = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    return checkInYMD === todayYMD;
+  };
 
-       if (!res.ok) {
-         console.error("Stripe API Error (Local Server):", data?.error || "Unknown Error");
-         setClientSecret('MOCK_TEST_MODE');
-         setStripeConfigError(data.error || `Server responded with ${res.status}`);
-         return;
-       }
+  const handleCheckoutSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!guestEmail.trim()) {
+      setError("Please enter a valid confirmation email.");
+      return;
+    }
+    if (!guestPhone.trim()) {
+      setError("Please enter a valid mobile number.");
+      return;
+    }
 
-       if (data.clientSecret) {
-         setClientSecret(data.clientSecret);
-       } else {
-         setClientSecret('MOCK_TEST_MODE');
-         setStripeConfigError("Server did not return a clientSecret.");
-       }
-       
-       if (!hasPublishableKey) {
-         setStripeConfigError("VITE_STRIPE_PUBLISHABLE_KEY is missing on the client. Please add it to your Secrets.");
-       }
-     })
-     .catch((err) => {
-        console.error("Payment intent fetch error:", err);
-        setClientSecret('MOCK_TEST_MODE');
-        setStripeConfigError("Network error: Could not reach the payment server.");
-     });
-  }, [propertyId, checkIn, checkOut, selectedBedrooms, hasPublishableKey, upfrontAmount]);
+    if (checkIsSameDay() && !warningConfirmed) {
+      setShowWarningModal(true);
+      return;
+    }
+
+    await startStripeCheckout();
+  };
+
+  const handleConfirmWarningAndPay = async () => {
+    setShowWarningModal(false);
+    setWarningConfirmed(true);
+    await startStripeCheckout();
+  };
+
+  const startStripeCheckout = async () => {
+    setProcessing(true);
+    setError(null);
+
+    const bookingId = uuidv4();
+    const e164Phone = formatPhoneE164(guestPhone);
+    const bookingRef = Math.random().toString(36).substring(2, 8).toUpperCase();
+
+    try {
+      // 1. Create accessCode (lookup manual code first, or assign placeholder)
+      let accessCode = '';
+      if (property?.hasSmartLock && property?.frontDoorCode) {
+        accessCode = property.frontDoorCode.trim();
+      }
+
+      // 2. Prepare Firestore payload (initially as 'pending_payment')
+      const payload: any = {
+        userId: user.uid,
+        propertyId: propertyId,
+        checkIn: checkIn.split('T')[0],
+        checkOut: checkOut.split('T')[0],
+        status: 'pending_payment',
+        totalPrice: Math.round(upfrontAmount * 100),
+        bookingRef,
+        selectedBedrooms,
+        guestPhone: e164Phone,
+        guestEmail: guestEmail,
+        guestName: user.displayName || "Guest",
+        guests: 1,
+        priceDetails: localPriceDetails,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      };
+
+      if (leaseCode) {
+        payload.leaseCode = leaseCode;
+      }
+      if (bookingType) {
+        payload.bookingType = bookingType;
+      }
+      if (accessCode) {
+        payload.accessCode = accessCode;
+      }
+
+      if (localPriceDetails?.nights > 60) {
+        payload.paymentOption = paymentOption;
+        payload.securityDeposit = securityDeposit;
+        payload.numMonths = numMonths;
+        payload.monthlyAmount = monthlyAmount;
+        payload.upfrontAmountPaid = upfrontAmount;
+
+        // Build simple initial payment schedule
+        const paymentSchedule: any[] = [];
+        const checkInDate = new Date(checkIn);
+        paymentSchedule.push({
+          month: 1,
+          dueDate: checkIn.split('T')[0],
+          amount: paymentOption === 'full' ? grandTotal : monthlyAmount,
+          status: 'paid',
+          description: paymentOption === 'full' ? 'Entire Lease Amount' : 'First Month Stay',
+          alertSent: false
+        });
+
+        for (let m = 2; m <= numMonths; m++) {
+          const dueDate = new Date(checkInDate);
+          dueDate.setDate(dueDate.getDate() + (m - 1) * 30);
+          paymentSchedule.push({
+            month: m,
+            dueDate: dueDate.toISOString().split('T')[0],
+            amount: paymentOption === 'full' ? 0 : monthlyAmount,
+            status: paymentOption === 'full' ? 'paid' : 'unpaid',
+            description: `Month ${m} Stay`,
+            alertSent: false
+          });
+        }
+        payload.paymentSchedule = paymentSchedule;
+      }
+
+      if (dailySelections) {
+        payload.dailySelections = dailySelections;
+      }
+
+      // Save Booking to Firestore as 'pending_payment'
+      if (db) {
+        await setDoc(doc(db, 'bookings', bookingId), payload);
+      }
+
+      // 3. Request Checkout Session from Server
+      const res = await fetch('/api/create-booking-checkout-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookingId })
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(errorText || "Failed to initiate secure Stripe Checkout Session.");
+      }
+
+      const data = await res.json();
+      if (data.url) {
+        console.log("[Checkout] Redirecting to Checkout Session URL:", data.url);
+        window.location.href = data.url;
+      } else {
+        throw new Error("No payment session URL returned from backend server.");
+      }
+    } catch (err: any) {
+      console.error("[Checkout] Error during starting checkout session:", err);
+      setError(err.message || "Failed to initialize payment process.");
+      setProcessing(false);
+    }
+  };
 
   const parseLocalDate = (dateStr: string) => {
     if (!dateStr) return new Date();
@@ -676,162 +335,162 @@ export const Checkout: React.FC = () => {
              <h3 className="font-bold text-lg mb-6 text-slate-800">Payment Details</h3>
              
              {isLongTermLease && (
-                 <div className="mb-6 p-5 bg-indigo-50/40 border border-indigo-100 rounded-2xl text-left">
-                    <h4 className="font-extrabold text-sm text-indigo-950 mb-3 uppercase tracking-wider flex items-center gap-1.5">
-                       <span>🔒</span> Long Term Lease Options ({localPriceDetails?.nights} Nights)
-                    </h4>
-                    <p className="text-xs text-indigo-900 mb-4 font-semibold leading-relaxed">
-                       A fully-refundable **Security Deposit** of <strong>${securityDeposit.toFixed(2)}</strong> is required upfront. Select your preferred lease payment plan below:
-                    </p>
-                    <div className="grid grid-cols-1 gap-3 font-sans">
-                       <button
-                          type="button"
-                          onClick={() => setPaymentOption('full')}
-                          className={cn(
-                             "w-full p-4 rounded-xl border text-left transition-all flex flex-col gap-1 cursor-pointer",
-                             paymentOption === 'full' 
-                               ? "border-indigo-600 bg-white ring-2 ring-indigo-600/20" 
-                               : "border-slate-200 bg-white hover:border-indigo-300"
-                          )}
-                       >
-                          <div className="flex justify-between items-center w-full">
-                             <span className="font-black text-sm text-slate-800">Pay In Full Upfront</span>
-                             <span className={cn(
-                                "w-4 h-4 rounded-full border flex items-center justify-center",
-                                paymentOption === 'full' ? "border-indigo-600 bg-indigo-600" : "border-slate-300"
-                             )}>
-                                {paymentOption === 'full' && <span className="w-1.5 h-1.5 rounded-full bg-white"></span>}
-                             </span>
-                          </div>
-                          <p className="text-[11px] text-slate-500 font-medium">
-                             Pay entire lease amount + security deposit now. No monthly follow-ups.
-                          </p>
-                          <span className="text-indigo-600 text-xs font-mono font-bold mt-1 block">
-                             Total Today: ${(grandTotal + securityDeposit).toFixed(2)}
-                          </span>
-                       </button>
+                  <div className="mb-6 p-5 bg-indigo-50/40 border border-indigo-100 rounded-2xl text-left">
+                     <h4 className="font-extrabold text-sm text-indigo-950 mb-3 uppercase tracking-wider flex items-center gap-1.5">
+                        <span>🔒</span> Long Term Lease Options ({localPriceDetails?.nights} Nights)
+                     </h4>
+                     <p className="text-xs text-indigo-900 mb-4 font-semibold leading-relaxed">
+                        A fully-refundable **Security Deposit** of <strong>${securityDeposit.toFixed(2)}</strong> is required upfront. Select your preferred lease payment plan below:
+                     </p>
+                     <div className="grid grid-cols-1 gap-3 font-sans">
+                        <button
+                           type="button"
+                           onClick={() => setPaymentOption('full')}
+                           className={cn(
+                              "w-full p-4 rounded-xl border text-left transition-all flex flex-col gap-1 cursor-pointer",
+                              paymentOption === 'full' 
+                                ? "border-indigo-600 bg-white ring-2 ring-indigo-600/20" 
+                                : "border-slate-200 bg-white hover:border-indigo-300"
+                           )}
+                        >
+                           <div className="flex justify-between items-center w-full">
+                              <span className="font-black text-sm text-slate-800">Pay In Full Upfront</span>
+                              <span className={cn(
+                                 "w-4 h-4 rounded-full border flex items-center justify-center",
+                                 paymentOption === 'full' ? "border-indigo-600 bg-indigo-600" : "border-slate-300"
+                              )}>
+                                 {paymentOption === 'full' && <span className="w-1.5 h-1.5 rounded-full bg-white"></span>}
+                              </span>
+                           </div>
+                           <p className="text-[11px] text-slate-500 font-medium">
+                              Pay entire lease amount + security deposit now. No monthly follow-ups.
+                           </p>
+                           <span className="text-indigo-600 text-xs font-mono font-bold mt-1 block">
+                              Total Today: ${(grandTotal + securityDeposit).toFixed(2)}
+                           </span>
+                        </button>
 
-                       <button
-                          type="button"
-                          onClick={() => setPaymentOption('monthly')}
-                          className={cn(
-                             "w-full p-4 rounded-xl border text-left transition-all flex flex-col gap-1 cursor-pointer",
-                             paymentOption === 'monthly' 
-                               ? "border-indigo-600 bg-white ring-2 ring-indigo-600/20" 
-                               : "border-slate-200 bg-white hover:border-indigo-300"
-                          )}
-                       >
-                          <div className="flex justify-between items-center w-full">
-                             <span className="font-black text-sm text-slate-800">Month-to-Month Plan</span>
-                             <span className={cn(
-                                "w-4 h-4 rounded-full border flex items-center justify-center",
-                                paymentOption === 'monthly' ? "border-indigo-600 bg-indigo-600" : "border-slate-300"
-                             )}>
-                                {paymentOption === 'monthly' && <span className="w-1.5 h-1.5 rounded-full bg-white"></span>}
-                             </span>
-                          </div>
-                          <p className="text-[11px] text-slate-500 font-medium font-semibold">
-                             Pay Security Deposit + 1st month now. Remaining payments auto-drafted every 30 days.
-                          </p>
-                          <div className="mt-1 flex flex-wrap justify-between items-center gap-1">
-                             <span className="text-indigo-600 text-xs font-mono font-bold">
-                                Total Today: ${(monthlyAmount + securityDeposit).toFixed(2)}
-                             </span>
-                             <span className="text-slate-500 font-bold font-mono text-[10px] bg-slate-150 px-1.5 py-0.5 rounded">
-                                ${(monthlyAmount).toFixed(2)} / mo
-                             </span>
-                          </div>
-                          <div className="mt-2 bg-amber-50/60 p-2 rounded-lg border border-amber-105 text-[10px] text-amber-800 leading-relaxed font-semibold">
-                             💡 Alert sent 5 days prior to each remaining month (balance of ${(grandTotal - monthlyAmount).toFixed(2)} split across remaining {numMonths - 1} months).
-                          </div>
-                       </button>
-                    </div>
-                 </div>
-              )}
+                        <button
+                           type="button"
+                           onClick={() => setPaymentOption('monthly')}
+                           className={cn(
+                              "w-full p-4 rounded-xl border text-left transition-all flex flex-col gap-1 cursor-pointer",
+                              paymentOption === 'monthly' 
+                                ? "border-indigo-600 bg-white ring-2 ring-indigo-600/20" 
+                                : "border-slate-200 bg-white hover:border-indigo-300"
+                           )}
+                        >
+                           <div className="flex justify-between items-center w-full">
+                              <span className="font-black text-sm text-slate-800">Month-to-Month Plan</span>
+                              <span className={cn(
+                                 "w-4 h-4 rounded-full border flex items-center justify-center",
+                                 paymentOption === 'monthly' ? "border-indigo-600 bg-indigo-600" : "border-slate-300"
+                              )}>
+                                 {paymentOption === 'monthly' && <span className="w-1.5 h-1.5 rounded-full bg-white"></span>}
+                              </span>
+                           </div>
+                           <p className="text-[11px] text-slate-500 font-medium font-semibold">
+                              Pay Security Deposit + 1st month now. Remaining payments auto-drafted every 30 days.
+                           </p>
+                           <div className="mt-1 flex flex-wrap justify-between items-center gap-1">
+                              <span className="text-indigo-600 text-xs font-mono font-bold">
+                                 Total Today: ${(monthlyAmount + securityDeposit).toFixed(2)}
+                              </span>
+                              <span className="text-slate-500 font-bold font-mono text-[10px] bg-slate-150 px-1.5 py-0.5 rounded">
+                                 ${(monthlyAmount).toFixed(2)} / mo
+                              </span>
+                           </div>
+                           <div className="mt-2 bg-amber-50/60 p-2 rounded-lg border border-amber-105 text-[10px] text-amber-800 leading-relaxed font-semibold">
+                              💡 Alert sent 5 days prior to each remaining month (balance of ${(grandTotal - monthlyAmount).toFixed(2)} split across remaining {numMonths - 1} months).
+                           </div>
+                        </button>
+                     </div>
+                  </div>
+             )}
              
              {/* Bedroom / SmartLock Section */}
              {property?.bedrooms && property.bedrooms.length > 0 && (
-                 <div className="mb-6">
-                    {selectedBedrooms.length === 0 ? (
-                        <div className="bg-indigo-50/50 border border-indigo-105 p-5 rounded-2xl mb-4">
-                           <div className="flex items-center gap-2 mb-2">
-                               <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 inline-block animate-pulse"></span>
-                               <label className="block text-sm font-bold text-indigo-950">Entire Property Booking Included Access</label>
-                           </div>
-                           <p className="text-xs text-indigo-700/80 mb-4 leading-relaxed font-semibold">
-                              You booked the **Entire Property**. This includes digital smart lock entry for the front door and secure individual codes for **all** rooms below:
-                           </p>
-                           <div className="space-y-2.5">
-                               {property?.bedrooms?.map((b, i) => (
-                                   <div key={i} className="flex justify-between items-center bg-white p-3 rounded-xl border border-indigo-50/60 shadow-sm">
-                                       <div>
-                                           <span className="font-bold text-xs text-slate-800">{b.type}</span>
-                                           <span className="text-[10px] text-slate-400 font-bold ml-1.5 font-mono">Room {b.roomNumber}</span>
-                                       </div>
-                                       <div className="flex items-center gap-2">
-                                            <span className="text-[9px] font-bold uppercase tracking-wide text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100">Hidden until paid</span>
-                                            <span className="font-mono text-xs font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded border border-slate-200" title="Revealed after payment">🔒 ••••</span>
-                                       </div>
-                                   </div>
-                               ))}
-                           </div>
-                        </div>
-                    ) : (
-                        <label className="block text-sm font-bold text-slate-700 mb-2">Select Rooms</label>
-                    )}
-                    {selectedBedrooms.length > 0 && (
-                    <div className="space-y-2">
-                        {property.bedrooms.map((b, i) => {
-                            const isSelected = selectedBedrooms.some(rb => rb.roomNumber === b.roomNumber);
-                            return (
-                                <label key={i} className={cn(
-                                    "flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all",
-                                    isSelected ? "bg-indigo-50 border-indigo-200" : "bg-white border-slate-200 hover:border-indigo-100"
-                                )}>
-                                    <div className="flex items-center gap-3">
-                                        <input 
-                                            type="checkbox" 
-                                            className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                                            checked={isSelected}
-                                            onChange={() => {
-                                                setSelectedBedrooms(prev => 
-                                                    isSelected 
-                                                        ? prev.filter(rb => rb.roomNumber !== b.roomNumber)
-                                                        : [...prev, b]
-                                                );
-                                            }}
-                                        />
+                  <div className="mb-6">
+                     {selectedBedrooms.length === 0 ? (
+                         <div className="bg-indigo-50/50 border border-indigo-105 p-5 rounded-2xl mb-4">
+                            <div className="flex items-center gap-2 mb-2">
+                                <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 inline-block animate-pulse"></span>
+                                <label className="block text-sm font-bold text-indigo-950">Entire Property Booking Included Access</label>
+                            </div>
+                            <p className="text-xs text-indigo-700/80 mb-4 leading-relaxed font-semibold">
+                               You booked the **Entire Property**. This includes digital smart lock entry for the front door and secure individual codes for **all** rooms below:
+                            </p>
+                            <div className="space-y-2.5">
+                                {property?.bedrooms?.map((b, i) => (
+                                    <div key={i} className="flex justify-between items-center bg-white p-3 rounded-xl border border-indigo-50/60 shadow-sm">
                                         <div>
-                                            <div className="font-bold text-sm text-slate-800">{b.type} - Room {b.roomNumber}</div>
-                                            <div className="text-[10px] text-slate-500 font-medium">{b.sqFt} sq ft • Private Code: <span className="font-mono bg-slate-50 text-slate-400 px-1 py-0.5 rounded border border-slate-150 inline-flex items-center gap-0.5" title="Revealed after payment">🔒 ••••</span></div>
+                                            <span className="font-bold text-xs text-slate-800">{b.type}</span>
+                                            <span className="text-[10px] text-slate-400 font-bold ml-1.5 font-mono">Room {b.roomNumber}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                             <span className="text-[9px] font-bold uppercase tracking-wide text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100">Hidden until paid</span>
+                                             <span className="font-mono text-xs font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded border border-slate-200" title="Revealed after payment">🔒 ••••</span>
                                         </div>
                                     </div>
-                                    <div className="font-mono font-bold text-indigo-600">${b.fee}</div>
-                                </label>
-                            );
-                        })}
-                    </div>
-                    )}
-                 </div>
+                                ))}
+                            </div>
+                         </div>
+                     ) : (
+                         <label className="block text-sm font-bold text-slate-700 mb-2">Select Rooms</label>
+                     )}
+                     {selectedBedrooms.length > 0 && (
+                     <div className="space-y-2">
+                         {property.bedrooms.map((b, i) => {
+                             const isSelected = selectedBedrooms.some(rb => rb.roomNumber === b.roomNumber);
+                             return (
+                                 <label key={i} className={cn(
+                                     "flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all",
+                                     isSelected ? "bg-indigo-50 border-indigo-200" : "bg-white border-slate-200 hover:border-indigo-100"
+                                 )}>
+                                     <div className="flex items-center gap-3">
+                                         <input 
+                                             type="checkbox" 
+                                             className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                             checked={isSelected}
+                                             onChange={() => {
+                                                 setSelectedBedrooms(prev => 
+                                                     isSelected 
+                                                         ? prev.filter(rb => rb.roomNumber !== b.roomNumber)
+                                                         : [...prev, b]
+                                                 );
+                                             }}
+                                         />
+                                         <div>
+                                             <div className="font-bold text-sm text-slate-800">{b.type} - Room {b.roomNumber}</div>
+                                             <div className="text-[10px] text-slate-500 font-medium">{b.sqFt} sq ft • Private Code: <span className="font-mono bg-slate-50 text-slate-400 px-1 py-0.5 rounded border border-slate-150 inline-flex items-center gap-0.5" title="Revealed after payment">🔒 ••••</span></div>
+                                         </div>
+                                     </div>
+                                     <div className="font-mono font-bold text-indigo-600">${b.fee}</div>
+                                 </label>
+                             );
+                         })}
+                     </div>
+                     )}
+                  </div>
              )}
              
              {property?.hasSmartLock && property?.isTestProperty && (
-                 <div className="mb-6 p-4 bg-indigo-50 border border-indigo-200 rounded-xl text-indigo-900 border-dashed">
-                      <p className="font-bold text-xs text-indigo-950 flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> Smart Lock Code Status
-                      </p>
-                      <p className="text-xs text-slate-500 mt-1 leading-relaxed font-semibold">
-                          Your custom front door smart key will be automatically provisioned and sent as soon as checkout payment is verified.
-                      </p>
-                      <div className="mt-3 flex items-center gap-2 bg-white/65 px-3 py-2 rounded-lg border border-indigo-100 h-10">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Front Door Lock PIN</span>
-                          <span className="text-xs font-mono font-black text-slate-400 tracking-wider">🔒 CODES HIDDEN UNTIL PAID</span>
-                      </div>
-                 </div>
+                  <div className="mb-6 p-4 bg-indigo-50 border border-indigo-200 rounded-xl text-indigo-900 border-dashed">
+                       <p className="font-bold text-xs text-indigo-950 flex items-center gap-1">
+                           <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> Smart Lock Code Status
+                       </p>
+                       <p className="text-xs text-slate-500 mt-1 leading-relaxed font-semibold">
+                           Your custom front door smart key will be automatically provisioned and sent as soon as checkout payment is verified.
+                       </p>
+                       <div className="mt-3 flex items-center gap-2 bg-white/65 px-3 py-2 rounded-lg border border-indigo-100 h-10">
+                           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Front Door Lock PIN</span>
+                           <span className="text-xs font-mono font-black text-slate-400 tracking-wider">🔒 CODES HIDDEN UNTIL PAID</span>
+                       </div>
+                  </div>
              )}
              
              {/* Guest Details Capture */}
-             <div className="mb-6 space-y-4">
+             <form onSubmit={handleCheckoutSubmit} className="mb-6 space-y-4">
                  <div>
                     <label className="block text-sm font-bold text-slate-700 mb-1">Confirmation Email</label>
                     <input 
@@ -839,7 +498,8 @@ export const Checkout: React.FC = () => {
                        value={guestEmail}
                        onChange={e => setGuestEmail(e.target.value)}
                        placeholder="guest@example.com"
-                       className="w-full border border-slate-200 rounded-xl px-4 py-3 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent transition-shadow"
+                       className="w-full border border-slate-200 rounded-xl px-4 py-3 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent transition-shadow font-sans"
+                       required
                     />
                  </div>
                  <div>
@@ -853,52 +513,102 @@ export const Checkout: React.FC = () => {
                        value={guestPhone}
                        onChange={e => setGuestPhone(e.target.value)}
                        placeholder="(415) 555-2671"
-                       className="w-full border border-slate-200 rounded-xl px-4 py-3 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent transition-shadow"
+                       className="w-full border border-slate-200 rounded-xl px-4 py-3 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent transition-shadow font-sans"
+                       required
                     />
                  </div>
-             </div>
 
-             {isTestProperty ? (
-                 <div className="p-6 bg-emerald-50 border border-emerald-200 rounded-2xl mb-6">
-                    <p className="text-emerald-800 font-medium mb-4 text-sm">This is a TEST property. You may use the Test Visa card number: 4242 4242 4242 4242</p>
+                 {isTestProperty && (
+                     <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-800 text-xs font-medium">
+                        💡 This is a TEST property. You may use any valid test card on Stripe Checkout to finalize your reservation.
+                     </div>
+                 )}
+
+                 <div className="pt-4 border-t border-slate-100">
+                    <div className="text-center text-[11px] text-slate-400 mb-4 flex items-center justify-center gap-1.5 font-medium">
+                       <span>🔒 Secure redirect to Stripe Checkout</span>
+                       <span>•</span>
+                       <span>Card, Apple Pay, Google Pay accepted</span>
+                    </div>
+
+                    {error && <div className="text-rose-500 text-sm font-semibold mb-3">{error}</div>}
+
+                    <button 
+                      type="submit" 
+                      disabled={processing}
+                      className="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-4 rounded-2xl font-bold disabled:bg-slate-400 transition-colors shadow-sm flex items-center justify-center gap-2 text-base cursor-pointer"
+                    >
+                      {processing ? (
+                        <>
+                          <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                          <span>Processing...</span>
+                        </>
+                      ) : (
+                        <span>Proceed to Secure Payment</span>
+                      )}
+                    </button>
                  </div>
-             ) : null}
+             </form>
 
-             {clientSecret && clientSecret !== 'MOCK_TEST_MODE' ? (
-                <Elements stripe={stripePromise} options={{ clientSecret }}>
-                  <CheckoutForm clientSecret={clientSecret} bookingDetails={{ propertyId, checkIn, checkOut, priceDetails: localPriceDetails, leaseCode, bookingType, paymentOption, securityDeposit, monthlyAmount, numMonths, upfrontAmount }} guestEmail={guestEmail} guestPhone={guestPhone} isTestProperty={isTestProperty} selectedBedrooms={selectedBedrooms} dailySelections={dailySelections} />
-                </Elements>
-             ) : (
-                <div className="p-8 bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl text-center">
-                   {stripeConfigError ? (
-                      <div className="space-y-3">
-                        <p className="text-rose-600 font-bold">Stripe Configuration Required</p>
-                        <p className="text-slate-500 text-sm leading-relaxed">
-                          {stripeConfigError}
-                          <br />
-                          Please add <code className="bg-slate-100 px-1 rounded">STRIPE_SECRET_KEY</code> and <code className="bg-slate-100 px-1 rounded">VITE_STRIPE_PUBLISHABLE_KEY</code> to your secrets to enable payments.
-                        </p>
-                      </div>
-                   ) : (
-                      <div className="animate-pulse flex flex-col items-center space-y-4">
-                        <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-                        <p className="text-slate-500 font-medium text-sm">Initializing secure checkout...</p>
-                      </div>
-                   )}
-                </div>
+             {/* Same-day Booking Policy Agreement Dialog */}
+             {showWarningModal && (
+               <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                 <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-slate-100 flex flex-col gap-6 animate-in fade-in-50 zoom-in-95 duration-200 text-left">
+                   <div className="flex items-center gap-3 text-amber-500">
+                     <span className="text-2xl">⚠️</span>
+                     <h3 className="text-xl font-extrabold tracking-tight text-slate-800">Same-Day Booking Agreement</h3>
+                   </div>
+                   
+                   <div className="space-y-4 text-slate-600 text-sm leading-relaxed">
+                     <p className="font-semibold text-slate-700">
+                       You are scheduling a booking that checks in today (<span className="text-indigo-600 font-bold">{checkIn.split('T')[0]}</span>).
+                     </p>
+                     <p>
+                       Same-day bookings are subject to unique cancellation restrictions. You must understand and accept:
+                     </p>
+                     <div className="space-y-3 pl-1">
+                       <div className="flex gap-2.5">
+                         <span className="text-amber-500 font-extrabold font-mono">1.</span>
+                         <span><strong>Cancellation Forfeited:</strong> Since this booking starts today, you cannot cancel this reservation for a refund.</span>
+                       </div>
+                       <div className="flex gap-2.5">
+                         <span className="text-amber-500 font-extrabold font-mono">2.</span>
+                         <span><strong>Date Changes Allowed:</strong> You are still allowed to change/edit your dates in the future. However, if you do, <strong>you will still be charged a 50% nightly rate penalty for tonight</strong>, plus the regular pricing for your new dates.</span>
+                       </div>
+                     </div>
+                   </div>
+
+                   <div className="flex flex-col gap-3 mt-2">
+                     <button
+                       type="button"
+                       onClick={handleConfirmWarningAndPay}
+                       className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold py-3.5 px-4 rounded-xl transition-all shadow-md active:scale-95 text-sm cursor-pointer"
+                     >
+                       I Understand & Proceed to Book
+                     </button>
+                     <button
+                       type="button"
+                       onClick={() => setShowWarningModal(false)}
+                       className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 px-4 rounded-xl transition-all text-sm cursor-pointer"
+                     >
+                       Go Back / Edit Dates
+                     </button>
+                   </div>
+                 </div>
+               </div>
              )}
 
              {/* Booking Controls */}
              <div className="mt-8 pt-6 border-t border-slate-200 flex flex-col sm:flex-row gap-4 justify-between items-center">
                  <button 
                     onClick={() => navigate(`/property/${propertyId}`)}
-                    className="text-indigo-600 hover:text-indigo-800 font-medium text-sm transition-colors"
+                    className="text-indigo-600 hover:text-indigo-800 font-medium text-sm transition-colors cursor-pointer"
                  >
                     Edit Booking Dates
                  </button>
                  <button 
                     onClick={() => navigate('/')}
-                    className="text-red-500 hover:text-red-700 font-medium text-sm transition-colors"
+                    className="text-red-500 hover:text-red-700 font-medium text-sm transition-colors cursor-pointer"
                  >
                     Cancel Booking
                  </button>

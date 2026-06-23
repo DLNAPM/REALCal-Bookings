@@ -1,19 +1,30 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLocation, Link, Navigate } from 'react-router-dom';
 import { CheckCircle, Key, Printer, Video } from 'lucide-react';
 import { LegalFooter } from '../components/LegalFooter';
 import { db } from '../lib/firebase';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, getDoc, getDocs, query, collection } from 'firebase/firestore';
 
 export const Confirmation: React.FC = () => {
     const location = useLocation();
     const queryParams = new URLSearchParams(location.search);
     const queryBookingId = queryParams.get('bookingId');
     const queryStatus = queryParams.get('status');
+    const queryType = queryParams.get('type');
 
     const state = location.state || {};
     const bookingId = state.bookingId || queryBookingId;
-    const isPaidInvoice = queryStatus === 'paid' || state.status === 'paid';
+    const isPaidInvoice = queryStatus === 'paid' && queryType !== 'booking';
+
+    // State hooks for booking details (for Stripe Checkout redirects)
+    const [loadingBooking, setLoadingBooking] = useState(queryType === 'booking');
+    const [errorBooking, setErrorBooking] = useState<string | null>(null);
+    const [accessCode, setAccessCode] = useState<string | null>(state.accessCode || null);
+    const [bookingRef, setBookingRef] = useState<string>(state.bookingRef || (queryBookingId ? `Invoice ${queryBookingId.substring(0, 8).toUpperCase()}` : ''));
+    const [selectedBedrooms, setSelectedBedrooms] = useState<any[]>(state.selectedBedrooms || []);
+    const [checkIn, setCheckIn] = useState<string>(state.checkIn || '');
+    const [checkOut, setCheckOut] = useState<string>(state.checkOut || '');
+    const [notificationResults, setNotificationResults] = useState<string[]>(state.notificationResults || []);
 
     useEffect(() => {
         if (isPaidInvoice && queryBookingId) {
@@ -38,14 +49,92 @@ export const Confirmation: React.FC = () => {
         }
     }, [isPaidInvoice, queryBookingId]);
 
-    const accessCode = state.accessCode;
-    const notificationResults = state.notificationResults;
-    const bookingRef = state.bookingRef || (queryBookingId ? `Invoice ${queryBookingId.substring(0, 8).toUpperCase()}` : '');
+    useEffect(() => {
+        if (queryType === 'booking' && queryBookingId) {
+            const completeBooking = async () => {
+                try {
+                    setLoadingBooking(true);
+                    const res = await fetch('/api/complete-booking-checkout', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ bookingId: queryBookingId })
+                    });
+                    
+                    if (!res.ok) {
+                        const errText = await res.text();
+                        throw new Error(errText || "Failed to complete booking checkout on the server.");
+                    }
+                    
+                    const data = await res.json();
+                    if (data.success) {
+                        const booking = data.booking;
+                        setAccessCode(data.accessCode || booking.accessCode || '');
+                        setBookingRef(booking.bookingRef || '');
+                        setCheckIn(booking.checkIn || '');
+                        setCheckOut(booking.checkOut || '');
+                        setSelectedBedrooms(booking.selectedBedrooms || (booking.selectedBedroom ? [booking.selectedBedroom] : []));
+                        
+                        // Fire manager/guest notifications if not already done for this bookingId
+                        const notifyKey = `notified-${queryBookingId}`;
+                        if (!localStorage.getItem(notifyKey)) {
+                            localStorage.setItem(notifyKey, 'true');
+                            
+                            try {
+                                const managersSnap = await getDocs(query(collection(db, 'property_managers')));
+                                const managers = managersSnap.docs.map(d => d.data()).filter(m => m.enabled);
+                                
+                                let propertyName = "Villa";
+                                let isTestProperty = false;
+                                const propSnap = await getDoc(doc(db, 'properties', booking.propertyId));
+                                if (propSnap.exists()) {
+                                    propertyName = propSnap.data().name;
+                                    isTestProperty = !!propSnap.data().isTestProperty;
+                                }
+                                
+                                const notifyRes = await fetch('/api/notify-managers', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        managers,
+                                        bookingDetails: {
+                                            checkIn: booking.checkIn,
+                                            checkOut: booking.checkOut,
+                                            totalAmount: booking.totalPrice,
+                                            propertyName: propertyName,
+                                            guestName: booking.guestName,
+                                            guestEmail: booking.guestEmail,
+                                            guestPhone: booking.guestPhone,
+                                            accessCode: data.accessCode || booking.accessCode,
+                                            isTestProperty: isTestProperty,
+                                            selectedBedrooms: booking.selectedBedrooms || (booking.selectedBedroom ? [booking.selectedBedroom] : [])
+                                        }
+                                    })
+                                });
+                                
+                                if (notifyRes.ok) {
+                                    const notifyData = await notifyRes.json();
+                                    setNotificationResults(notifyData.results || []);
+                                }
+                            } catch (notifyErr) {
+                                console.error("[Confirmation] Notification triggering failed:", notifyErr);
+                            }
+                        }
+                    } else {
+                        throw new Error(data.error || "Server completed but returned failure.");
+                    }
+                } catch (err: any) {
+                    console.error("[Confirmation] Error completing booking checkout:", err);
+                    setErrorBooking(err.message || "Failed to finalize your booking.");
+                } finally {
+                    setLoadingBooking(false);
+                }
+            };
+            completeBooking();
+        }
+    }, [queryType, queryBookingId]);
+
     const selectedBedroom = state.selectedBedroom;
-    const selectedBedrooms = state.selectedBedrooms || [];
-    const checkIn = state.checkIn;
-    const checkOut = state.checkOut;
-    const rooms = selectedBedrooms || (selectedBedroom ? [selectedBedroom] : []);
+    const rooms = selectedBedrooms.length > 0 ? selectedBedrooms : (selectedBedroom ? [selectedBedroom] : []);
     
     const formatDate = (dateStr: string) => {
         if (!dateStr) return '';
@@ -59,6 +148,45 @@ export const Confirmation: React.FC = () => {
     };
 
     if (!bookingId) return <Navigate to="/" />;
+
+    if (queryType === 'booking' && loadingBooking) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4 font-sans text-slate-900">
+                <div className="max-w-md w-full bg-white p-8 rounded-3xl shadow-xl border border-slate-200 text-center my-8">
+                    <div className="animate-pulse flex flex-col items-center space-y-6">
+                        <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-2"></div>
+                        <h2 className="text-2xl font-bold text-slate-800 animate-bounce">Finalizing Reservation</h2>
+                        <p className="text-slate-500 text-sm leading-relaxed">
+                            We are securing your digital smart lock access codes and preparing your lodging details. This may take a moment. Please do not close or refresh this page.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (queryType === 'booking' && errorBooking) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4 font-sans text-slate-900">
+                <div className="max-w-md w-full bg-white p-8 rounded-3xl shadow-xl border border-rose-100 text-center my-8">
+                    <div className="w-20 h-20 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm">
+                        <span className="text-3xl">⚠️</span>
+                    </div>
+                    <h2 className="text-2xl font-bold text-slate-800 mb-2">Checkout Error</h2>
+                    <p className="text-rose-600 font-medium mb-4 text-sm">{errorBooking}</p>
+                    <p className="text-slate-500 text-sm leading-relaxed mb-6">
+                        There was an issue processing your confirmation. Please contact support or check your "My Bookings" page to see if your stay was processed.
+                    </p>
+                    <Link to="/my-bookings" className="w-full block py-4 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-500 transition-colors shadow-sm text-center mb-3">
+                        Go to My Bookings
+                    </Link>
+                    <Link to="/" className="w-full block py-3 bg-slate-100 text-slate-700 font-semibold rounded-2xl hover:bg-slate-200 transition-colors text-center text-sm">
+                        Return Home
+                    </Link>
+                </div>
+            </div>
+        );
+    }
 
     if (isPaidInvoice) {
         return (

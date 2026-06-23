@@ -1077,6 +1077,240 @@ async function startServer() {
     }
   });
 
+  app.post("/api/create-booking-checkout-session", async (req, res) => {
+    try {
+      const { bookingId } = req.body;
+      if (!bookingId) {
+        return res.status(400).json({ error: "bookingId is required." });
+      }
+
+      const key = process.env.STRIPE_SECRET_KEY;
+      const isStripeMissing = !key || key === "sk_test_..." || key.trim() === "";
+
+      let activeDb = db;
+      if (!activeDb) {
+        const configPath = path.resolve(process.cwd(), "firebase-applet-config.json");
+        if (fs.existsSync(configPath)) {
+          const firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+          if (admin.apps.length === 0) {
+            admin.initializeApp({ projectId: firebaseConfig.projectId });
+          }
+          activeDb = getFirestore(admin.app(), firebaseConfig.firestoreDatabaseId || "(default)");
+        }
+      }
+
+      if (!activeDb) {
+        return res.status(500).json({ error: "Database (Firestore) is not initialized on the server." });
+      }
+
+      const bookingRef = activeDb.collection('bookings').doc(bookingId);
+      const bookingDoc = await bookingRef.get();
+
+      if (!bookingDoc.exists) {
+        return res.status(404).json({ error: `Booking with ID ${bookingId} not found` });
+      }
+
+      const bookingData = bookingDoc.data() || {};
+      const amountInCents = bookingData.totalPrice || Math.round((bookingData.priceDetails?.grandTotal || 0) * 100);
+
+      // Fetch property details to display name/description
+      const propertyId = bookingData.propertyId;
+      const propSnap = await activeDb.collection('properties').doc(propertyId).get();
+      const propertyName = propSnap.exists ? propSnap.data().name : "Lodging Property";
+
+      const referer = req.headers.referer || "";
+      let hostUrl = referer;
+      if (referer) {
+         try {
+           const parsed = new URL(referer);
+           hostUrl = parsed.origin;
+         } catch {
+           hostUrl = `${req.protocol}://${req.get('host')}`;
+         }
+      } else {
+        hostUrl = `${req.protocol}://${req.get('host')}`;
+      }
+      
+      if (!hostUrl.endsWith('/')) {
+         hostUrl = hostUrl + '/';
+      }
+
+      if (isStripeMissing) {
+        console.log(`[Server] Stripe keys are not configured. Returning mock checkout URL for booking ID ${bookingId}`);
+        return res.json({ url: `${hostUrl}confirmation?bookingId=${bookingId}&status=paid&type=booking`, isMock: true });
+      }
+
+      const stripe = new Stripe(key);
+
+      console.log(`[Server] Creating checkout session for booking ID ${bookingId} with amount ${amountInCents} cents`);
+
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        line_items: [
+          {
+            price_data: {
+              currency: 'usd',
+              product_data: {
+                name: `Lodging Reservation at ${propertyName}`,
+                description: `Stay from ${bookingData.checkIn} to ${bookingData.checkOut}`,
+              },
+              unit_amount: amountInCents,
+            },
+            quantity: 1,
+          },
+        ],
+        mode: 'payment',
+        success_url: `${hostUrl}confirmation?bookingId=${bookingId}&status=paid&type=booking`,
+        cancel_url: `${hostUrl}checkout`,
+        customer_email: bookingData.guestEmail || undefined,
+        metadata: {
+          bookingId: bookingId,
+          propertyId: propertyId,
+          guestName: bookingData.guestName || '',
+          guestEmail: bookingData.guestEmail || '',
+          guestPhone: bookingData.guestPhone || '',
+        }
+      });
+
+      res.json({ url: session.url });
+    } catch (e: any) {
+      console.error("Error creating booking checkout session:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/complete-booking-checkout", async (req, res) => {
+    try {
+      const { bookingId } = req.body;
+      if (!bookingId) {
+        return res.status(400).json({ error: "bookingId is required." });
+      }
+
+      let activeDb = db;
+      if (!activeDb) {
+        const configPath = path.resolve(process.cwd(), "firebase-applet-config.json");
+        if (fs.existsSync(configPath)) {
+          const firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+          if (admin.apps.length === 0) {
+            admin.initializeApp({ projectId: firebaseConfig.projectId });
+          }
+          activeDb = getFirestore(admin.app(), firebaseConfig.firestoreDatabaseId || "(default)");
+        }
+      }
+
+      if (!activeDb) {
+        return res.status(500).json({ error: "Database not initialized" });
+      }
+
+      const bookingRef = activeDb.collection('bookings').doc(bookingId);
+      const bookingDoc = await bookingRef.get();
+
+      if (!bookingDoc.exists) {
+        return res.status(404).json({ error: `Booking with ID ${bookingId} not found` });
+      }
+
+      const booking = bookingDoc.data() || {};
+      
+      // If booking is already confirmed/pending and has access code, we can just return success
+      if ((booking.status === 'confirmed' || booking.status === 'pending') && booking.accessCode) {
+        return res.json({ 
+          success: true, 
+          booking, 
+          accessCode: booking.accessCode || '', 
+          bookingRef: booking.bookingRef || '' 
+        });
+      }
+
+      // Provision smart lock access code if it does not exist
+      let accessCode = booking.accessCode || '';
+      if (!accessCode) {
+        const seamApiKey = process.env.SEAM_API_KEY;
+        const deviceId = process.env.YALE_DEVICE_ID;
+
+        if (!seamApiKey || !deviceId || seamApiKey === "seam_test_...") {
+          accessCode = Math.floor(1000 + Math.random() * 9000).toString();
+        } else {
+          try {
+            const { Seam } = await import("seam");
+            const seam = new Seam({ apiKey: seamApiKey });
+            const createdAccessCode = await seam.accessCodes.create({
+              device_id: deviceId,
+              name: `Guest: ${booking.guestName || 'Guest'}`,
+              starts_at: `${booking.checkIn}T15:00:00`,
+              ends_at: `${booking.checkOut}T11:00:00`
+            });
+            accessCode = createdAccessCode.code || '';
+          } catch (lockErr: any) {
+            console.error("Lock provisioning error during complete-booking-checkout:", lockErr);
+            accessCode = Math.floor(1000 + Math.random() * 9000).toString();
+          }
+        }
+      }
+
+      // Read isTestProperty from property to decide the status
+      const propSnap = await activeDb.collection('properties').doc(booking.propertyId).get();
+      const isTestProperty = propSnap.exists ? !!propSnap.data().isTestProperty : false;
+      const finalStatus = isTestProperty ? 'confirmed' : 'pending';
+
+      const updatePayload: any = {
+        status: finalStatus,
+        accessCode: accessCode,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      };
+
+      // Create auto-blackout for cleaning the day after checkout
+      try {
+        const checkOutDate = new Date(booking.checkOut);
+        const dayAfterDate = new Date(checkOutDate);
+        dayAfterDate.setDate(dayAfterDate.getDate() + 1);
+        const blackoutDateString = dayAfterDate.toISOString().split('T')[0];
+        
+        const selectedBedrooms = booking.selectedBedrooms || [];
+        const bookingRefCode = booking.bookingRef || '';
+
+        if (selectedBedrooms.length > 0) {
+          for (const room of selectedBedrooms) {
+            const blackoutId = `maint-${bookingId}-${room.roomNumber}`;
+            await activeDb.collection('blackout_dates').doc(blackoutId).set({
+              propertyId: booking.propertyId,
+              date: blackoutDateString,
+              targetType: 'room',
+              roomNumber: room.roomNumber,
+              reason: `Maintenance/Cleaning for Booking ${bookingRefCode} (Room ${room.roomNumber})`,
+              createdAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+          }
+        } else {
+          await activeDb.collection('blackout_dates').doc(`maint-${bookingId}`).set({
+            propertyId: booking.propertyId,
+            date: blackoutDateString,
+            targetType: 'property',
+            roomNumber: null,
+            reason: `Maintenance/Cleaning for Booking ${bookingRefCode}`,
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
+          });
+        }
+        console.log(`[Server] Auto-blackout(s) created for checkout day after: ${blackoutDateString}`);
+      } catch (blackoutErr) {
+        console.warn("Failed to create auto-blackout on server complete-booking-checkout:", blackoutErr);
+      }
+
+      // Update the booking document in Firestore
+      await bookingRef.update(updatePayload);
+      const updatedBooking = { ...booking, ...updatePayload };
+
+      res.json({
+        success: true,
+        booking: updatedBooking,
+        accessCode: accessCode,
+        bookingRef: booking.bookingRef || ''
+      });
+    } catch (e: any) {
+      console.error("Error in complete-booking-checkout:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   app.post("/api/create-invoice-checkout-session", async (req, res) => {
     try {
       const { bookingId, amount, invoiceNumber, guestName, propertyName, checkIn, checkOut, sponsorEmail } = req.body;
