@@ -8,29 +8,8 @@ import { useNavigate, Link } from 'react-router-dom';
 import { ChevronLeft, Calendar as CalendarIcon, XCircle, CheckCircle, Home, MapPin, Edit3, X, Trash2, Printer, CreditCard, Loader2, AlertCircle, ArrowUpDown } from 'lucide-react';
 import { parseISO, differenceInHours } from 'date-fns';
 import { Calendar } from '../components/Calendar';
-import { loadStripe } from '@stripe/stripe-js';
-import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
-
 import { LegalFooter } from '../components/LegalFooter';
 import { AdminBookings } from '../components/AdminBookings';
-
-// Stripe initialization for modifications
-const stripePromiseBase = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '';
-let dynamicStripePromise: Promise<any> | null = null;
-const getStripe = async () => {
-  if (dynamicStripePromise) return dynamicStripePromise;
-  let key = stripePromiseBase;
-  try {
-    const res = await fetch('/api/config');
-    if (res.ok) {
-      const config = await res.json();
-      if (config.stripePublishableKey) key = config.stripePublishableKey;
-    }
-  } catch (e) {}
-  if (!key || key === 'pk_test_placeholder') return null;
-  dynamicStripePromise = loadStripe(key);
-  return dynamicStripePromise;
-};
 
 export const getBookingPriceBreakdown = (booking: any, globalSettings: any) => {
   if (booking.priceDetails) {
@@ -103,67 +82,7 @@ export const formatBookedDateTime = (createdAt: any) => {
   }
 };
 
-const ModificationPaymentForm: React.FC<{ 
-  clientSecret: string, 
-  onSuccess: () => void, 
-  onCancel: () => void,
-  amount: number
-}> = ({ clientSecret, onSuccess, onCancel, amount }) => {
-  const stripe = useStripe();
-  const elements = useElements();
-  const [error, setError] = useState<string | null>(null);
-  const [processing, setProcessing] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!stripe || !elements) return;
-    setProcessing(true);
-
-    const { error: submitError } = await stripe.confirmPayment({
-      elements,
-      redirect: "if_required"
-    });
-
-    if (submitError) {
-      setError(submitError.message || 'Payment failed');
-      setProcessing(false);
-    } else {
-      onSuccess();
-    }
-  };
-
-  return (
-    <div className="bg-white p-6 rounded-2xl shadow-xl max-w-md w-full">
-      <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-        <CreditCard className="text-indigo-600" />
-        Pay Difference: ${(amount / 100).toFixed(2)}
-      </h3>
-      <p className="text-sm text-slate-500 mb-6 italic">To confirm your new dates, please pay the difference for the extended stay or higher rate.</p>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="max-h-[350px] overflow-y-auto pr-2 border border-slate-100 rounded-xl p-3 bg-slate-50/50">
-          <PaymentElement />
-        </div>
-        {error && <div className="text-red-500 text-xs font-medium">{error}</div>}
-        <div className="flex gap-3 pt-4 font-black uppercase text-[10px] tracking-widest">
-           <button 
-             type="button" 
-             onClick={onCancel}
-             className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 py-3 rounded-xl transition-colors italic"
-           >
-             Cancel Changes
-           </button>
-           <button 
-             type="submit" 
-             disabled={!stripe || processing}
-             className="flex-[2] bg-indigo-600 hover:bg-indigo-500 text-white py-3 rounded-xl disabled:bg-slate-400 transition-colors shadow-sm flex items-center justify-center gap-2"
-           >
-             {processing ? <Loader2 className="animate-spin" size={16} /> : 'Complete Payment'}
-           </button>
-        </div>
-      </form>
-    </div>
-  );
-};
 
 export const MyBookings: React.FC = () => {
     const { user, loading } = useAuth();
@@ -172,9 +91,6 @@ export const MyBookings: React.FC = () => {
     const [filter, setFilter] = useState<'active' | 'checked-out' | 'cancelled'>('active');
     const [fetching, setFetching] = useState(true);
     const [editingBooking, setEditingBooking] = useState<(Booking & { propertyName?: string; propertyImage?: string; property?: Property | null }) | null>(null);
-    const [modificationPayment, setModificationPayment] = useState<{ clientSecret: string; amount: number; checkIn: string; checkOut: string; priceDetails: any; selectedBedrooms: any[]; rentalMode: 'entire' | 'room' } | null>(null);
-    const [stripePromise, setStripePromise] = useState<any>(null);
-
     const [globalSettings, setGlobalSettings] = useState<any>(null);
     const [checkoutTargetBooking, setCheckoutTargetBooking] = useState<(Booking & { propertyName?: string; propertyImage?: string; property?: Property | null }) | null>(null);
     const [checkoutProcessing, setCheckoutProcessing] = useState(false);
@@ -184,8 +100,60 @@ export const MyBookings: React.FC = () => {
     const [selectedAdminBooking, setSelectedAdminBooking] = useState<(Booking & { propertyName?: string; propertyImage?: string; property?: Property | null }) | null>(null);
 
     useEffect(() => {
-        getStripe().then(setStripePromise);
-    }, []);
+        const handleUrlCallback = async () => {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('checkout') === 'success') {
+                const bookingId = params.get('bookingId');
+                const newCheckIn = params.get('newCheckIn');
+                const newCheckOut = params.get('newCheckOut');
+                const amount = Number(params.get('amount') || '0');
+                
+                let priceDetails = {};
+                try {
+                    priceDetails = JSON.parse(decodeURIComponent(params.get('priceDetails') || '{}'));
+                } catch (e) {
+                    console.error("Failed to parse price details from URL");
+                }
+                
+                let selectedBedrooms = [];
+                try {
+                    selectedBedrooms = JSON.parse(decodeURIComponent(params.get('selectedBedrooms') || '[]'));
+                } catch (e) {
+                    console.error("Failed to parse selected bedrooms from URL");
+                }
+                
+                const rentalMode = params.get('rentalMode') as 'entire' | 'room' || 'entire';
+
+                if (bookingId && newCheckIn && newCheckOut) {
+                    const docSnap = await getDoc(doc(db, 'bookings', bookingId));
+                    if (docSnap.exists()) {
+                        const currentData = docSnap.data();
+                        if (currentData.checkIn === newCheckIn && currentData.checkOut === newCheckOut) {
+                            window.history.replaceState({}, document.title, window.location.pathname);
+                            return;
+                        }
+                    }
+                    
+                    const oldTotal = docSnap.exists() ? docSnap.data().totalPrice || 0 : 0;
+                    const newTotal = oldTotal + amount;
+
+                    await finalizeBookingUpdateOnRedirect(
+                        bookingId,
+                        newCheckIn,
+                        newCheckOut,
+                        newTotal,
+                        selectedBedrooms,
+                        rentalMode,
+                        priceDetails
+                    );
+                }
+            }
+        };
+
+        if (user) {
+            handleUrlCallback();
+        }
+    }, [user]);
 
     useEffect(() => {
         if (!user) {
@@ -504,33 +472,30 @@ export const MyBookings: React.FC = () => {
             }
         } else if (diff > 0) {
             try {
-                const intentRes = await fetch('/api/create-payment-intent', {
+                const sessionRes = await fetch('/api/create-modification-checkout-session', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
-                        amount: diff,
-                        propertyId: editingBooking.propertyId,
+                        bookingId: editingBooking.id,
                         checkIn,
                         checkOut,
-                        metadata: {
-                            bookingId: editingBooking.id,
-                            type: 'modification_charge'
-                        }
+                        amount: diff,
+                        priceDetails,
+                        selectedBedrooms,
+                        rentalMode
                     })
                 });
 
-                if (!intentRes.ok) throw new Error("Failed to create modification payment intent");
-                const { clientSecret } = await intentRes.json();
-                
-                setModificationPayment({
-                    clientSecret,
-                    amount: diff,
-                    checkIn,
-                    checkOut,
-                    priceDetails,
-                    selectedBedrooms,
-                    rentalMode
-                });
+                if (!sessionRes.ok) {
+                    const errText = await sessionRes.text();
+                    throw new Error(errText || "Failed to create modification checkout session");
+                }
+                const { url } = await sessionRes.json();
+                if (url) {
+                    window.location.href = url;
+                } else {
+                    throw new Error("No redirect URL returned from modification checkout session");
+                }
                 return;
             } catch (e: any) {
                 alert(`Error initializing additional payment: ${e.message}`);
@@ -539,6 +504,95 @@ export const MyBookings: React.FC = () => {
         }
 
         await finalizeBookingUpdate(checkIn, checkOut, newTotal, selectedBedrooms, rentalMode, priceDetails);
+    };
+
+    const finalizeBookingUpdateOnRedirect = async (
+        bookingId: string,
+        checkIn: string,
+        checkOut: string,
+        newTotal: number,
+        selectedBedrooms: any[],
+        rentalMode: 'entire' | 'room',
+        priceDetails?: any
+    ) => {
+        try {
+            const cleanCheckIn = checkIn.split('T')[0];
+            const cleanCheckOut = checkOut.split('T')[0];
+            
+            const bDoc = await getDoc(doc(db, 'bookings', bookingId));
+            if (!bDoc.exists()) {
+                console.error("Booking not found on redirect callback");
+                return;
+            }
+            const bData = bDoc.data();
+            
+            try {
+                const oldRooms = bData.selectedBedrooms || (bData.selectedBedroom ? [bData.selectedBedroom] : []);
+                if (oldRooms.length > 0) {
+                    for (const room of oldRooms) {
+                        await deleteDoc(doc(db, 'blackout_dates', `maint-${bookingId}-${room.roomNumber}`));
+                    }
+                } else {
+                    await deleteDoc(doc(db, 'blackout_dates', `maint-${bookingId}`));
+                }
+            } catch (err) {
+                console.warn("Minor: Failed to cleanup old blackouts", err);
+            }
+
+            const updatedPriceDetails = priceDetails ? { ...priceDetails } : (bData.priceDetails ? { ...bData.priceDetails } : {});
+            const datesChanged = bData.checkIn !== cleanCheckIn || bData.checkOut !== cleanCheckOut;
+            if (datesChanged) {
+                updatedPriceDetails.datesEdited = true;
+                updatedPriceDetails.datesEditedAt = new Date().toISOString();
+            }
+
+            const updatePayload: any = {
+                checkIn: cleanCheckIn,
+                checkOut: cleanCheckOut,
+                totalPrice: newTotal,
+                selectedBedrooms: selectedBedrooms.length > 0 ? selectedBedrooms : null,
+                selectedBedroom: null,
+                updatedAt: serverTimestamp(),
+                priceDetails: updatedPriceDetails
+            };
+            await updateDoc(doc(db, 'bookings', bookingId), updatePayload);
+
+            try {
+                const checkOutDate = new Date(cleanCheckOut + 'T12:00:00'); 
+                const dayAfterDate = new Date(checkOutDate);
+                dayAfterDate.setDate(dayAfterDate.getDate() + 1);
+                const blackoutDateString = dayAfterDate.toISOString().split('T')[0];
+                
+                if (rentalMode === 'room' && selectedBedrooms.length > 0) {
+                    for (const room of selectedBedrooms) {
+                        await setDoc(doc(db, 'blackout_dates', `maint-${bookingId}-${room.roomNumber}`), {
+                            propertyId: bData.propertyId,
+                            date: blackoutDateString,
+                            targetType: 'room',
+                            roomNumber: room.roomNumber,
+                            reason: `Maintenance/Cleaning for Booking ${bData.bookingRef} (Room ${room.roomNumber})`,
+                            createdAt: serverTimestamp()
+                        });
+                    }
+                } else {
+                    await setDoc(doc(db, 'blackout_dates', `maint-${bookingId}`), {
+                        propertyId: bData.propertyId,
+                        date: blackoutDateString,
+                        targetType: 'property',
+                        reason: `Maintenance/Cleaning for Booking ${bData.bookingRef}`,
+                        createdAt: serverTimestamp()
+                    });
+                }
+            } catch (err) {
+                console.warn("Minor: Failed to set new blackouts", err);
+            }
+
+            alert("Booking modification confirmed and paid successfully!");
+            window.location.href = window.location.origin + window.location.pathname;
+        } catch (error: any) {
+            console.error("Error finalizing booking update on redirect:", error);
+            alert(`Error confirming payment callback: ${error.message}`);
+        }
     };
 
     const finalizeBookingUpdate = async (checkIn: string, checkOut: string, newTotal: number, selectedBedrooms: any[], rentalMode: 'entire' | 'room', priceDetails?: any) => {
@@ -662,7 +716,6 @@ export const MyBookings: React.FC = () => {
             
             alert("Booking successfully updated! Notifications have been sent.");
             setEditingBooking(null);
-            setModificationPayment(null);
         } catch (err: any) {
             alert(`Failed to update booking: ${err.message}`);
         }
@@ -1285,7 +1338,7 @@ export const MyBookings: React.FC = () => {
                 )}
             </main>
 
-            {editingBooking && !modificationPayment && (
+            {editingBooking && (
                 <div className="fixed inset-0 bg-slate-900/50 z-50 overflow-y-auto flex items-start justify-center pt-20 pb-20 px-4">
                     <div className="bg-white rounded-3xl overflow-hidden w-full max-w-6xl shadow-2xl">
                         <div className="flex justify-between items-center p-6 border-b border-slate-100">
@@ -1311,26 +1364,6 @@ export const MyBookings: React.FC = () => {
                             />
                         </div>
                     </div>
-                </div>
-            )}
-
-            {modificationPayment && (
-                <div className="fixed inset-0 bg-slate-900/60 z-[60] flex items-center justify-center p-4">
-                    <Elements stripe={stripePromise} options={{ clientSecret: modificationPayment.clientSecret }}>
-                        <ModificationPaymentForm 
-                            clientSecret={modificationPayment.clientSecret}
-                            amount={modificationPayment.amount}
-                            onSuccess={() => finalizeBookingUpdate(
-                                modificationPayment.checkIn, 
-                                modificationPayment.checkOut, 
-                                Math.round(modificationPayment.priceDetails.grandTotal * 100),
-                                modificationPayment.selectedBedrooms,
-                                modificationPayment.rentalMode,
-                                modificationPayment.priceDetails
-                            )}
-                            onCancel={() => setModificationPayment(null)}
-                        />
-                    </Elements>
                 </div>
             )}
 

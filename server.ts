@@ -6,7 +6,7 @@ import Stripe from "stripe";
 import * as dotenv from "dotenv";
 import fs from "fs";
 import cors from "cors";
-import * as admin from "firebase-admin";
+import admin from "firebase-admin";
 import { getFirestore } from "firebase-admin/firestore";
 import { calculatePriceDetails } from "./src/lib/pricing";
 import PDFDocument from "pdfkit";
@@ -461,7 +461,11 @@ async function startServer() {
   });
 
   app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", uptime: process.uptime() });
+    res.json({ 
+      status: "ok", 
+      uptime: process.uptime(),
+      envKeys: Object.keys(process.env)
+    });
   });
 
   app.get("/api/debug-booking", async (req, res) => {
@@ -535,9 +539,11 @@ async function startServer() {
 
       const bookingsSnap = await db.collection("bookings").get();
       const docs = bookingsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const queryRef = (req.query.ref as string || "HLFA1L").toUpperCase();
       const matches = docs.filter((b: any) => 
-        b.bookingRef === "RU7JNH" || 
-        b.id === "RU7JNH" || 
+        b.bookingRef === queryRef || 
+        b.id === queryRef || 
+        (b.bookingRef && b.bookingRef.toUpperCase().includes(queryRef)) ||
         (b.bookingRef && b.bookingRef.toUpperCase().includes("RU7JNH"))
       );
       
@@ -1175,6 +1181,103 @@ async function startServer() {
       res.json({ url: session.url });
     } catch (e: any) {
       console.error("Error creating booking checkout session:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/create-modification-checkout-session", async (req, res) => {
+    try {
+      const { bookingId, checkIn, checkOut, amount, priceDetails, selectedBedrooms, rentalMode } = req.body;
+      if (!bookingId || !checkIn || !checkOut || !amount) {
+        return res.status(400).json({ error: "Missing required modification details." });
+      }
+
+      const key = process.env.STRIPE_SECRET_KEY;
+      const isStripeMissing = !key || key === "sk_test_..." || key.trim() === "";
+
+      let activeDb = db;
+      if (!activeDb) {
+        const configPath = path.resolve(process.cwd(), "firebase-applet-config.json");
+        if (fs.existsSync(configPath)) {
+          const firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+          if (admin.apps.length === 0) {
+            admin.initializeApp({ projectId: firebaseConfig.projectId });
+          }
+          activeDb = getFirestore(admin.app(), firebaseConfig.firestoreDatabaseId || "(default)");
+        }
+      }
+
+      if (!activeDb) {
+        return res.status(500).json({ error: "Database not initialized" });
+      }
+
+      const bookingRef = activeDb.collection('bookings').doc(bookingId);
+      const bookingDoc = await bookingRef.get();
+      if (!bookingDoc.exists) {
+        return res.status(404).json({ error: `Booking with ID ${bookingId} not found` });
+      }
+
+      const bookingData = bookingDoc.data() || {};
+      const propertyId = bookingData.propertyId;
+      const propSnap = await activeDb.collection('properties').doc(propertyId).get();
+      const propertyName = propSnap.exists ? propSnap.data().name : "Lodging Property";
+
+      const referer = req.headers.referer || "";
+      let hostUrl = referer;
+      if (referer) {
+         try {
+           const parsed = new URL(referer);
+           hostUrl = parsed.origin;
+         } catch {
+           hostUrl = `${req.protocol}://${req.get('host')}`;
+         }
+      } else {
+        hostUrl = `${req.protocol}://${req.get('host')}`;
+      }
+      
+      if (!hostUrl.endsWith('/')) {
+         hostUrl = hostUrl + '/';
+      }
+
+      const successUrl = `${hostUrl}my-bookings?checkout=success&bookingId=${bookingId}&newCheckIn=${checkIn}&newCheckOut=${checkOut}&amount=${amount}&priceDetails=${encodeURIComponent(JSON.stringify(priceDetails))}&selectedBedrooms=${encodeURIComponent(JSON.stringify(selectedBedrooms))}&rentalMode=${rentalMode}`;
+
+      if (isStripeMissing) {
+        console.log(`[Server] Stripe keys are not configured. Returning mock checkout URL for booking modification ID ${bookingId}`);
+        return res.json({ url: successUrl, isMock: true });
+      }
+
+      const stripe = new Stripe(key);
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        line_items: [
+          {
+            price_data: {
+              currency: 'usd',
+              product_data: {
+                name: `Reservation Modification at ${propertyName}`,
+                description: `Stay modified to: ${checkIn} to ${checkOut}`,
+              },
+              unit_amount: Math.round(amount),
+            },
+            quantity: 1,
+          },
+        ],
+        mode: 'payment',
+        success_url: successUrl,
+        cancel_url: `${hostUrl}my-bookings`,
+        customer_email: bookingData.guestEmail || undefined,
+        metadata: {
+          bookingId: bookingId,
+          type: 'modification_charge',
+          checkIn,
+          checkOut,
+          amount: String(amount)
+        }
+      });
+
+      res.json({ url: session.url });
+    } catch (e: any) {
+      console.error("Error creating modification checkout session:", e);
       res.status(500).json({ error: e.message });
     }
   });
