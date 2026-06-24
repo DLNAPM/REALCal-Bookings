@@ -1,7 +1,9 @@
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut as fbSignOut, Auth } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer, Firestore } from 'firebase/firestore';
-import configJson from '../../firebase-applet-config.json';
+
+declare const __FIREBASE_APPLET_CONFIG__: any;
+const configJson = typeof __FIREBASE_APPLET_CONFIG__ !== 'undefined' ? __FIREBASE_APPLET_CONFIG__ : {};
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
