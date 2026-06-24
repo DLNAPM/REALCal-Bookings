@@ -17,46 +17,45 @@ dotenv.config();
 // Initialize Firebase Admin
 let db: admin.firestore.Firestore;
 try {
-  const configPath = path.resolve(process.cwd(), "firebase-applet-config.json");
   console.log(`[Server] Initializing Firebase Admin...`);
-  
+  const configPath = path.resolve(process.cwd(), "firebase-applet-config.json");
+  let firebaseConfig: any = {};
   if (fs.existsSync(configPath)) {
-    const firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-    if (admin.apps.length === 0) {
-      admin.initializeApp({ projectId: firebaseConfig.projectId });
+    try {
+      firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+    } catch (e) {
+      console.error("[Server] Error reading firebase-applet-config.json:", e);
     }
-    const dbId = firebaseConfig.firestoreDatabaseId || "(default)";
-    db = getFirestore(admin.app(), dbId);
-    console.log(`[Server] Firebase Admin initialized using config file. Project: ${firebaseConfig.projectId}, DB: ${dbId}`);
-  } else {
-    // Check for environment variables (Render.com / Deployment)
-    const projectId = process.env.FIREBASE_PROJECT_ID;
-    const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-    
-    if (projectId || serviceAccountJson) {
-      if (admin.apps.length === 0) {
-        if (serviceAccountJson) {
-          try {
-            const sa = JSON.parse(serviceAccountJson);
-            admin.initializeApp({
-              credential: admin.credential.cert(sa),
-              projectId: sa.project_id || projectId
-            });
-            console.log(`[Server] Firebase Admin initialized using Service Account JSON.`);
-          } catch (saErr) {
-            console.error("[Server] Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON:", saErr);
-            admin.initializeApp({ projectId });
-          }
-        } else {
-          admin.initializeApp({ projectId });
-          console.log(`[Server] Firebase Admin initialized using Project ID: ${projectId}. (Warning: May require credentials)`);
-        }
+  }
+
+  const projectId = process.env.FIREBASE_PROJECT_ID || firebaseConfig.projectId;
+  const dbId = process.env.FIREBASE_DATABASE_ID || firebaseConfig.firestoreDatabaseId || "(default)";
+  const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+
+  if (admin.apps.length === 0) {
+    if (serviceAccountJson) {
+      try {
+        const sa = JSON.parse(serviceAccountJson);
+        admin.initializeApp({
+          credential: admin.credential.cert(sa),
+          projectId: sa.project_id || projectId
+        });
+        console.log(`[Server] Firebase Admin initialized using Service Account JSON. Project: ${sa.project_id || projectId}, DB: ${dbId}`);
+      } catch (saErr) {
+        console.error("[Server] Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON, falling back to projectId:", saErr);
+        admin.initializeApp({ projectId });
+        console.log(`[Server] Firebase Admin initialized with projectId fallback. Project: ${projectId}, DB: ${dbId}`);
       }
-      const dbId = process.env.FIREBASE_DATABASE_ID || "(default)";
-      db = getFirestore(admin.app(), dbId);
+    } else if (projectId) {
+      admin.initializeApp({ projectId });
+      console.log(`[Server] Firebase Admin initialized using Project ID: ${projectId}. DB: ${dbId} (Warning: Local sandbox runs may require service account credentials for server-side write operations)`);
     } else {
       console.warn(`[Server] No Firebase configuration found. Use AI Studio setup or set FIREBASE_PROJECT_ID / FIREBASE_SERVICE_ACCOUNT_JSON.`);
     }
+  }
+
+  if (admin.apps.length > 0) {
+    db = getFirestore(admin.app(), dbId);
   }
 } catch (e) {
   console.error("[Server] Critical failure during Firebase initialization:", e);
@@ -2058,7 +2057,7 @@ async function startServer() {
       return;
     }
     try {
-      const bookingsSnap = await db.collection("bookings").where("status", "==", "confirmed").get();
+      const bookingsSnap = await db.collection("bookings").get();
       if (bookingsSnap.empty) {
         return;
       }
@@ -2082,6 +2081,9 @@ async function startServer() {
       for (const doc of bookingsSnap.docs) {
         const b = doc.data();
         if (!b) continue;
+
+        // Only remind for confirmed or pending bookings (not cancelled or pending_payment)
+        if (b.status !== "confirmed" && b.status !== "pending") continue;
 
         // Only remind if checkoutRemindersEnabled is true (defaults to true if not set)
         const remindersEnabled = b.checkoutRemindersEnabled !== false;

@@ -82,7 +82,7 @@ service cloud.firestore {
         data.propertyId is string && data.propertyId.size() <= 128 &&
         data.checkIn is string && data.checkIn.size() <= 32 &&
         data.checkOut is string && data.checkOut.size() <= 32 &&
-        data.status in ['pending', 'confirmed', 'cancelled'] &&
+        data.status in ['pending', 'pending_payment', 'confirmed', 'cancelled'] &&
         data.totalPrice is number &&
         data.guests is number &&
         (data.keys().hasAll(['accessCode']) ? data.accessCode is string && data.accessCode.size() <= 64 : true) &&
@@ -205,7 +205,7 @@ service cloud.firestore {
         isValidBooking(incoming()) && 
         incoming().createdAt == request.time && 
         incoming().updatedAt == request.time &&
-        (incoming().status in ['pending', 'confirmed', 'cancelled'] || isAdmin());
+        (incoming().status in ['pending', 'pending_payment', 'confirmed', 'cancelled'] || isAdmin());
         
       allow update: if isSignedIn() && isValidId(bookingId) &&
         incoming().userId == existing().userId &&
