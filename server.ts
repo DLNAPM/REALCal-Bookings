@@ -2194,7 +2194,14 @@ async function startServer() {
         }
       }
     } catch (err: any) {
-      console.error("[Reminders] Error in scheduler loop:", err);
+      const isPermissionDenied = err.message?.includes("PERMISSION_DENIED") || 
+                                 err.message?.includes("insufficient permissions") ||
+                                 err.code === 7;
+      if (isPermissionDenied) {
+        console.warn("[Reminders] Scheduler run skipped: Service account does not have sufficient permissions to query Firestore. This is expected in development sandboxes and will be resolved upon deployment when the FIREBASE_SERVICE_ACCOUNT_JSON secret is set.");
+      } else {
+        console.error("[Reminders] Error in scheduler loop:", err);
+      }
     }
   }
 
