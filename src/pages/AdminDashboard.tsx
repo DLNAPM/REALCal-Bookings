@@ -112,6 +112,7 @@ export const AdminDashboard: React.FC = () => {
   const [contactUsPhone, setContactUsPhone] = useState('');
   const [contactUsAddress, setContactUsAddress] = useState('');
   const [contactUsText, setContactUsText] = useState('');
+  const [cleaningFee, setCleaningFee] = useState<number>(100);
   
   // Image uploader state
   const [uploadingProperty, setUploadingProperty] = useState(false);
@@ -204,6 +205,7 @@ export const AdminDashboard: React.FC = () => {
       setContactUsPhone(globalSettings.contactUsPhone || '');
       setContactUsAddress(globalSettings.contactUsAddress || '');
       setContactUsText(globalSettings.contactUsText || '');
+      setCleaningFee(globalSettings.cleaningFee !== undefined ? globalSettings.cleaningFee : 100);
     }
   }, [globalSettings]);
 
@@ -664,6 +666,21 @@ export const AdminDashboard: React.FC = () => {
         alert(e.message);
     }
   }
+
+  const handleSaveCleaningFee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!db) return alert("Firebase not configured");
+    try {
+        await setDoc(doc(db, 'global_settings', 'settings'), {
+            ...globalSettings,
+            cleaningFee: Number(cleaningFee),
+            updatedAt: serverTimestamp()
+        });
+        alert("Global Cleaning Rate Saved Successfully!");
+    } catch (err: any) {
+        alert("Error saving Cleaning Rate: " + err.message);
+    }
+  };
 
   const handleUpdateCancellationRule = async (index: number, field: string, value: number) => {
       if (!db) return;
@@ -3171,6 +3188,33 @@ C.&S.H. Group Properties, LLC
                             </div>
                         )}
                     </div>
+
+                    {/* Global Cleaning Rate */}
+                    <form onSubmit={handleSaveCleaningFee} className="mb-6 p-4 bg-indigo-50/50 border border-indigo-100 rounded-2xl flex flex-col sm:flex-row sm:items-end justify-between gap-4 shadow-sm">
+                        <div className="flex-1">
+                            <label className="text-xs font-bold text-indigo-900 uppercase tracking-wider block">Global Cleaning Rate</label>
+                            <p className="text-xs text-slate-500 mt-0.5">Applied as a flat one-time service fee to all guest bookings.</p>
+                            <div className="relative mt-2 max-w-[160px]">
+                                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
+                                <input 
+                                    type="number" 
+                                    min="0" 
+                                    value={cleaningFee} 
+                                    onChange={(e) => setCleaningFee(Number(e.target.value))} 
+                                    className="w-full border border-slate-200 rounded-xl py-2 pl-8 pr-4 bg-white shadow-sm font-semibold font-mono text-slate-800" 
+                                    placeholder="100"
+                                    required
+                                />
+                            </div>
+                        </div>
+                        <button 
+                            type="submit" 
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 py-2.5 rounded-xl shadow-md shadow-indigo-100 transition-colors shrink-0 text-xs flex items-center gap-1.5"
+                        >
+                            Update Fee
+                        </button>
+                    </form>
+
                    <form onSubmit={handleCreatePricingRule} className="space-y-4 mb-6 p-4 bg-slate-50 rounded-2xl border border-slate-200">
                        {pricingTarget === 'room' && (
                           <div>
