@@ -16,6 +16,7 @@ import { OptIn } from './pages/OptIn';
 import { PrivacyPolicy } from './pages/PrivacyPolicy';
 import { TermsOfService } from './pages/TermsOfService';
 import { Itinerary } from './pages/Itinerary';
+import { FAQ } from './pages/FAQ';
 import { HelpModal } from './components/HelpModal';
 
 export default function App() {
@@ -33,6 +34,7 @@ export default function App() {
            <Route path="/opt-in" element={<OptIn />} />
            <Route path="/privacy" element={<PrivacyPolicy />} />
            <Route path="/terms" element={<TermsOfService />} />
+           <Route path="/faq" element={<FAQ />} />
            <Route path="*" element={<Home />} />
         </Routes>
         <HelpModal />

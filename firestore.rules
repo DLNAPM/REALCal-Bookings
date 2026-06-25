@@ -112,7 +112,7 @@ service cloud.firestore {
     function isValidPricingRule(data) {
       return data.keys().hasAll(['propertyId', 'type', 'rate', 'createdAt']) && data.keys().size() >= 4 && data.keys().size() <= 10 &&
         data.propertyId is string && data.propertyId.size() <= 128 &&
-        data.type in ['default', 'weekend', 'holiday', 'custom'] &&
+        data.type in ['default', 'weekend', 'holiday', 'custom', 'daily', 'five_day', 'weekly', 'monthly'] &&
         data.rate is number &&
         (data.keys().hasAll(['startDate']) ? data.startDate is string : true) &&
         (data.keys().hasAll(['endDate']) ? data.endDate is string : true) &&

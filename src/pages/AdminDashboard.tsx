@@ -6,7 +6,7 @@ import { Navigate, useNavigate, Link } from 'react-router-dom';
 import { format, eachDayOfInterval, parseISO, addDays } from 'date-fns';
 import { cn } from '../lib/utils';
 import { BlackoutDate, PricingRule, Booking, Property, PropertyManager } from '../types';
-import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight, RefreshCw, MessageSquare, CheckCircle, Loader2, FileText, XCircle } from 'lucide-react';
+import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight, RefreshCw, MessageSquare, CheckCircle, Loader2, FileText, XCircle, HelpCircle, MapPin, Upload } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 const formatPhoneE164 = (phone: string) => {
@@ -101,6 +101,18 @@ export const AdminDashboard: React.FC = () => {
 
   const [globalSettings, setGlobalSettings] = useState<any>(null);
   
+  // CEO, Property Manager and FAQ Contact state variables
+  const [ceoName, setCeoName] = useState('');
+  const [ceoImage, setCeoImage] = useState('');
+  const [ceoContact, setCeoContact] = useState('');
+  const [pmName, setPmName] = useState('');
+  const [pmImage, setPmImage] = useState('');
+  const [pmContact, setPmContact] = useState('');
+  const [contactUsEmail, setContactUsEmail] = useState('');
+  const [contactUsPhone, setContactUsPhone] = useState('');
+  const [contactUsAddress, setContactUsAddress] = useState('');
+  const [contactUsText, setContactUsText] = useState('');
+  
   // Image uploader state
   const [uploadingProperty, setUploadingProperty] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -179,6 +191,21 @@ export const AdminDashboard: React.FC = () => {
       console.error("Admin properties snapshot error:", error);
     });
   }, []);
+
+  useEffect(() => {
+    if (globalSettings) {
+      setCeoName(globalSettings.ceoName || '');
+      setCeoImage(globalSettings.ceoImage || '');
+      setCeoContact(globalSettings.ceoContact || '');
+      setPmName(globalSettings.pmName || '');
+      setPmImage(globalSettings.pmImage || '');
+      setPmContact(globalSettings.pmContact || '');
+      setContactUsEmail(globalSettings.contactUsEmail || '');
+      setContactUsPhone(globalSettings.contactUsPhone || '');
+      setContactUsAddress(globalSettings.contactUsAddress || '');
+      setContactUsText(globalSettings.contactUsText || '');
+    }
+  }, [globalSettings]);
 
   useEffect(() => {
     if (activePropertyId) {
@@ -567,6 +594,54 @@ export const AdminDashboard: React.FC = () => {
           });
       } catch (err: any) { alert(err.message); }
   }
+
+  const handleCeoImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      try {
+        const compressed = await compressImage(files[0]);
+        setCeoImage(compressed);
+      } catch (err) {
+        alert("Failed to read/compress image.");
+      }
+    }
+  };
+
+  const handlePmImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      try {
+        const compressed = await compressImage(files[0]);
+        setPmImage(compressed);
+      } catch (err) {
+        alert("Failed to read/compress image.");
+      }
+    }
+  };
+
+  const handleSaveFaqSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!db) return alert("Firebase not configured");
+    try {
+        await setDoc(doc(db, 'global_settings', 'settings'), {
+            ...globalSettings,
+            ceoName,
+            ceoImage,
+            ceoContact,
+            pmName,
+            pmImage,
+            pmContact,
+            contactUsEmail,
+            contactUsPhone,
+            contactUsAddress,
+            contactUsText,
+            updatedAt: serverTimestamp()
+        });
+        alert("FAQ and Contact Information Saved Successfully!");
+    } catch (err: any) {
+        alert("Error saving FAQ Settings: " + err.message);
+    }
+  };
 
   const handleSaveGlobalSettings = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1818,6 +1893,126 @@ C.&S.H. Group Properties, LLC
                     </div>
                  </div>
               </div>
+          </div>
+
+          {/* FAQ & Executive Team Settings Card */}
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm mt-8">
+              <h2 className="text-xl font-bold mb-6 flex items-center gap-2"><HelpCircle className="text-indigo-600" size={20}/> FAQ & Corporate Team Configuration</h2>
+              
+              <form onSubmit={handleSaveFaqSettings} className="space-y-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                      
+                      {/* Left Column: CEO & PM Uploads */}
+                      <div className="space-y-6">
+                          
+                          {/* CEO Settings */}
+                          <div className="border border-slate-200 p-5 rounded-2xl bg-slate-50/50 space-y-4">
+                              <h3 className="font-bold text-slate-800 text-md flex items-center gap-1.5 border-b border-slate-200 pb-2">
+                                  <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 inline-block"></span> Chief Executive Officer (CEO)
+                              </h3>
+                              
+                              <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-center">
+                                  <div className="sm:col-span-4 flex flex-col items-center">
+                                      <div className="w-20 h-20 rounded-xl bg-indigo-100 border border-slate-200 overflow-hidden flex items-center justify-center relative shadow-sm">
+                                          {ceoImage ? (
+                                              <img src={ceoImage} alt="CEO Preview" className="w-full h-full object-cover" />
+                                          ) : (
+                                              <span className="text-indigo-700 font-extrabold text-xs">No Photo</span>
+                                          )}
+                                      </div>
+                                      <label className="mt-2 text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-white hover:bg-indigo-50 border border-indigo-200 px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors shadow-sm inline-flex items-center gap-1">
+                                          <Upload size={12} /> Upload File
+                                          <input type="file" accept="image/*" onChange={handleCeoImageUpload} className="hidden" />
+                                      </label>
+                                  </div>
+                                  
+                                  <div className="sm:col-span-8 space-y-3">
+                                      <div>
+                                          <label className="text-[11px] font-bold text-slate-500 uppercase tracking-tight block">CEO Name</label>
+                                          <input type="text" value={ceoName} onChange={(e) => setCeoName(e.target.value)} placeholder="e.g. Cynthia S. H. Robinson" className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm" />
+                                      </div>
+                                      <div>
+                                          <label className="text-[11px] font-bold text-slate-500 uppercase tracking-tight block">CEO Contact Email / Info</label>
+                                          <input type="text" value={ceoContact} onChange={(e) => setCeoContact(e.target.value)} placeholder="e.g. cynthia@cshproperties.com" className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm" />
+                                      </div>
+                                  </div>
+                              </div>
+                          </div>
+
+                          {/* PM Settings */}
+                          <div className="border border-slate-200 p-5 rounded-2xl bg-slate-50/50 space-y-4">
+                              <h3 className="font-bold text-slate-800 text-md flex items-center gap-1.5 border-b border-slate-200 pb-2">
+                                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span> Property Manager
+                              </h3>
+                              
+                              <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-center">
+                                  <div className="sm:col-span-4 flex flex-col items-center">
+                                      <div className="w-20 h-20 rounded-xl bg-emerald-100 border border-slate-200 overflow-hidden flex items-center justify-center relative shadow-sm">
+                                          {pmImage ? (
+                                              <img src={pmImage} alt="PM Preview" className="w-full h-full object-cover" />
+                                          ) : (
+                                              <span className="text-emerald-700 font-extrabold text-xs">No Photo</span>
+                                          )}
+                                      </div>
+                                      <label className="mt-2 text-xs font-bold text-emerald-600 hover:text-emerald-800 bg-white hover:bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors shadow-sm inline-flex items-center gap-1">
+                                          <Upload size={12} /> Upload File
+                                          <input type="file" accept="image/*" onChange={handlePmImageUpload} className="hidden" />
+                                      </label>
+                                  </div>
+                                  
+                                  <div className="sm:col-span-8 space-y-3">
+                                      <div>
+                                          <label className="text-[11px] font-bold text-slate-500 uppercase tracking-tight block">Manager Name</label>
+                                          <input type="text" value={pmName} onChange={(e) => setPmName(e.target.value)} placeholder="e.g. Markus Vance" className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm" />
+                                      </div>
+                                      <div>
+                                          <label className="text-[11px] font-bold text-slate-500 uppercase tracking-tight block">Manager Contact Email / Info</label>
+                                          <input type="text" value={pmContact} onChange={(e) => setPmContact(e.target.value)} placeholder="e.g. markus@cshproperties.com" className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm" />
+                                      </div>
+                                  </div>
+                              </div>
+                          </div>
+
+                      </div>
+
+                      {/* Right Column: Contact Us & FAQ Footer Info */}
+                      <div className="border border-slate-200 p-5 rounded-2xl bg-slate-50/50 space-y-4 flex flex-col justify-between">
+                          <div className="space-y-4">
+                              <h3 className="font-bold text-slate-800 text-md flex items-center gap-1.5 border-b border-slate-200 pb-2">
+                                  <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 inline-block"></span> Contact Us Information (FAQ Page Footer)
+                              </h3>
+                              
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                  <div>
+                                      <label className="text-[11px] font-bold text-slate-500 uppercase tracking-tight block">Support Email</label>
+                                      <input type="email" value={contactUsEmail} onChange={(e) => setContactUsEmail(e.target.value)} placeholder="e.g. support@cshproperties.com" className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm" />
+                                  </div>
+                                  <div>
+                                      <label className="text-[11px] font-bold text-slate-500 uppercase tracking-tight block">Support Phone</label>
+                                      <input type="text" value={contactUsPhone} onChange={(e) => setContactUsPhone(e.target.value)} placeholder="e.g. (800) 555-0199" className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm" />
+                                  </div>
+                              </div>
+
+                              <div>
+                                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-tight block">Corporate Headquarters / Office Address</label>
+                                  <input type="text" value={contactUsAddress} onChange={(e) => setContactUsAddress(e.target.value)} placeholder="e.g. 100 Starling Blvd, Suite 400, Atlanta, GA 30309" className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm" />
+                              </div>
+
+                              <div>
+                                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-tight block">Custom Help Text / Subtitle</label>
+                                  <textarea rows={3} value={contactUsText} onChange={(e) => setContactUsText(e.target.value)} placeholder="e.g. Our friendly support team is available 24/7 to assist you..." className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm resize-none" />
+                              </div>
+                          </div>
+
+                          <div className="pt-4 mt-auto">
+                              <button type="submit" className="w-full bg-slate-900 hover:bg-indigo-600 text-white px-5 py-3 rounded-xl font-bold transition-colors shadow-md">
+                                  Save FAQ & Corporate Settings
+                              </button>
+                          </div>
+                      </div>
+
+                  </div>
+              </form>
           </div>
 
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm mt-8">

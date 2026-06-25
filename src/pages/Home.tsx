@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { signIn, signOut, db } from '../lib/firebase';
 import { collection, query, onSnapshot } from 'firebase/firestore';
 import { Link, useNavigate } from 'react-router-dom';
-import { Calendar as CalendarIcon, Key, LogOut, ChevronRight, Lock, BellRing, ShieldCheck, MessageSquare } from 'lucide-react';
+import { Calendar as CalendarIcon, Key, LogOut, ChevronRight, Lock, BellRing, ShieldCheck, MessageSquare, HelpCircle } from 'lucide-react';
 import { Property } from '../types';
 import { PrivacyPolicyModal } from '../components/PrivacyPolicyModal';
 
@@ -109,6 +109,14 @@ export const Home: React.FC = () => {
                                     <span className="hidden md:inline">My Bookings</span>
                                 </Link>
                                 <Link 
+                                  to="/faq" 
+                                  className="text-slate-600 hover:text-indigo-600 font-bold flex items-center gap-1 text-xs sm:text-sm transition-colors rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 hover:bg-slate-50"
+                                  title="Frequently Asked Questions"
+                                >
+                                    <HelpCircle size={15}/>
+                                    <span className="hidden md:inline">FAQ</span>
+                                </Link>
+                                <Link 
                                   to="/opt-in" 
                                   className="text-slate-600 hover:text-indigo-600 font-bold flex items-center gap-1 text-xs sm:text-sm transition-colors rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 hover:bg-slate-50"
                                   title="Opt-in Preferences"
@@ -133,6 +141,9 @@ export const Home: React.FC = () => {
                             </div>
                         ) : (
                             <div className="flex items-center gap-3 sm:gap-4">
+                                <Link to="/faq" className="text-slate-500 hover:text-indigo-600 font-bold text-[10px] sm:text-xs uppercase tracking-widest transition-colors flex items-center gap-1">
+                                    <HelpCircle size={14}/> FAQ
+                                </Link>
                                 <Link to="/opt-in" className="text-slate-500 hover:text-indigo-600 font-bold text-[10px] sm:text-xs uppercase tracking-widest transition-colors">
                                     Opt-In Preview
                                 </Link>
