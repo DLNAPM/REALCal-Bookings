@@ -69,8 +69,8 @@ export const FAQ: React.FC = () => {
       answer: "Standard check-in time begins at 4:00 PM on your check-in date, and check-out time is by 11:00 AM on your check-out date. These times ensure our cleaning staff has adequate time to prepare the property for the next guest."
     },
     {
-      question: "What is the cancellation policy at The Starling Hotel?",
-      answer: "At The Starling Hotel, cancellations can be made via the My Bookings section. Cancellations made outside of the late-cancellation window (typically 48 hours prior to check-in) are fully refundable. Late cancellations or same-day cancellations forfeit the cancellation option or are subject to fee penalties according to global policy settings."
+      question: "What is the cancellation policy at your Properties?",
+      answer: "At our Properties, cancellations can be made via the My Bookings section. Cancellations made outside of the late-cancellation window (typically 48 hours prior to check-in) are fully refundable. Late cancellations or same-day cancellations forfeit the cancellation option or are subject to fee penalties according to global policy settings."
     }
   ];
 
