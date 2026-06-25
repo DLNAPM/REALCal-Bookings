@@ -6,7 +6,7 @@ import { Navigate, useNavigate, Link } from 'react-router-dom';
 import { format, eachDayOfInterval, parseISO, addDays } from 'date-fns';
 import { cn } from '../lib/utils';
 import { BlackoutDate, PricingRule, Booking, Property, PropertyManager } from '../types';
-import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight, RefreshCw, MessageSquare, CheckCircle, Loader2, FileText, XCircle, HelpCircle, MapPin, Upload } from 'lucide-react';
+import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight, RefreshCw, MessageSquare, CheckCircle, Loader2, FileText, XCircle, HelpCircle, MapPin, Upload, Database } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 const formatPhoneE164 = (phone: string) => {
@@ -113,6 +113,10 @@ export const AdminDashboard: React.FC = () => {
   const [contactUsAddress, setContactUsAddress] = useState('');
   const [contactUsText, setContactUsText] = useState('');
   const [cleaningFee, setCleaningFee] = useState<number>(100);
+  
+  // Backup Import/Export states
+  const [importingBackup, setImportingBackup] = useState(false);
+  const [importStatus, setImportStatus] = useState('');
   
   // Image uploader state
   const [uploadingProperty, setUploadingProperty] = useState(false);
@@ -679,6 +683,162 @@ export const AdminDashboard: React.FC = () => {
         alert("Global Cleaning Rate Saved Successfully!");
     } catch (err: any) {
         alert("Error saving Cleaning Rate: " + err.message);
+    }
+  };
+
+  const handleExportBackup = async () => {
+    try {
+      if (!db) throw new Error("Database not initialized");
+      
+      // Fetch Global Settings
+      const gsSnap = await getDoc(doc(db, 'global_settings', 'settings'));
+      const gsData = gsSnap.exists() ? gsSnap.data() : null;
+
+      // Fetch Properties
+      const propSnap = await getDocs(collection(db, 'properties'));
+      const propertiesList = propSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+      // Fetch Pricing Rules
+      const prSnap = await getDocs(collection(db, 'pricing_rules'));
+      const pricingRulesList = prSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+      // Fetch Blackout Dates
+      const boSnap = await getDocs(collection(db, 'blackout_dates'));
+      const blackoutsList = boSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+      const backupData = {
+        backupVersion: "1.0",
+        exportedAt: new Date().toISOString(),
+        globalSettings: gsData,
+        properties: propertiesList,
+        pricingRules: pricingRulesList,
+        blackoutDates: blackoutsList
+      };
+
+      const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `realcal_config_backup_${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert("Failed to export backup: " + err.message);
+    }
+  };
+
+  const handleImportBackup = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !db) return;
+
+    setImportingBackup(true);
+    setImportStatus("Reading backup file...");
+
+    try {
+      const text = await file.text();
+      const backup = JSON.parse(text);
+
+      // Simple structural validation
+      if (!backup || typeof backup !== 'object') {
+        throw new Error("Invalid backup file: not a JSON object");
+      }
+
+      if (
+        !('globalSettings' in backup) && 
+        !('properties' in backup) && 
+        !('pricingRules' in backup) && 
+        !('blackoutDates' in backup)
+      ) {
+        throw new Error("Invalid backup file: missing required database configuration fields");
+      }
+
+      const confirmRestore = window.confirm(
+        "⚠️ WARNING: Restoring this backup will replace existing configurations (Global Settings, Properties, Pricing Rules, and Blackout Dates) with the backup content.\n\n" +
+        "This will NOT delete your bookings, user profiles, or leases.\n\n" +
+        "Are you sure you want to proceed?"
+      );
+
+      if (!confirmRestore) {
+        setImportingBackup(false);
+        setImportStatus("");
+        e.target.value = '';
+        return;
+      }
+
+      // Step 1: Restore Global Settings if present
+      if (backup.globalSettings) {
+        setImportStatus("Restoring global settings...");
+        await setDoc(doc(db, 'global_settings', 'settings'), {
+          ...backup.globalSettings,
+          updatedAt: serverTimestamp()
+        });
+      }
+
+      // Step 2: Delete existing pricing rules and restore from backup
+      setImportStatus("Cleaning existing pricing rules...");
+      const prSnap = await getDocs(collection(db, 'pricing_rules'));
+      const prBatch = writeBatch(db);
+      prSnap.docs.forEach(doc => prBatch.delete(doc.ref));
+      await prBatch.commit();
+
+      if (Array.isArray(backup.pricingRules) || Array.isArray(backup.pricingRulesList)) {
+        setImportStatus("Restoring pricing rules...");
+        const rules = backup.pricingRules || backup.pricingRulesList;
+        for (const rule of rules) {
+          if (rule.id) {
+            const data = { ...rule };
+            delete data.id;
+            await setDoc(doc(db, 'pricing_rules', rule.id), data);
+          }
+        }
+      }
+
+      // Step 3: Delete existing blackout dates and restore from backup
+      setImportStatus("Cleaning existing blackout dates...");
+      const boSnap = await getDocs(collection(db, 'blackout_dates'));
+      const boBatch = writeBatch(db);
+      boSnap.docs.forEach(doc => boBatch.delete(doc.ref));
+      await boBatch.commit();
+
+      if (Array.isArray(backup.blackoutDates) || Array.isArray(backup.blackoutsList)) {
+        setImportStatus("Restoring blackout dates...");
+        const blackouts = backup.blackoutDates || backup.blackoutsList;
+        for (const bo of blackouts) {
+          if (bo.id) {
+            const data = { ...bo };
+            delete data.id;
+            await setDoc(doc(db, 'blackout_dates', bo.id), data);
+          }
+        }
+      }
+
+      // Step 4: Delete existing properties and restore from backup
+      setImportStatus("Cleaning existing properties...");
+      const propSnap = await getDocs(collection(db, 'properties'));
+      const propBatch = writeBatch(db);
+      propSnap.docs.forEach(doc => propBatch.delete(doc.ref));
+      await propBatch.commit();
+
+      if (Array.isArray(backup.properties)) {
+        setImportStatus("Restoring properties...");
+        for (const prop of backup.properties) {
+          if (prop.id) {
+            const data = { ...prop };
+            delete data.id;
+            await setDoc(doc(db, 'properties', prop.id), data);
+          }
+        }
+      }
+
+      setImportStatus("Backup restored successfully!");
+      alert("Database configuration backup has been successfully imported and restored!");
+      window.location.reload();
+    } catch (err: any) {
+      alert("Import failed: " + err.message);
+    } finally {
+      setImportingBackup(false);
+      setImportStatus("");
+      e.target.value = '';
     }
   };
 
@@ -2030,6 +2190,83 @@ C.&S.H. Group Properties, LLC
 
                   </div>
               </form>
+          </div>
+
+          {/* Database Configuration Backup & Recovery Section */}
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm mt-8">
+              <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                  <Database className="text-indigo-600" size={20} /> Database Configuration Backup & Recovery
+              </h2>
+              <p className="text-sm text-slate-500 mb-6">
+                  Manage portable backups of your application's global configuration state. Use this panel to download a secure snapshot of your settings, properties, rooms, pricing structures, and blocked dates, or to restore from an existing config file.
+              </p>
+
+              {importingBackup && (
+                  <div className="mb-6 p-4 bg-indigo-50 border border-indigo-100 rounded-2xl flex items-center gap-3 animate-pulse">
+                      <RefreshCw className="animate-spin text-indigo-600" size={20} />
+                      <div>
+                          <p className="text-sm font-bold text-indigo-900">Restoring Database Configuration...</p>
+                          <p className="text-xs text-indigo-700 mt-0.5">{importStatus}</p>
+                      </div>
+                  </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Export Column */}
+                  <div className="border border-slate-100 p-5 rounded-2xl bg-slate-50/50 flex flex-col justify-between">
+                      <div>
+                          <h3 className="font-bold text-slate-800 text-md flex items-center gap-1.5 border-b border-slate-100 pb-2 mb-3">
+                              <span className="w-2 h-2 rounded-full bg-indigo-500 inline-block"></span> Export Backup Configuration
+                          </h3>
+                          <p className="text-xs text-slate-500 leading-relaxed mb-4">
+                              Creates and downloads a structured <strong>JSON config file</strong> containing:
+                          </p>
+                          <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 mb-6 leading-relaxed">
+                              <li>Global Booking Settings & cancellation policies</li>
+                              <li>Full Properties catalog (including rooms and amenities)</li>
+                              <li>Special pricing rules & rates</li>
+                              <li>Property blackout and maintenance dates</li>
+                          </ul>
+                      </div>
+                      <div>
+                          <button 
+                              type="button" 
+                              onClick={handleExportBackup}
+                              disabled={importingBackup}
+                              className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white font-bold py-3 px-4 rounded-xl transition-colors shadow-md shadow-indigo-100 flex items-center justify-center gap-2 text-sm"
+                          >
+                              <FileDown size={16} /> Export Backup File (.json)
+                          </button>
+                      </div>
+                  </div>
+
+                  {/* Import Column */}
+                  <div className="border border-slate-100 p-5 rounded-2xl bg-slate-50/50 flex flex-col justify-between">
+                      <div>
+                          <h3 className="font-bold text-slate-800 text-md flex items-center gap-1.5 border-b border-slate-100 pb-2 mb-3">
+                              <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span> Import & Restore Configuration
+                          </h3>
+                          <p className="text-xs text-slate-500 leading-relaxed mb-4">
+                              Upload a valid configuration file to fully restore database settings. 
+                          </p>
+                          <div className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-xl p-3 mb-6 leading-relaxed">
+                              <strong>⚠️ Overwrite Notice:</strong> Restoring a backup replaces existing global configurations. It is non-destructive and will <strong>NOT</strong> delete, modify, or affect active guest bookings, leases, or user profiles.
+                          </div>
+                      </div>
+                      <div>
+                          <label className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 px-4 rounded-xl transition-colors shadow-md cursor-pointer flex items-center justify-center gap-2 text-sm text-center">
+                              <Upload size={16} /> Import & Restore Backup
+                              <input 
+                                  type="file" 
+                                  accept=".json" 
+                                  onChange={handleImportBackup} 
+                                  disabled={importingBackup}
+                                  className="hidden" 
+                              />
+                          </label>
+                      </div>
+                  </div>
+              </div>
           </div>
 
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm mt-8">
