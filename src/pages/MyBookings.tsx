@@ -866,9 +866,9 @@ export const MyBookings: React.FC = () => {
                             const isCheckoutToday = bookingCheckOutYMD === todayYMD;
 
                             // Users can edit dates as long as it's active, they haven't checked out yet, and checkout is NOT today
-                            const canEditDates = (booking.status === 'confirmed' || booking.status === 'pending') && !booking.checkedOut && !isCheckoutToday;
+                            const canEditDates = (booking.status === 'confirmed' || booking.status === 'pending' || booking.status === 'pending_payment') && !booking.checkedOut && !isCheckoutToday;
                             // Guest can cancel if they haven't checked out yet, and check-in is NOT today or in the past (same-day bookings forfeit cancellation)
-                            const canCancel = (booking.status === 'confirmed' || booking.status === 'pending') && !booking.checkedOut && !isSameDayOrPastCheckIn;
+                            const canCancel = (booking.status === 'confirmed' || booking.status === 'pending' || booking.status === 'pending_payment') && !booking.checkedOut && !isSameDayOrPastCheckIn;
                             const isLate = hoursUntilCheckIn < freeCancelHoursBefore;
 
                             return (
@@ -888,7 +888,7 @@ export const MyBookings: React.FC = () => {
                                                 booking.status === 'cancelled' ? 'bg-rose-500' :
                                                 'bg-amber-500'
                                             }`}>
-                                            {booking.checkedOut ? 'Checked Out' : booking.status}
+                                            {booking.checkedOut ? 'Checked Out' : (booking.status === 'pending_payment' ? 'Pending Payment' : (booking.status === 'confirmed' ? 'Confirmed' : (booking.status === 'pending' ? 'Pending' : (booking.status === 'cancelled' ? 'Cancelled' : booking.status))))}
                                         </div>
                                     </div>
                                     
@@ -1106,7 +1106,7 @@ export const MyBookings: React.FC = () => {
                                                 </Link>
                                             )}
 
-                                            {(booking.status === 'confirmed' || booking.status === 'pending') && !booking.checkedOut && (
+                                            {(booking.status === 'confirmed' || booking.status === 'pending' || booking.status === 'pending_payment') && !booking.checkedOut && (
                                                 <div className="flex flex-col gap-3 w-full">
                                                     {/* Check-In Button */}
                                                     {!booking.checkedIn && (() => {
