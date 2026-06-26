@@ -54,7 +54,7 @@ export const FAQ: React.FC = () => {
     },
     {
       question: "Do your Properties offer an airport shuttle?",
-      answer: "No, airport shuttle is not provided to guests. Guests may use taxis or rideshre services for airport transfers."
+      answer: "No, airport shuttle is not provided to guests. Guests may use taxis or their own rideshare services like Uber or Lift for airport transfers."
     },
     {
       question: "Do your Properties provide free Wi-Fi?",
