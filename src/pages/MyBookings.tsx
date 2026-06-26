@@ -394,8 +394,8 @@ export const MyBookings: React.FC = () => {
                            checkOut: booking.checkOut,
                            totalAmount: booking.totalPrice,
                            propertyName: booking.propertyName || 'Property',
-                           guestName: user?.displayName || booking.guestName || 'Guest',
-                           guestEmail: user?.email || booking.guestEmail || '',
+                           guestName: booking.guestName || user?.displayName || 'Guest',
+                           guestEmail: booking.guestEmail || user?.email || '',
                            guestPhone: booking.guestPhone || '',
                            selectedBedrooms: rooms,
                            isTestProperty: isTestProperty
@@ -771,7 +771,12 @@ export const MyBookings: React.FC = () => {
                 </h1>
 
                 {user?.role === 'admin' ? (
-                    <AdminBookings bookings={bookings} globalSettings={globalSettings} />
+                    <AdminBookings 
+                        bookings={bookings} 
+                        globalSettings={globalSettings} 
+                        onCancelBooking={handleCancel}
+                        onCheckoutBooking={executeCheckout}
+                    />
                 ) : (
                     <>
                         <div className="bg-amber-50/50 border border-amber-200/60 rounded-3xl p-6 mb-8 text-sm font-medium text-slate-700 space-y-2.5">
@@ -868,7 +873,7 @@ export const MyBookings: React.FC = () => {
                             // Users can edit dates as long as it's active, they haven't checked out yet, and checkout is NOT today
                             const canEditDates = (booking.status === 'confirmed' || booking.status === 'pending' || booking.status === 'pending_payment') && !booking.checkedOut && !isCheckoutToday;
                             // Guest can cancel if they haven't checked out yet, and check-in is NOT today or in the past (same-day bookings forfeit cancellation)
-                            const canCancel = (booking.status === 'confirmed' || booking.status === 'pending' || booking.status === 'pending_payment') && !booking.checkedOut && !isSameDayOrPastCheckIn;
+                            const canCancel = ((booking.status === 'confirmed' || booking.status === 'pending' || booking.status === 'pending_payment') && !booking.checkedOut && !isSameDayOrPastCheckIn) || (user?.role === 'admin');
                             const isLate = hoursUntilCheckIn < freeCancelHoursBefore;
 
                             return (
@@ -1136,11 +1141,11 @@ export const MyBookings: React.FC = () => {
                                                         );
                                                     })()}
 
-                                                    {/* Check-Out Button (Only available if already checked-in) */}
-                                                    {booking.checkedIn && (() => {
+                                                    {/* Check-Out Button (Only available if already checked-in, or if admin) */}
+                                                    {(booking.checkedIn || user?.role === 'admin') && (() => {
                                                         const dateParts = booking.checkIn.split('T')[0].split('-').map(Number);
                                                         const checkInTimeObj = new Date(dateParts[0], dateParts[1] - 1, dateParts[2], 0, 0, 0);
-                                                        const isPastCheckInStart = new Date() >= checkInTimeObj;
+                                                        const isPastCheckInStart = new Date() >= checkInTimeObj || user?.role === 'admin';
                                                         return isPastCheckInStart && (
                                                             <button 
                                                                 id={`btn-checkout-${booking.id}`}

@@ -7,11 +7,48 @@ import { getBookingPriceBreakdown } from '../pages/MyBookings';
 interface AdminBookingsProps {
     bookings: (Booking & { propertyName?: string; propertyImage?: string; property?: Property | null })[];
     globalSettings: any;
+    onCancelBooking?: (booking: any) => Promise<void>;
+    onCheckoutBooking?: (bookingId: string) => Promise<void>;
 }
 
-export const AdminBookings: React.FC<AdminBookingsProps> = ({ bookings, globalSettings }) => {
+export const AdminBookings: React.FC<AdminBookingsProps> = ({ 
+    bookings, 
+    globalSettings,
+    onCancelBooking,
+    onCheckoutBooking
+}) => {
     const [adminSortOrder, setAdminSortOrder] = useState<'asc' | 'desc'>('desc');
-    const [selectedAdminBooking, setSelectedAdminBooking] = useState<(Booking & { propertyName?: string; propertyImage?: string; property?: Property | null }) | null>(null);
+    const [selectedAdminBookingId, setSelectedAdminBookingId] = useState<string | null>(null);
+    const [processingAction, setProcessingAction] = useState<boolean>(false);
+
+    const selectedAdminBooking = selectedAdminBookingId 
+        ? bookings.find(b => b.id === selectedAdminBookingId) || null
+        : null;
+
+    const handleAdminCancel = async (booking: any) => {
+        if (!onCancelBooking) return;
+        setProcessingAction(true);
+        try {
+            await onCancelBooking(booking);
+        } catch (err: any) {
+            console.error(err);
+        } finally {
+            setProcessingAction(false);
+        }
+    };
+
+    const handleAdminCheckout = async (bookingId: string) => {
+        if (!onCheckoutBooking) return;
+        if (!window.confirm("Are you sure you want to force check-out this booking on behalf of the guest? This will instantly deactivate their entry PIN code.")) return;
+        setProcessingAction(true);
+        try {
+            await onCheckoutBooking(bookingId);
+        } catch (err: any) {
+            console.error(err);
+        } finally {
+            setProcessingAction(false);
+        }
+    };
 
     const adminSortedBookings = [...bookings].sort((a, b) => {
         const dateA = a.checkIn || '';
@@ -90,7 +127,7 @@ export const AdminBookings: React.FC<AdminBookingsProps> = ({ bookings, globalSe
                                                 <td className="py-3.5 px-4 font-bold font-mono">
                                                     <button
                                                         type="button"
-                                                        onClick={() => setSelectedAdminBooking(b)}
+                                                        onClick={() => setSelectedAdminBookingId(b.id)}
                                                         className={`hover:underline cursor-pointer tracking-wider text-left ${isSelected ? 'text-indigo-850 font-black underline' : 'text-indigo-600 hover:text-indigo-700'}`}
                                                     >
                                                         {refNum}
@@ -154,7 +191,7 @@ export const AdminBookings: React.FC<AdminBookingsProps> = ({ bookings, globalSe
                                 </div>
                                 <button 
                                     type="button" 
-                                    onClick={() => setSelectedAdminBooking(null)}
+                                    onClick={() => setSelectedAdminBookingId(null)}
                                     className="p-1.5 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 font-bold transition-colors cursor-pointer"
                                 >
                                     <X size={16} />
@@ -284,15 +321,42 @@ export const AdminBookings: React.FC<AdminBookingsProps> = ({ bookings, globalSe
                                 })()}
                             </div>
 
-                            <div className="pt-4 border-t border-slate-150">
-                                <Link 
-                                    to={`/itinerary/${selectedAdminBooking.id}`}
-                                    className="w-full bg-indigo-600 hover:bg-indigo-750 text-white font-extrabold py-3.5 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-xs uppercase tracking-wider text-center cursor-pointer"
-                                    id="admin-btn-itinerary"
-                                >
-                                    <Printer size={15} /> View Itinerary
-                                </Link>
-                            </div>
+                            {(() => {
+                                const isActive = selectedAdminBooking.status !== 'cancelled' && !selectedAdminBooking.checkedOut;
+                                return (
+                                    <div className="pt-4 border-t border-slate-150 space-y-3">
+                                        {isActive && (
+                                            <>
+                                                <button
+                                                    type="button"
+                                                    disabled={processingAction}
+                                                    onClick={() => handleAdminCheckout(selectedAdminBooking.id)}
+                                                    className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-extrabold py-3.5 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-xs uppercase tracking-wider text-center cursor-pointer font-sans"
+                                                >
+                                                    🔔 {processingAction ? 'Processing...' : 'Complete Electronic Check-out'}
+                                                </button>
+
+                                                <button
+                                                    type="button"
+                                                    disabled={processingAction}
+                                                    onClick={() => handleAdminCancel(selectedAdminBooking)}
+                                                    className="w-full bg-white border-2 border-rose-150 hover:bg-rose-50 hover:border-rose-250 text-rose-600 disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200 disabled:cursor-not-allowed font-extrabold py-3.5 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-xs uppercase tracking-wider text-center cursor-pointer font-sans"
+                                                >
+                                                    ❌ {processingAction ? 'Processing...' : 'Cancel Booking'}
+                                                </button>
+                                            </>
+                                        )}
+
+                                        <Link 
+                                            to={`/itinerary/${selectedAdminBooking.id}`}
+                                            className="w-full bg-indigo-600 hover:bg-indigo-750 text-white font-extrabold py-3.5 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-xs uppercase tracking-wider text-center cursor-pointer"
+                                            id="admin-btn-itinerary"
+                                        >
+                                            <Printer size={15} /> View Itinerary
+                                        </Link>
+                                    </div>
+                                );
+                            })()}
                         </div>
                     ) : (
                         <div className="bg-slate-100/50 border border-slate-200 border-dashed rounded-3xl p-8 text-center flex flex-col items-center justify-center min-h-[300px]">
