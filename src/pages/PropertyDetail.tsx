@@ -180,36 +180,21 @@ export const PropertyDetail: React.FC = () => {
                     )}
 
                     {/* Property Address - THE LAST LINE IN PROPERTY DETAILS */}
-                    <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div className="flex-1">
-                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Property Address</span>
-                            {property.location ? (
-                                <a 
-                                    href={getMapLink(property.location)}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-2 group cursor-pointer"
-                                    title={`Open in ${isAppleOS() ? 'Apple Maps' : 'Google Maps'}`}
-                                >
-                                    <div className="w-10 h-10 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center transition-colors shadow-sm shrink-0">
-                                        <MapPin size={20} className="animate-pulse" />
-                                    </div>
-                                    <div className="text-left">
-                                        <span className="font-bold text-slate-800 text-base md:text-lg underline decoration-slate-300 decoration-2 underline-offset-4 group-hover:text-indigo-600 group-hover:decoration-indigo-400 transition-all">
-                                            {property.location}
-                                        </span>
-                                        <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
-                                            📍 Click to view on {isAppleOS() ? 'Apple Maps' : 'Google Maps'} ({isAppleOS() ? 'macOS/iOS' : 'Android/Web'})
-                                        </span>
-                                    </div>
-                                </a>
-                            ) : (
-                                <div className="flex items-center gap-2 text-slate-500 font-medium text-base">
-                                    <MapPin size={20} className="text-slate-400" />
-                                    <span>Vacation Rental Address</span>
-                                </div>
-                            )}
-                        </div>
+                    <div className="pt-4 border-t border-slate-100 flex items-start sm:items-center gap-2 text-base md:text-lg text-slate-800">
+                        <span className="font-bold text-slate-900 shrink-0">Address:</span>
+                        {property.location ? (
+                            <a 
+                                href={getMapLink(property.location)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="font-bold text-indigo-600 underline decoration-indigo-300 decoration-2 underline-offset-4 hover:text-indigo-700 hover:decoration-indigo-500 transition-all cursor-pointer text-left"
+                                title={`Open in ${isAppleOS() ? 'Apple Maps' : 'Google Maps'} for directions`}
+                            >
+                                {property.location}
+                            </a>
+                        ) : (
+                            <span className="text-slate-500 italic">Not configured</span>
+                        )}
                     </div>
                 </div>
 
