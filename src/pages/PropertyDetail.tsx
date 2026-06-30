@@ -4,8 +4,9 @@ import { Calendar } from '../components/Calendar';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
-import { ChevronLeft, ChevronRight, X, Calendar as CalendarIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, MapPin, Home, Shield, Sparkles } from 'lucide-react';
 import { Property } from '../types';
+import { isAppleOS, getMapLink } from '../lib/utils';
 
 import { LegalFooter } from '../components/LegalFooter';
 
@@ -122,6 +123,96 @@ export const PropertyDetail: React.FC = () => {
                    )}
                </div>
                
+                {/* Property Details card (with Address as the Last line of details) */}
+                <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 md:p-8 mt-4 mb-4 text-left">
+                    <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">
+                        <Sparkles className="text-indigo-600 animate-pulse" size={20} /> Property Details
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 text-sm mb-6">
+                        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col gap-1.5">
+                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Accommodation Type</span>
+                            <span className="font-semibold text-slate-800 text-base">
+                                {property.allowIndividualRoomRental ? 'Entire Home & Room Rentals' : 'Entire Home Rental'}
+                            </span>
+                        </div>
+                        
+                        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col gap-1.5">
+                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Bedrooms Layout</span>
+                            <span className="font-semibold text-slate-800 text-base">
+                                {property.bedrooms && property.bedrooms.length > 0 
+                                    ? `${property.bedrooms.length} Configured Bedroom${property.bedrooms.length > 1 ? 's' : ''}` 
+                                    : 'Comfortable Family Layout'}
+                            </span>
+                        </div>
+
+                        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col gap-1.5">
+                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Access Method</span>
+                            <span className="font-semibold text-slate-800 text-base flex items-center gap-1.5">
+                                {property.hasSmartLock ? 'SmartLock Keyless' : 'Standard Key Access'}
+                            </span>
+                        </div>
+
+                        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col gap-1.5">
+                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Standard Schedule</span>
+                            <span className="font-semibold text-slate-800 text-base">
+                                4:00 PM In / 11:00 AM Out
+                            </span>
+                        </div>
+                    </div>
+
+                    {property.bedrooms && property.bedrooms.length > 0 && (
+                        <div className="mb-6 pb-6 border-b border-slate-100">
+                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-3">Room Specifications</span>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {property.bedrooms.map((room, idx) => (
+                                    <div key={idx} className="bg-slate-50/50 p-3 rounded-xl border border-slate-100/80 flex items-center justify-between text-xs font-medium">
+                                        <div className="flex flex-col gap-0.5">
+                                            <span className="font-bold text-slate-800">Room {room.roomNumber}</span>
+                                            <span className="text-slate-400 text-[10px] uppercase font-semibold">{room.type}</span>
+                                        </div>
+                                        {room.sqFt > 0 && (
+                                            <span className="font-mono text-indigo-600 bg-indigo-50/50 border border-indigo-100/30 px-2 py-0.5 rounded text-[10px]">{room.sqFt} sq ft</span>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Property Address - THE LAST LINE IN PROPERTY DETAILS */}
+                    <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="flex-1">
+                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Property Address</span>
+                            {property.location ? (
+                                <a 
+                                    href={getMapLink(property.location)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-2 group cursor-pointer"
+                                    title={`Open in ${isAppleOS() ? 'Apple Maps' : 'Google Maps'}`}
+                                >
+                                    <div className="w-10 h-10 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center transition-colors shadow-sm shrink-0">
+                                        <MapPin size={20} className="animate-pulse" />
+                                    </div>
+                                    <div className="text-left">
+                                        <span className="font-bold text-slate-800 text-base md:text-lg underline decoration-slate-300 decoration-2 underline-offset-4 group-hover:text-indigo-600 group-hover:decoration-indigo-400 transition-all">
+                                            {property.location}
+                                        </span>
+                                        <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
+                                            📍 Click to view on {isAppleOS() ? 'Apple Maps' : 'Google Maps'} ({isAppleOS() ? 'macOS/iOS' : 'Android/Web'})
+                                        </span>
+                                    </div>
+                                </a>
+                            ) : (
+                                <div className="flex items-center gap-2 text-slate-500 font-medium text-base">
+                                    <MapPin size={20} className="text-slate-400" />
+                                    <span>Vacation Rental Address</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
                <Calendar propertyId={property.id} property={property} />
             </main>
             <LegalFooter />

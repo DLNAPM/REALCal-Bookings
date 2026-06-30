@@ -3,6 +3,7 @@ import { useParams, Link, Navigate } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Booking, Property } from '../types';
+import { isAppleOS, getMapLink } from '../lib/utils';
 import { 
   Printer, 
   MapPin, 
@@ -125,10 +126,11 @@ export const Itinerary: React.FC = () => {
                 <p className="text-indigo-300/60 font-medium text-xs mb-4 print:text-slate-400">Booked by REALCal Bookings</p>
                 <h1 className="text-4xl font-bold tracking-tight mb-1">{property.name}</h1>
                 <a 
-                  href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(property.location || '')}`}
+                  href={getMapLink(property.location || '')}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-slate-400 text-lg flex items-center gap-2 hover:text-indigo-400 transition-colors group print:text-slate-500"
+                  title={`Open in ${isAppleOS() ? 'Apple Maps' : 'Google Maps'}`}
                 >
                   <MapPin size={18} /> 
                   <span className="underline decoration-slate-400/30 group-hover:decoration-indigo-400/50">{property.location || 'Vacation Rental'}</span>
