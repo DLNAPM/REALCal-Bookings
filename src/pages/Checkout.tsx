@@ -462,7 +462,7 @@ export const Checkout: React.FC = () => {
                                          />
                                          <div>
                                              <div className="font-bold text-sm text-slate-800">{b.type} - Room {b.roomNumber}</div>
-                                             <div className="text-[10px] text-slate-500 font-medium">{b.sqFt} sq ft • Private Code: <span className="font-mono bg-slate-50 text-slate-400 px-1 py-0.5 rounded border border-slate-150 inline-flex items-center gap-0.5" title="Revealed after payment">🔒 ••••</span></div>
+                                             <div className="text-[10px] text-slate-500 font-medium">{b.sqFt} sq ft • Max {b.maxCapacity || 2} Guests • Private Code: <span className="font-mono bg-slate-50 text-slate-400 px-1 py-0.5 rounded border border-slate-150 inline-flex items-center gap-0.5" title="Revealed after payment">🔒 ••••</span></div>
                                          </div>
                                      </div>
                                      <div className="font-mono font-bold text-indigo-600">${b.fee}</div>

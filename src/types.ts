@@ -10,7 +10,7 @@ export interface Property {
   hasSmartLock?: boolean;
   frontDoorCode?: string;
   allowIndividualRoomRental?: boolean;
-  bedrooms?: { roomNumber: string; roomLockNumber: string; type: 'Master Bed' | 'Guest Bedroom'; sqFt: number; fee: number }[];
+  bedrooms?: { roomNumber: string; roomLockNumber: string; type: 'Master Bed' | 'Guest Bedroom'; sqFt: number; fee: number; maxCapacity?: number }[];
   createdAt: any;
 }
 

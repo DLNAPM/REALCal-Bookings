@@ -168,7 +168,7 @@ export const PropertyDetail: React.FC = () => {
                                     <div key={idx} className="bg-slate-50/50 p-3 rounded-xl border border-slate-100/80 flex items-center justify-between text-xs font-medium">
                                         <div className="flex flex-col gap-0.5">
                                             <span className="font-bold text-slate-800">Room {room.roomNumber}</span>
-                                            <span className="text-slate-400 text-[10px] uppercase font-semibold">{room.type}</span>
+                                            <span className="text-slate-400 text-[10px] uppercase font-semibold">{room.type} • Max {room.maxCapacity || 2} Guests</span>
                                         </div>
                                         {room.sqFt > 0 && (
                                             <span className="font-mono text-indigo-600 bg-indigo-50/50 border border-indigo-100/30 px-2 py-0.5 rounded text-[10px]">{room.sqFt} sq ft</span>

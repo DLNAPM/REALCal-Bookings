@@ -892,10 +892,14 @@ export const Calendar: React.FC<{
                             )}
                         >
                             <div className="flex justify-between w-full gap-4">
-                                <span>{room.type} {room.roomNumber}</span>
+                                <span>{room.type} {room.roomNumber} (Max {room.maxCapacity || 2})</span>
                                 <span className="font-mono">${room.fee}</span>
                             </div>
-                            {room.sqFt > 0 && <span className={cn("text-[10px] font-medium uppercase tracking-wider", isSelected ? "text-indigo-200" : "text-slate-400")}>{room.sqFt} sq ft</span>}
+                            <div className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-wider">
+                                {room.sqFt > 0 && <span className={isSelected ? "text-indigo-200" : "text-slate-400"}>{room.sqFt} sq ft</span>}
+                                {room.sqFt > 0 && <span className={isSelected ? "text-indigo-300" : "text-slate-300"}>•</span>}
+                                <span className={isSelected ? "text-indigo-200" : "text-indigo-600 font-bold"}>Max {room.maxCapacity || 2} Guests</span>
+                            </div>
                         </button>
                     );
                 })}
@@ -1095,7 +1099,7 @@ if (false) setSelectedRooms(prev =>
                              <div>
                                  <div className="font-bold">{room.type} {room.roomNumber}</div>
                                  <div className="text-[10px] opacity-70 uppercase tracking-tighter italic">
-                                     Individual Room {room.sqFt > 0 && `• ${room.sqFt} sq ft`}
+                                     Individual Room {room.sqFt > 0 && `• ${room.sqFt} sq ft`} • Max {room.maxCapacity || 2} Guests
                                  </div>
                              </div>
                              <div className="text-right">

@@ -65,7 +65,7 @@ export const AdminDashboard: React.FC = () => {
   const [selectedBlackoutIds, setSelectedBlackoutIds] = useState<string[]>([]);
   const [propertyManagers, setPropertyManagers] = useState<PropertyManager[]>([]);
   const [editingManagerId, setEditingManagerId] = useState<string | null>(null);
-  const [editingBedrooms, setEditingBedrooms] = useState<{ roomNumber: string; roomLockNumber: string; type: 'Master Bed' | 'Guest Bedroom'; sqFt: number; fee: number }[]>([]);
+  const [editingBedrooms, setEditingBedrooms] = useState<{ roomNumber: string; roomLockNumber: string; type: 'Master Bed' | 'Guest Bedroom'; sqFt: number; fee: number; maxCapacity?: number }[]>([]);
   
   // Manual booking states
   const [manualBookingPropId, setManualBookingPropId] = useState<string>('');
@@ -3278,7 +3278,7 @@ C.&S.H. Group Properties, LLC
                                                     className="w-full border border-indigo-100 rounded-xl p-2.5 text-sm bg-indigo-50/30 hover:bg-white focus:bg-white focus:ring-2 focus:ring-indigo-200 transition-all outline-none font-bold text-indigo-600" 
                                                 />
                                             </div>
-                                            <div className="col-span-2">
+                                            <div className="col-span-1">
                                                 <label className="text-[10px] uppercase font-black text-slate-400 block mb-1.5 tracking-wider">Room Type</label>
                                                 <select 
                                                     value={b.type} 
@@ -3292,6 +3292,19 @@ C.&S.H. Group Properties, LLC
                                                     <option value="Master Bed">Master Bed</option>
                                                     <option value="Guest Bedroom">Guest Bedroom</option>
                                                 </select>
+                                            </div>
+                                            <div className="col-span-1">
+                                                <label className="text-[10px] uppercase font-black text-slate-400 block mb-1.5 tracking-wider">Max Capacity</label>
+                                                <input 
+                                                    type="number" 
+                                                    value={b.maxCapacity !== undefined ? b.maxCapacity : 2} 
+                                                    onChange={(e) => {
+                                                        const newRooms = [...editingBedrooms];
+                                                        newRooms[i] = { ...newRooms[i], maxCapacity: parseInt(e.target.value) || 1 };
+                                                        setEditingBedrooms(newRooms);
+                                                    }}
+                                                    className="w-full border border-slate-200 rounded-xl p-2.5 text-sm bg-slate-50 hover:bg-white focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all outline-none font-semibold text-slate-700" 
+                                                />
                                             </div>
                                          </div>
                                      </div>
@@ -3312,6 +3325,7 @@ C.&S.H. Group Properties, LLC
                                      <input type="text" id="newRoomLock" placeholder="Lock #" className="p-3 border border-slate-200 rounded-xl text-sm bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-100 focus:bg-white transition-all" />
                                      <input type="number" id="newRoomSqFt" placeholder="Sq Ft" className="p-3 border border-slate-200 rounded-xl text-sm bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-100 focus:bg-white transition-all" />
                                      <input type="number" id="newRoomFee" placeholder="Fee ($)" className="p-3 border border-slate-200 rounded-xl text-sm bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-100 focus:bg-white transition-all" />
+                                      <input type="number" id="newRoomMaxCapacity" placeholder="Max Capacity" defaultValue={2} className="p-3 border border-slate-200 rounded-xl text-sm bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-100 focus:bg-white transition-all" />
                                  </div>
                                  <select id="newRoomType" className="w-full p-3 border border-slate-200 rounded-xl text-sm bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-100 focus:bg-white transition-all">
                                      <option value="Master Bed">Master Bed</option>
@@ -3324,14 +3338,16 @@ C.&S.H. Group Properties, LLC
                                          const roomLockNumber = (document.getElementById('newRoomLock') as HTMLInputElement).value;
                                          const sqFt = parseInt((document.getElementById('newRoomSqFt') as HTMLInputElement).value || '0');
                                          const fee = parseInt((document.getElementById('newRoomFee') as HTMLInputElement).value || '0');
+                                          const maxCapacity = parseInt((document.getElementById('newRoomMaxCapacity') as HTMLInputElement).value || '2');
                                          const type = (document.getElementById('newRoomType') as HTMLSelectElement).value as 'Master Bed' | 'Guest Bedroom';
                                          if(roomNumber && roomLockNumber) {
-                                             setEditingBedrooms(prev => [...prev, { roomNumber, roomLockNumber, type, sqFt, fee }]);
+                                             setEditingBedrooms(prev => [...prev, { roomNumber, roomLockNumber, type, sqFt, fee, maxCapacity }]);
                                              // Reset inputs
                                              (document.getElementById('newRoomNumber') as HTMLInputElement).value = '';
                                              (document.getElementById('newRoomLock') as HTMLInputElement).value = '';
                                              (document.getElementById('newRoomSqFt') as HTMLInputElement).value = '';
                                              (document.getElementById('newRoomFee') as HTMLInputElement).value = '';
+                                             (document.getElementById('newRoomMaxCapacity') as HTMLInputElement).value = '2';
                                          }
                                      }} 
                                      className="w-full bg-indigo-600 hover:bg-slate-900 text-white p-3.5 rounded-xl font-bold shadow-md shadow-indigo-100 transition-all flex items-center justify-center gap-2"
