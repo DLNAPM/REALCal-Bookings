@@ -113,6 +113,7 @@ export const AdminDashboard: React.FC = () => {
   const [contactUsAddress, setContactUsAddress] = useState('');
   const [contactUsText, setContactUsText] = useState('');
   const [cleaningFee, setCleaningFee] = useState<number>(100);
+  const [allowLongTermRentals, setAllowLongTermRentals] = useState<boolean>(true);
   
   // Backup Import/Export states
   const [importingBackup, setImportingBackup] = useState(false);
@@ -210,6 +211,7 @@ export const AdminDashboard: React.FC = () => {
       setContactUsAddress(globalSettings.contactUsAddress || '');
       setContactUsText(globalSettings.contactUsText || '');
       setCleaningFee(globalSettings.cleaningFee !== undefined ? globalSettings.cleaningFee : 100);
+      setAllowLongTermRentals(globalSettings.allowLongTermRentals !== false);
     }
   }, [globalSettings]);
 
@@ -663,6 +665,7 @@ export const AdminDashboard: React.FC = () => {
             minDaysDefault,
             minDaysWeekend,
             lateCheckoutFeePercent,
+            allowLongTermRentals,
             updatedAt: serverTimestamp()
         });
         alert("Global Settings Saved!");
@@ -2018,6 +2021,35 @@ C.&S.H. Group Properties, LLC
                             <div className="relative flex items-center w-36">
                                 <input name="lateCheckoutFeePercent" type="number" step="0.1" min="0" max="100" defaultValue={globalSettings?.lateCheckoutFeePercent !== undefined ? globalSettings.lateCheckoutFeePercent : 5.0} required className="w-full border border-slate-200 rounded-xl p-2.5 pr-8 bg-white shadow-sm font-semibold font-mono text-slate-800" />
                                 <span className="absolute right-3.5 text-slate-400 font-bold text-xs">% / hr</span>
+                            </div>
+                        </div>
+
+                        <div className="border-t border-slate-200 pt-4 mt-2">
+                            <label className="text-xs font-bold text-slate-700 uppercase tracking-tight block">Long-Term Renting (&gt; 30 Days)</label>
+                            <p className="text-[11px] text-slate-500 mb-3">Allow or deny guests to request stays exceeding 30 days.</p>
+                            <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-sm w-fit">
+                                <button
+                                    type="button"
+                                    onClick={() => setAllowLongTermRentals(true)}
+                                    className={`px-4 py-2 rounded-lg font-bold text-xs uppercase tracking-wider transition-all cursor-pointer ${
+                                        allowLongTermRentals 
+                                            ? 'bg-emerald-600 text-white shadow-sm' 
+                                            : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
+                                    }`}
+                                >
+                                    Enabled
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setAllowLongTermRentals(false)}
+                                    className={`px-4 py-2 rounded-lg font-bold text-xs uppercase tracking-wider transition-all cursor-pointer ${
+                                        !allowLongTermRentals 
+                                            ? 'bg-rose-600 text-white shadow-sm' 
+                                            : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
+                                    }`}
+                                >
+                                    Disabled
+                                </button>
                             </div>
                         </div>
                         

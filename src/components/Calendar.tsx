@@ -801,6 +801,10 @@ export const Calendar: React.FC<{
 
        // Require Lease Code if consecutive nights exceed 30
        if (priceDetails.nights > 30) {
+           if (globalSettings?.allowLongTermRentals === false) {
+               alert("Short-Term rentals of more than 30 days is not available at this time and to choose less amount of consecutive days.");
+               return;
+           }
            if (!validatedLeaseCode) {
                alert(`A Lease Code is required for ${priceDetails.nights > 180 ? 'long-term' : 'short-term'} bookings. Please verify your code or fill out the Lease Request Form.`);
                return;
@@ -1129,7 +1133,18 @@ if (false) setSelectedRooms(prev =>
             
              {/* Lease Code and Request Form section */}
              {priceDetails && priceDetails.nights > 30 && (
-               <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 mb-4 text-xs font-sans text-slate-300">
+               globalSettings?.allowLongTermRentals === false ? (
+                 <div className="bg-rose-500/10 border border-rose-500/25 rounded-3xl p-6 mb-4 text-xs font-sans text-rose-200 text-left">
+                   <div className="flex items-center gap-2 text-rose-400 font-bold uppercase tracking-wider text-[11px] mb-2">
+                     <AlertCircle size={14} />
+                     <span>Short-Term Restriction ({priceDetails.nights} Nights)</span>
+                   </div>
+                   <p className="text-rose-300 font-semibold text-sm leading-relaxed">
+                     Short-Term rentals of more than 30 days is not available at this time and to choose less amount of consecutive days.
+                   </p>
+                 </div>
+               ) : (
+                 <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 mb-4 text-xs font-sans text-slate-300">
                  <div className="flex items-center gap-2 text-indigo-400 font-bold uppercase tracking-wider text-[11px] mb-2">
                    <FileText size={14} />
                    <span>{priceDetails.nights > 180 ? 'Long-Term Lease Required' : 'Short-Term Lease Required'} ({priceDetails.nights} Nights)</span>
@@ -1358,7 +1373,7 @@ if (false) setSelectedRooms(prev =>
                    </div>
                  )}
                </div>
-             )}
+             ))}
 
             {!isEditMode && checkIn && checkOut && (
                <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl mb-4 text-xs">
@@ -1424,7 +1439,7 @@ if (false) setSelectedRooms(prev =>
                       handleBook();
                   }
               }}
-              disabled={!checkIn || !checkOut || (user && user.tollFreeAccept !== true && !isEditMode) || (!agreedToHouseRules && !isEditMode) || (rentalMode === 'room' && !agreedToNoKidsUnder10 && !isEditMode) || (priceDetails && priceDetails.nights > 30 && !validatedLeaseCode && !isEditMode)}
+              disabled={!checkIn || !checkOut || (user && user.tollFreeAccept !== true && !isEditMode) || (!agreedToHouseRules && !isEditMode) || (rentalMode === 'room' && !agreedToNoKidsUnder10 && !isEditMode) || (priceDetails && priceDetails.nights > 30 && (globalSettings?.allowLongTermRentals === false || !validatedLeaseCode) && !isEditMode)}
               className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-2xl transition-colors flex items-center justify-center gap-2 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed"
             >
               {isEditMode ? 'Save Changes' : 'Proceed to Checkout'}
