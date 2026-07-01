@@ -1032,7 +1032,10 @@ export const AdminDashboard: React.FC = () => {
       }
 
       const selectedBedroomObjects = (prop?.bedrooms || []).filter(b => manualBookingRooms.includes(b.roomNumber));
-      const finalPriceCents = Math.round(Number(totalAmountStr) * 100);
+      const baseAmount = Number(totalAmountStr);
+      const stripeFee = Math.round((baseAmount * 0.029 + 0.3) * 100) / 100;
+      const grandTotalAmount = baseAmount + stripeFee;
+      const finalPriceCents = Math.round(grandTotalAmount * 100);
 
       let stripePaymentUrl = '';
       try {
@@ -1041,7 +1044,7 @@ export const AdminDashboard: React.FC = () => {
              headers: { 'Content-Type': 'application/json' },
              body: JSON.stringify({
                  bookingId,
-                 amount: Number(totalAmountStr),
+                 amount: grandTotalAmount,
                  invoiceNumber,
                  guestName,
                  propertyName,
@@ -1069,7 +1072,10 @@ export const AdminDashboard: React.FC = () => {
          dueDate: invoiceDueDate,
          customNotes: invoiceCustomNotes,
          sentAt: new Date().toISOString(),
-         stripePaymentUrl: stripePaymentUrl || null
+         stripePaymentUrl: stripePaymentUrl || null,
+         baseAmount: baseAmount,
+         stripeFee: stripeFee,
+         grandTotal: grandTotalAmount
       };
 
       const payload: any = {
@@ -1187,9 +1193,16 @@ export const AdminDashboard: React.FC = () => {
                 </td>
                 <td style="padding: 10px 0; text-align: right; color: #0f172a; font-weight: bold; font-family: Courier, monospace;">$ ${Number(totalAmountStr).toFixed(2)}</td>
             </tr>
+            <tr style="border-bottom: 1px solid #e2e8f0;">
+                <td style="padding: 10px 0; color: #0f172a; font-weight: 500;">
+                    Stripe Processing Fee<br/>
+                    <span style="font-size: 11px; color: #64748b;">Processing fee (2.9% + $0.30)</span>
+                </td>
+                <td style="padding: 10px 0; text-align: right; color: #0f172a; font-weight: bold; font-family: Courier, monospace;">$ ${stripeFee.toFixed(2)}</td>
+            </tr>
             <tr>
                 <td style="padding: 12px 0 4px 0; font-size: 15px; font-weight: bold; color: #0f172a;">Grand Total:</td>
-                <td style="padding: 12px 0 4px 0; text-align: right; font-size: 16px; font-weight: bold; color: #4f46e5; font-family: Courier, monospace;">$ ${Number(totalAmountStr).toFixed(2)}</td>
+                <td style="padding: 12px 0 4px 0; text-align: right; font-size: 16px; font-weight: bold; color: #4f46e5; font-family: Courier, monospace;">$ ${grandTotalAmount.toFixed(2)}</td>
             </tr>
         </tbody>
     </table>
@@ -1239,7 +1252,8 @@ Dates: ${checkIn} to ${checkOut} (${totalNights} Night(s))
 
 Summary of Charges:
 Guest Rental Override Access Fee: $${Number(totalAmountStr).toFixed(2)}
-Grand Total Due: $${Number(totalAmountStr).toFixed(2)}
+Stripe Processing Fee (2.9% + $0.30): $${stripeFee.toFixed(2)}
+Grand Total Due: $${grandTotalAmount.toFixed(2)}
 
 ${stripePaymentUrl ? `SECURE ONLINE PAYMENT LINK:\nClick here to pay this invoice securely via Stripe:\n${stripePaymentUrl}\n` : ''}
 
@@ -1566,6 +1580,9 @@ C.&S.H. Group Properties, LLC
 
       const manualBookingRooms = b.selectedBedrooms ? b.selectedBedrooms.map(r => r.roomNumber) : (b.selectedBedroom ? [b.selectedBedroom.roomNumber] : []);
       const totalAmountStr = (b.totalPrice / 100).toFixed(2);
+      const baseAmountVal = b.invoiceDetails.baseAmount !== undefined ? b.invoiceDetails.baseAmount : (b.totalPrice / 100);
+      const stripeFeeVal = b.invoiceDetails.stripeFee !== undefined ? b.invoiceDetails.stripeFee : 0;
+      const grandTotalVal = b.invoiceDetails.grandTotal !== undefined ? b.invoiceDetails.grandTotal : (b.totalPrice / 100);
       const stripePaymentUrl = b.invoiceDetails.stripePaymentUrl || '';
 
       const invoiceNumber = b.invoiceDetails.invoiceNumber || 'Manual';
@@ -1664,11 +1681,20 @@ C.&S.H. Group Properties, LLC
                     Guest Rental Override Access Fee<br/>
                     <span style="font-size: 11px; color: #64748b;">Lodging charge for the entire stay interval</span>
                 </td>
-                <td style="padding: 10px 0; text-align: right; color: #0f172a; font-weight: bold; font-family: Courier, monospace;">$ \${Number(totalAmountStr).toFixed(2)}</td>
+                <td style="padding: 10px 0; text-align: right; color: #0f172a; font-weight: bold; font-family: Courier, monospace;">$ \${Number(baseAmountVal).toFixed(2)}</td>
             </tr>
+            \${stripeFeeVal > 0 ? \`
+            <tr style="border-bottom: 1px solid #e2e8f0;">
+                <td style="padding: 10px 0; color: #0f172a; font-weight: 500;">
+                    Stripe Processing Fee<br/>
+                    <span style="font-size: 11px; color: #64748b;">Processing fee (2.9% + $0.30)</span>
+                </td>
+                <td style="padding: 10px 0; text-align: right; color: #0f172a; font-weight: bold; font-family: Courier, monospace;">$ \${stripeFeeVal.toFixed(2)}</td>
+            </tr>
+            \` : ''}
             <tr>
                 <td style="padding: 12px 0 4px 0; font-size: 15px; font-weight: bold; color: #0f172a;">Grand Total:</td>
-                <td style="padding: 12px 0 4px 0; text-align: right; font-size: 16px; font-weight: bold; color: #4f46e5; font-family: Courier, monospace;">$ \${Number(totalAmountStr).toFixed(2)}</td>
+                <td style="padding: 12px 0 4px 0; text-align: right; font-size: 16px; font-weight: bold; color: #4f46e5; font-family: Courier, monospace;">$ \${Number(grandTotalVal).toFixed(2)}</td>
             </tr>
         </tbody>
     </table>
@@ -1716,8 +1742,8 @@ Property: \${propertyName}
 Dates: \${checkIn} to \${checkOut} (\${totalNights} Night(s))
 
 Summary of Charges:
-Guest Rental Override Access Fee: $\${Number(totalAmountStr).toFixed(2)}
-Grand Total Due: $\${Number(totalAmountStr).toFixed(2)}
+Guest Rental Override Access Fee: $\${Number(baseAmountVal).toFixed(2)}
+\${stripeFeeVal > 0 ? \`Stripe Processing Fee (2.9% + $0.30): $\${stripeFeeVal.toFixed(2)}\\n\` : ''}Grand Total Due: $\${Number(grandTotalVal).toFixed(2)}
 
 \${stripePaymentUrl ? \`SECURE ONLINE PAYMENT LINK:\\nClick here to pay this invoice securely via Stripe:\\n\${stripePaymentUrl}\\n\` : ''}
 
@@ -3901,8 +3927,8 @@ C.&S.H. Group Properties, LLC
                                      <th className="py-2 font-bold uppercase">Description</th>
                                      <th className="py-2 text-right font-bold uppercase">Amount</th>
                                   </tr>
-                               </thead>
-                               <tbody>
+                                </thead>
+                                <tbody>
                                   <tr className="border-b border-slate-100">
                                      <td className="py-3">
                                         <div className="font-bold text-slate-800">Guest Rental Override Access Fee</div>
@@ -3912,13 +3938,22 @@ C.&S.H. Group Properties, LLC
                                         ${Number(pendingBookingData.totalPrice).toFixed(2)}
                                      </td>
                                   </tr>
+                                  <tr className="border-b border-slate-100">
+                                     <td className="py-3">
+                                        <div className="font-bold text-slate-800">Stripe Processing Fee (2.9% + $0.30)</div>
+                                        <div className="text-xs text-slate-400 mt-1">Stripe transaction processing cost</div>
+                                     </td>
+                                     <td className="py-3 text-right font-mono font-bold text-slate-800">
+                                        ${(Number(pendingBookingData.totalPrice) * 0.029 + 0.30).toFixed(2)}
+                                     </td>
+                                  </tr>
                                   <tr>
                                      <td className="py-4 text-base font-black text-slate-800">Grand Total Due:</td>
                                      <td className="py-4 text-right text-lg font-black text-indigo-600 font-mono">
-                                        ${Number(pendingBookingData.totalPrice).toFixed(2)}
+                                        ${(Number(pendingBookingData.totalPrice) + Math.round((Number(pendingBookingData.totalPrice) * 0.029 + 0.30) * 100) / 100).toFixed(2)}
                                      </td>
                                   </tr>
-                                </tbody>
+                               </tbody>
                             </table>
 
                             {/* Custom notes box preview */}
