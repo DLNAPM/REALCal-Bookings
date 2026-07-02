@@ -4373,15 +4373,36 @@ C.&S.H. Group Properties, LLC
                                         <div className="font-semibold text-slate-800 text-xs mt-0.5">{liveBooking.checkIn} to {liveBooking.checkOut}</div>
                                      </div>
                                   </div>
-                                  {liveBooking.selectedBedrooms && liveBooking.selectedBedrooms.length > 0 && (
+                                  {(liveBooking.selectedBedrooms && liveBooking.selectedBedrooms.length > 0) ? (
                                      <div>
                                         <span className="text-xs text-slate-400">Allocated Room(s):</span>
                                         <div className="flex flex-wrap gap-1 mt-1">
-                                           {liveBooking.selectedBedrooms.map((roomNum: any, idx: number) => (
-                                              <span key={idx} className="font-mono text-[11px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded">
-                                                 Room {roomNum}
-                                              </span>
-                                           ))}
+                                           {liveBooking.selectedBedrooms.map((roomItem: any, idx: number) => {
+                                              const rNum = typeof roomItem === 'object' && roomItem !== null ? roomItem.roomNumber : roomItem;
+                                              return (
+                                                 <span key={idx} className="font-mono text-[11px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded">
+                                                    Room {rNum}
+                                                 </span>
+                                              );
+                                           })}
+                                        </div>
+                                     </div>
+                                  ) : liveBooking.selectedBedroom ? (
+                                     <div>
+                                        <span className="text-xs text-slate-400">Allocated Room:</span>
+                                        <div className="mt-1">
+                                           <span className="font-mono text-[11px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded">
+                                              Room {typeof liveBooking.selectedBedroom === 'object' && liveBooking.selectedBedroom !== null ? liveBooking.selectedBedroom.roomNumber : liveBooking.selectedBedroom}
+                                           </span>
+                                        </div>
+                                     </div>
+                                  ) : (
+                                     <div>
+                                        <span className="text-xs text-slate-400">Allocated Room:</span>
+                                        <div className="mt-1">
+                                           <span className="font-mono text-[11px] font-bold text-slate-600 bg-slate-50 border border-slate-100 px-1.5 py-0.5 rounded">
+                                              Entire Property
+                                           </span>
                                         </div>
                                      </div>
                                   )}
