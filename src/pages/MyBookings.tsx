@@ -499,10 +499,15 @@ export const MyBookings: React.FC = () => {
                     console.log("[MyBookings] Redirecting to modification checkout session URL:", url);
                     setEditingBooking(null);
                     setStripeRedirectUrl(url);
-                    const newWindow = window.open(url, '_blank', 'noopener,noreferrer');
-                    if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
-                        console.warn("[MyBookings] Pop-up blocked or failed to open. Fallback to direct redirect.");
-                        window.location.href = url;
+                    
+                    if (window.self === window.top) {
+                        const newWindow = window.open(url, '_blank', 'noopener,noreferrer');
+                        if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+                            console.warn("[MyBookings] Pop-up blocked or failed to open. Fallback to direct redirect.");
+                            window.location.href = url;
+                        }
+                    } else {
+                        console.log("[MyBookings] Running inside an iframe. Displaying manual payment dialog to avoid browser pop-up blocks and policy restrictions.");
                     }
                 } else {
                     throw new Error("No redirect URL returned from modification checkout session");

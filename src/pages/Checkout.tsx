@@ -250,15 +250,15 @@ export const Checkout: React.FC = () => {
         console.log("[Checkout] Redirecting to Checkout Session URL:", data.url);
         setRedirectUrl(data.url);
         
-        // Try opening in a new window/tab to bypass iframe restrictions in AI Studio preview
-        const newWindow = window.open(data.url, '_blank', 'noopener,noreferrer');
-        if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
-          console.warn("[Checkout] Pop-up blocked or failed to open. Fallback to direct redirect.");
-          if (window.self === window.top) {
+        if (window.self === window.top) {
+          // If we are at the top level, try to open in a new tab first, fallback to direct redirect
+          const newWindow = window.open(data.url, '_blank', 'noopener,noreferrer');
+          if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+            console.warn("[Checkout] Pop-up blocked or failed to open. Fallback to direct redirect.");
             window.location.href = data.url;
-          } else {
-            console.log("[Checkout] Running inside an iframe. Blocked automatic redirect to prevent Stripe checkout origin policy block.");
           }
+        } else {
+          console.log("[Checkout] Running inside an iframe. Showing manual button to complete checkout to prevent Stripe policy blocks and duplicate tabs.");
         }
       } else {
         throw new Error("No payment session URL returned from backend server.");
