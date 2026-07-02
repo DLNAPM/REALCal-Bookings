@@ -91,6 +91,7 @@ export const AdminDashboard: React.FC = () => {
   const [sendingInvoice, setSendingInvoice] = useState<boolean>(false);
   const [sendingInvoiceId, setSendingInvoiceId] = useState<string | null>(null);
   const [syncingInvoiceId, setSyncingInvoiceId] = useState<string | null>(null);
+  const [viewingInvoiceBooking, setViewingInvoiceBooking] = useState<any | null>(null);
 
   // User profile editing states
   const [editingUser, setEditingUser] = useState<any | null>(null);
@@ -3021,8 +3022,14 @@ C.&S.H. Group Properties, LLC
                                return (
                                   <tr key={b.id} className="hover:bg-slate-50 transition-colors">
                                      <td className="px-4 py-4 font-mono text-xs font-bold text-indigo-600">
-                                        <div className="flex flex-col">
-                                           <span>#{inv.invoiceNumber || 'Manual'}</span>
+                                        <div className="flex flex-col items-start">
+                                           <button
+                                              onClick={() => setViewingInvoiceBooking(b)}
+                                              className="text-left text-indigo-600 hover:text-indigo-800 hover:underline focus:outline-none font-bold font-mono transition-all inline-block cursor-pointer"
+                                              title="Click to view full invoice details"
+                                           >
+                                              #{inv.invoiceNumber || 'Manual'}
+                                           </button>
                                            <span className="text-[10px] text-slate-400 font-normal">Ref: {b.bookingRef || '—'}</span>
                                         </div>
                                      </td>
@@ -4222,6 +4229,295 @@ C.&S.H. Group Properties, LLC
                 </div>
              </div>
           )}
+
+          {viewingInvoiceBooking && (() => {
+             const liveBooking = bookings.find(b => b.id === viewingInvoiceBooking.id) || viewingInvoiceBooking;
+             const inv = liveBooking.invoiceDetails;
+             if (!inv) return null;
+             const prop = properties.find(p => p.id === liveBooking.propertyId);
+             const formattedSentDate = inv.sentAt ? new Date(inv.sentAt).toLocaleString() : 'N/A';
+             const formattedPaidDate = inv.paidAt ? new Date(inv.paidAt).toLocaleString() : '';
+             const formattedDueDate = inv.dueDate ? new Date(inv.dueDate).toLocaleDateString() : 'N/A';
+
+             return (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+                   <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 text-left">
+                      {/* Header */}
+                      <div className="px-8 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                         <div>
+                            <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                               <span className="p-1.5 bg-indigo-100 text-indigo-700 rounded-lg flex items-center justify-center"><FileText size={18}/></span>
+                               Invoice #{inv.invoiceNumber || 'Manual'} Details
+                            </h3>
+                            <p className="text-xs text-slate-500 mt-1">
+                               Ref Reference ID: <span className="font-mono font-bold text-indigo-600 bg-indigo-50 px-1 py-0.5 rounded">{liveBooking.bookingRef || '—'}</span>
+                            </p>
+                         </div>
+                         <button 
+                            onClick={() => setViewingInvoiceBooking(null)} 
+                            className="text-slate-400 hover:text-slate-600 transition-colors bg-white border border-slate-200 hover:border-slate-300 p-2 rounded-full cursor-pointer flex items-center justify-center"
+                            title="Close modal"
+                         >
+                            <XCircle size={20} />
+                         </button>
+                      </div>
+
+                      {/* Content area */}
+                      <div className="flex-1 overflow-y-auto p-8 space-y-6 bg-slate-50/50">
+                         {/* Live payment status hero section */}
+                         <div className={cn(
+                            "p-6 rounded-2xl border flex flex-col sm:flex-row items-center justify-between gap-4",
+                            inv.paid 
+                               ? "bg-emerald-50/50 border-emerald-100 text-emerald-900" 
+                               : "bg-amber-50/50 border-amber-100 text-amber-900"
+                         )}>
+                            <div className="flex items-center gap-4 text-center sm:text-left">
+                               <div className={cn(
+                                  "p-3 rounded-xl flex items-center justify-center",
+                                  inv.paid ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+                               )}>
+                                  {inv.paid ? <CheckCircle size={24} /> : <Loader2 size={24} className="animate-spin" />}
+                               </div>
+                               <div>
+                                  <div className="text-xs font-bold uppercase tracking-wide text-slate-400">Payment Status</div>
+                                  <div className="text-xl font-black flex items-center gap-2 justify-center sm:justify-start">
+                                     {inv.paid ? 'Fully Paid' : 'Pending Payment'}
+                                  </div>
+                                  <div className="text-xs text-slate-500 mt-0.5">
+                                     {inv.paid && formattedPaidDate ? `Paid via Stripe on ${formattedPaidDate}` : 'Awaiting transfer/checkout process completion.'}
+                                  </div>
+                               </div>
+                            </div>
+                            <div className="text-center sm:text-right">
+                               <div className="text-xs font-bold uppercase tracking-wide text-slate-400">Grand Total Due</div>
+                               <div className="text-2xl font-black text-indigo-600 font-mono">
+                                  ${(inv.grandTotal || liveBooking.totalPrice / 100).toFixed(2)}
+                                </div>
+                                <div className="text-[10px] text-slate-400 mt-0.5 font-mono">
+                                   Base: ${(inv.baseAmount || (liveBooking.totalPrice / 100) - (inv.stripeFee || 0)).toFixed(2)} + Stripe Fee: ${(inv.stripeFee || 0).toFixed(2)}
+                                </div>
+                            </div>
+                         </div>
+
+                         {/* Side-by-side Sponsor & Reservation */}
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Billing Sponsor info */}
+                            <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
+                               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-2">
+                                  Sponsor & Billing Entity
+                               </h4>
+                               <div className="space-y-3 text-sm">
+                                  <div>
+                                     <span className="text-xs text-slate-400">Sponsor Name / Company:</span>
+                                     <div className="font-bold text-slate-800">{inv.sponsorName || 'Unknown Sponsor'}</div>
+                                  </div>
+                                  <div>
+                                     <span className="text-xs text-slate-400">Billing Email:</span>
+                                     <div className="font-semibold text-slate-800 flex items-center gap-1.5 mt-0.5">
+                                        <Mail size={14} className="text-slate-400" />
+                                        {inv.sponsorEmail}
+                                     </div>
+                                  </div>
+                                  {inv.sponsorPhone && (
+                                     <div>
+                                        <span className="text-xs text-slate-400">Billing Phone:</span>
+                                        <div className="font-medium text-slate-800 flex items-center gap-1.5 mt-0.5">
+                                           <Phone size={14} className="text-slate-400" />
+                                           {inv.sponsorPhone}
+                                        </div>
+                                     </div>
+                                  )}
+                                  {inv.sponsorAddress && (
+                                     <div>
+                                        <span className="text-xs text-slate-400">Billing Address:</span>
+                                        <div className="text-slate-700 mt-0.5 whitespace-pre-wrap bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-xs leading-relaxed">
+                                           {inv.sponsorAddress}
+                                        </div>
+                                     </div>
+                                  )}
+                               </div>
+                            </div>
+
+                            {/* Guest details recap */}
+                            <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
+                               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-2">
+                                  Guest Reservation Details
+                               </h4>
+                               <div className="space-y-3 text-sm">
+                                  <div>
+                                     <span className="text-xs text-slate-400">Guest Name:</span>
+                                     <div className="font-bold text-slate-800">{liveBooking.guestName || 'Unknown Guest'}</div>
+                                  </div>
+                                  <div>
+                                     <span className="text-xs text-slate-400">Contact Email & Phone:</span>
+                                     <div className="font-medium text-slate-800 mt-0.5 flex flex-col gap-1">
+                                         {liveBooking.guestEmail && (
+                                            <span className="flex items-center gap-1.5 text-xs">
+                                               <Mail size={12} className="text-slate-400" /> {liveBooking.guestEmail}
+                                            </span>
+                                         )}
+                                         {liveBooking.guestPhone && (
+                                            <span className="flex items-center gap-1.5 text-xs">
+                                               <Phone size={12} className="text-slate-400" /> {liveBooking.guestPhone}
+                                            </span>
+                                         )}
+                                     </div>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-50">
+                                     <div>
+                                        <span className="text-xs text-slate-400">Destination Property:</span>
+                                        <div className="font-bold text-indigo-700 text-xs mt-0.5">{prop?.name || 'REALCal Luxury Lodging'}</div>
+                                     </div>
+                                     <div>
+                                        <span className="text-xs text-slate-400">Stay Duration:</span>
+                                        <div className="font-semibold text-slate-800 text-xs mt-0.5">{liveBooking.checkIn} to {liveBooking.checkOut}</div>
+                                     </div>
+                                  </div>
+                                  {liveBooking.selectedBedrooms && liveBooking.selectedBedrooms.length > 0 && (
+                                     <div>
+                                        <span className="text-xs text-slate-400">Allocated Room(s):</span>
+                                        <div className="flex flex-wrap gap-1 mt-1">
+                                           {liveBooking.selectedBedrooms.map((roomNum: any, idx: number) => (
+                                              <span key={idx} className="font-mono text-[11px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded">
+                                                 Room {roomNum}
+                                              </span>
+                                           ))}
+                                        </div>
+                                     </div>
+                                  )}
+                               </div>
+                            </div>
+                         </div>
+
+                         {/* Dates, Notes & Session IDs block */}
+                         <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
+                            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-2">
+                               Transaction Ledger & Metadata
+                            </h4>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs">
+                               <div className="space-y-1">
+                                  <span className="text-slate-400 font-bold">INVOICE SENT TIME</span>
+                                  <div className="font-mono text-slate-700 font-medium">{formattedSentDate}</div>
+                               </div>
+                               <div className="space-y-1">
+                                  <span className="text-slate-400 font-bold">PAYMENT DUE DATE</span>
+                                  <div className="font-mono text-slate-700 font-bold">{formattedDueDate}</div>
+                               </div>
+                               <div className="space-y-1">
+                                  <span className="text-slate-400 font-bold">BOOKING STATUS</span>
+                                  <div className="font-bold capitalize">
+                                     <span className={cn(
+                                        "px-2 py-0.5 rounded text-[10px]",
+                                        liveBooking.status === 'confirmed' ? "bg-emerald-100 text-emerald-800" :
+                                        liveBooking.status === 'cancelled' ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800"
+                                     )}>
+                                        {liveBooking.status}
+                                     </span>
+                                  </div>
+                               </div>
+                            </div>
+
+                            {inv.stripePaymentUrl && (
+                               <div className="pt-2 border-t border-slate-100 text-xs space-y-2">
+                                  <div>
+                                     <span className="text-slate-400 font-bold block mb-1">STRIPE CHECKOUT URL:</span>
+                                     <div className="flex gap-2 items-center">
+                                        <input 
+                                           type="text" 
+                                           readOnly 
+                                           value={inv.stripePaymentUrl} 
+                                           className="flex-1 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg text-slate-600 font-mono text-xs select-all focus:outline-none"
+                                        />
+                                        <a 
+                                           href={inv.stripePaymentUrl} 
+                                           target="_blank" 
+                                           rel="noopener noreferrer" 
+                                           className="bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 font-bold px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 cursor-pointer text-xs font-sans inline-flex"
+                                        >
+                                           Open URL
+                                        </a>
+                                     </div>
+                                  </div>
+                               </div>
+                            )}
+
+                            {inv.stripeSessionId && (
+                               <div className="text-xs space-y-1">
+                                  <span className="text-slate-400 font-bold">STRIPE SESSION ID</span>
+                                  <div className="font-mono text-slate-500 bg-slate-50 p-2 rounded-lg border border-slate-100 break-all select-all">
+                                     {inv.stripeSessionId}
+                                  </div>
+                               </div>
+                            )}
+                         </div>
+
+                         {/* Custom notes */}
+                         {inv.customNotes && (
+                            <div className="bg-indigo-50/40 border border-indigo-100/60 p-5 rounded-2xl">
+                               <div className="text-xs font-bold text-indigo-900 uppercase tracking-wide mb-2">Administrator Special Custom Notes:</div>
+                               <div className="text-xs text-slate-700 leading-relaxed italic whitespace-pre-wrap">{inv.customNotes}</div>
+                            </div>
+                         )}
+
+                         {/* corporate disclaimer */}
+                         <div className="text-center text-[10px] text-slate-400 pt-2 leading-relaxed">
+                            <strong>Corporate Billing Management Invoicing Ledger Entity</strong> <br />
+                            C.&S.H. Group Properties, LLC &bull; Atlanta, GA
+                         </div>
+                      </div>
+
+                      {/* Footer Actions */}
+                      <div className="px-8 py-5 border-t border-slate-100 flex justify-end gap-3 bg-slate-50 items-center">
+                         <button 
+                            type="button"
+                            onClick={() => setViewingInvoiceBooking(null)} 
+                            className="px-5 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-sm transition-all cursor-pointer"
+                         >
+                            Close Details
+                         </button>
+                         
+                         {inv.stripeSessionId && !inv.paid && (
+                            <button
+                               type="button"
+                               onClick={() => handleSyncStripeStatus(liveBooking.id)}
+                               disabled={syncingInvoiceId === liveBooking.id}
+                               className="text-sm font-bold text-slate-700 hover:text-indigo-600 bg-white hover:bg-indigo-50 border border-slate-300 hover:border-indigo-200 px-5 py-2.5 rounded-xl transition-all inline-flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                            >
+                               {syncingInvoiceId === liveBooking.id ? (
+                                  <>
+                                     <Loader2 size={14} className="animate-spin" /> Syncing...
+                                  </>
+                               ) : (
+                                  <>
+                                     <RefreshCw size={14} /> Sync Stripe Status
+                                  </>
+                               )}
+                            </button>
+                         )}
+
+                         {!inv.paid && (
+                            <button
+                               type="button"
+                               onClick={() => handleMarkInvoicePaidManual(liveBooking.id)}
+                               className="text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-500 border border-emerald-700 px-5 py-2.5 rounded-xl transition-all inline-flex items-center gap-1.5 cursor-pointer"
+                            >
+                               <CheckCircle size={14} /> Mark Paid Manually
+                            </button>
+                         )}
+                         
+                         <button
+                            type="button"
+                            onClick={() => handleResendInvoice(liveBooking)}
+                            disabled={sendingInvoiceId === liveBooking.id}
+                            className="text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-500 border border-indigo-700 px-5 py-2.5 rounded-xl transition-all inline-flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                         >
+                            {sendingInvoiceId === liveBooking.id ? 'Sending...' : 'Resend Invoice Email'}
+                         </button>
+                      </div>
+                   </div>
+                </div>
+             );
+          })()}
 
        </div>
     </div>
