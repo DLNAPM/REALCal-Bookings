@@ -387,6 +387,13 @@ export const Calendar: React.FC<{
       const isOverlap = date >= start && date < end;
       if (!isOverlap) return false;
 
+      // Only block if the date matches up with an added blackout date
+      const hasMatchingBlackout = blackoutDates.some(bo => {
+        const boDate = parseLocalDate(bo.date);
+        return boDate && isSameDay(startOfDay(boDate), date);
+      });
+      if (!hasMatchingBlackout) return false;
+
       // Conflict logic:
       if (rentalMode === 'entire') {
         // If booking entire property, ANY existing booking (entire or room) blocks it
