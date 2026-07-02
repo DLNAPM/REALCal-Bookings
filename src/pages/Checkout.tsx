@@ -228,8 +228,7 @@ export const Checkout: React.FC = () => {
         // Persist tollFreeAccept preference to user document in Firestore if accepted
         if (user && user.tollFreeAccept !== true && smsOptInChecked) {
           await setDoc(doc(db, 'users', user.uid), {
-            tollFreeAccept: true,
-            updatedAt: serverTimestamp()
+            tollFreeAccept: true
           }, { merge: true });
         }
       }
