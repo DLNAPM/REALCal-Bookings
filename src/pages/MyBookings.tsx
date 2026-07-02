@@ -191,6 +191,9 @@ export const MyBookings: React.FC = () => {
                     }
                 }
 
+                // Filter out bookings with 'pending_payment' status to avoid showing incomplete checkout attempts
+                fetchedBookings = fetchedBookings.filter(b => b.status !== 'pending_payment');
+
                 const activeBookings = user.role === 'admin' ? fetchedBookings : fetchedBookings.filter(b => !b.deletedByGuest);                
                 
                 // Enhance with property details

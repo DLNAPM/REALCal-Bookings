@@ -143,7 +143,7 @@ export const AdminDashboard: React.FC = () => {
     onSnapshot(query(collection(db, 'users')), (snap) => setUsers(snap.docs.map(d => ({ uid: d.id, ...d.data() }))), (error) => {
       console.error("Admin users snapshot error:", error);
     });
-    onSnapshot(query(collection(db, 'bookings')), (snap) => setBookings(snap.docs.map(d => ({id: d.id, ...d.data() } as Booking))), (error) => {
+    onSnapshot(query(collection(db, 'bookings')), (snap) => setBookings(snap.docs.map(d => ({id: d.id, ...d.data() } as Booking)).filter(b => b.status !== 'pending_payment')), (error) => {
       console.error("Admin bookings snapshot error:", error);
     });
     onSnapshot(query(collection(db, 'blackout_dates')), (snap) => setBlackouts(snap.docs.map(d => ({id: d.id, ...d.data() } as BlackoutDate))), (error) => {

@@ -52,7 +52,7 @@ export interface Booking {
   propertyId: string;
   checkIn: string;
   checkOut: string;
-  status: 'pending' | 'confirmed' | 'cancelled';
+  status: 'pending' | 'confirmed' | 'cancelled' | 'pending_payment';
   totalPrice: number; // in cents
   paymentIntentId?: string;
   guests: number;
