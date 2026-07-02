@@ -2,7 +2,7 @@ import React from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { Calendar as CalendarIcon, ShieldCheck, Mail, MessageSquare, AlertCircle, LogIn, CheckCircle2, Info, Check, Pointer } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { signIn, auth } from '../lib/firebase';
@@ -60,6 +60,7 @@ import { LegalFooter } from '../components/LegalFooter';
 export const OptIn: React.FC = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [showSuccess, setShowSuccess] = React.useState(false);
   const [showDeclineMessage, setShowDeclineMessage] = React.useState(false);
   const [isPreviewAction, setIsPreviewAction] = React.useState(false);
@@ -295,11 +296,15 @@ export const OptIn: React.FC = () => {
                     setIsPreviewAction(false);
                     return;
                   }
-                  navigate('/');
+                  if (location.state?.fromCheckout) {
+                    navigate('/checkout', { state: { ...location.state, fromCheckout: undefined } });
+                  } else {
+                    navigate('/');
+                  }
                 }}
                 className="w-full bg-slate-900 text-white font-bold py-4 rounded-2xl hover:bg-indigo-600 transition-all flex items-center justify-center gap-2"
               >
-                {isPreviewAction ? 'Close Preview' : 'Browse Properties'}
+                {isPreviewAction ? 'Close Preview' : (location.state?.fromCheckout ? 'Proceed to Checkout' : 'Browse Properties')}
               </button>
               
               <p className="mt-6 text-sm text-slate-400 italic">{isPreviewAction ? 'You are viewing a demonstration' : ''}</p>
@@ -346,11 +351,15 @@ export const OptIn: React.FC = () => {
                     setIsPreviewAction(false);
                     return;
                   }
-                  navigate('/');
+                  if (location.state?.fromCheckout) {
+                    navigate('/checkout', { state: { ...location.state, fromCheckout: undefined } });
+                  } else {
+                    navigate('/');
+                  }
                 }}
                 className="w-full bg-slate-900 text-white font-bold py-4 rounded-2xl hover:bg-indigo-600 transition-all flex items-center justify-center gap-2"
               >
-                {isPreviewAction ? 'Close Preview' : 'Continue to Browse'}
+                {isPreviewAction ? 'Close Preview' : (location.state?.fromCheckout ? 'Proceed to Checkout' : 'Continue to Browse')}
               </button>
               
               <p className="mt-6 text-sm text-slate-400 italic">{isPreviewAction ? 'Demonstration mode active' : ''}</p>

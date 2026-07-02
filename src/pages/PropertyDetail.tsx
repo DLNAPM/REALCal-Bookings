@@ -17,10 +17,6 @@ export const PropertyDetail: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [enlargedImageIndex, setEnlargedImageIndex] = useState<number | null>(null);
 
-    if (user && user.tollFreeAccept === undefined && !authLoading) {
-        return <Navigate to="/opt-in" replace />;
-    }
-
     useEffect(() => {
         if (enlargedImageIndex === null || !property) return;
 

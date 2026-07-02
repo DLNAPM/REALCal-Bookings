@@ -21,10 +21,6 @@ export const Home: React.FC = () => {
             handleSignIn();
             return;
         }
-        if (user.tollFreeAccept === undefined) {
-            navigate('/opt-in');
-            return;
-        }
         if (path.startsWith('#')) {
             const el = document.querySelector(path);
             el?.scrollIntoView({ behavior: 'smooth' });

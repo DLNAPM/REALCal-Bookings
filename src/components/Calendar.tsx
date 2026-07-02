@@ -811,6 +811,21 @@ export const Calendar: React.FC<{
            }
        }
 
+       if (user && user.tollFreeAccept === undefined) {
+         navigate('/opt-in', { state: { 
+           fromCheckout: true,
+           propertyId,
+           checkIn: format(checkIn, 'yyyy-MM-dd'), 
+           checkOut: format(checkOut, 'yyyy-MM-dd'), 
+           priceDetails,
+           selectedBedrooms: selectedRooms, dailySelections,
+           rentalMode,
+           leaseCode: validatedLeaseCode,
+           bookingType: priceDetails.nights > 180 ? 'long-term' : 'short-term'
+         }});
+         return;
+       }
+
        navigate('/checkout', { state: { 
          propertyId,
          checkIn: format(checkIn, 'yyyy-MM-dd'), 
@@ -1126,12 +1141,12 @@ if (false) setSelectedRooms(prev =>
               </div>
             )}
             
-            {user && user.tollFreeAccept !== true && !isEditMode && (
-               <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-amber-200 text-xs text-center leading-relaxed font-medium mb-4">
+            {user && user.tollFreeAccept === undefined && !isEditMode && (
+               <div className="p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl text-indigo-200 text-xs text-center leading-relaxed font-medium mb-4">
                   <p className="flex items-center justify-center gap-1.5 mb-2 font-bold uppercase tracking-wider text-[10px]">
-                     <Lock size={12} className="text-amber-500" /> Checkout Restricted
+                     <Lock size={12} className="text-indigo-400" /> Communication Consent
                   </p>
-                  To proceed with this booking, you must first accept our <Link to="/opt-in" className="text-amber-500 underline hover:text-amber-400">Communication Consent</Link> for SMS & Email updates.
+                  Before checking out, you will be prompted to select your SMS Booking Notifications preference.
                </div>
             )}
             
@@ -1443,7 +1458,7 @@ if (false) setSelectedRooms(prev =>
                       handleBook();
                   }
               }}
-              disabled={!checkIn || !checkOut || (user && user.tollFreeAccept !== true && !isEditMode) || (!agreedToHouseRules && !isEditMode) || (rentalMode === 'room' && !agreedToNoKidsUnder10 && !isEditMode) || (priceDetails && priceDetails.nights > 30 && (globalSettings?.allowLongTermRentals === false || !validatedLeaseCode) && !isEditMode)}
+              disabled={!checkIn || !checkOut || (!agreedToHouseRules && !isEditMode) || (rentalMode === 'room' && !agreedToNoKidsUnder10 && !isEditMode) || (priceDetails && priceDetails.nights > 30 && (globalSettings?.allowLongTermRentals === false || !validatedLeaseCode) && !isEditMode)}
               className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-2xl transition-colors flex items-center justify-center gap-2 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed"
             >
               {isEditMode ? 'Save Changes' : 'Proceed to Checkout'}
