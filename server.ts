@@ -886,6 +886,62 @@ async function startServer() {
 
       console.log(`[API] Booking ${bookingId} successfully checked out. Overdue: ${isLate} (${overdueHours} hours, fee: $${(lateCheckoutFee / 100).toFixed(2)})`);
 
+      // Create or update auto-blackout for cleaning the day after ACTUAL checkout
+      try {
+        const actualCheckoutDate = new Date(now);
+        const dayAfterDate = new Date(actualCheckoutDate);
+        dayAfterDate.setDate(dayAfterDate.getDate() + 1);
+        const blackoutDateString = dayAfterDate.toISOString().split('T')[0];
+
+        const selectedBedrooms = booking.selectedBedrooms || [];
+        const bookingRefCode = booking.bookingRef || '';
+
+        if (selectedBedrooms.length > 0) {
+          for (const room of selectedBedrooms) {
+            const blackoutId = `maint-${bookingId}-${room.roomNumber}`;
+            const boDoc = db.collection('blackout_dates').doc(blackoutId);
+            const boSnap = await boDoc.get();
+            if (boSnap.exists) {
+              await boDoc.update({
+                date: blackoutDateString,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+              });
+            } else {
+              await boDoc.set({
+                propertyId: booking.propertyId,
+                date: blackoutDateString,
+                targetType: 'room',
+                roomNumber: room.roomNumber,
+                reason: `Maintenance/Cleaning for Booking ${bookingRefCode} (Room ${room.roomNumber})`,
+                createdAt: admin.firestore.FieldValue.serverTimestamp()
+              });
+            }
+          }
+        } else {
+          const blackoutId = `maint-${bookingId}`;
+          const boDoc = db.collection('blackout_dates').doc(blackoutId);
+          const boSnap = await boDoc.get();
+          if (boSnap.exists) {
+            await boDoc.update({
+              date: blackoutDateString,
+              updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+          } else {
+            await boDoc.set({
+              propertyId: booking.propertyId,
+              date: blackoutDateString,
+              targetType: 'property',
+              roomNumber: null,
+              reason: `Maintenance/Cleaning for Booking ${bookingRefCode}`,
+              createdAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+          }
+        }
+        console.log(`[API] Updated checkout blackout(s) to day after actual checkout: ${blackoutDateString}`);
+      } catch (blackoutErr) {
+        console.warn("Failed to update blackout dates on checkout:", blackoutErr);
+      }
+
       // Prepare guest information
       let guestName = booking.guestName || "Guest";
       let guestEmail = booking.guestEmail;

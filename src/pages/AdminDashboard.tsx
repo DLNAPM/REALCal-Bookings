@@ -1860,7 +1860,25 @@ C.&S.H. Group Properties, LLC
   const handleAdminDeleteBooking = async (bookingId: string) => {
     if (!db || !window.confirm("Permanently delete this booking record? (Unrecoverable)")) return;
     try {
+      const booking = bookings.find(b => b.id === bookingId);
       await deleteDoc(doc(db, 'bookings', bookingId));
+      
+      // Also delete any associated maintenance blackout
+      try {
+        if (booking) {
+          const rooms = booking.selectedBedrooms || (booking.selectedBedroom ? [booking.selectedBedroom] : []);
+          if (rooms.length > 0) {
+            for (const room of rooms) {
+              await deleteDoc(doc(db, 'blackout_dates', `maint-${bookingId}-${room.roomNumber}`));
+            }
+          } else {
+            await deleteDoc(doc(db, 'blackout_dates', `maint-${bookingId}`));
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to remove blackout on delete", err);
+      }
+
       alert("Booking deleted.");
     } catch (err: any) {
       alert(err.message);
