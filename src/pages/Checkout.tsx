@@ -35,6 +35,7 @@ export const Checkout: React.FC = () => {
   const [redirectUrl, setRedirectUrl] = useState<string | null>(null);
   const [guestEmail, setGuestEmail] = useState('');
   const [guestPhone, setGuestPhone] = useState('');
+  const [smsOptInChecked, setSmsOptInChecked] = useState(false);
   const [property, setProperty] = useState<Property | null>(null);
   const [pricingRules, setPricingRules] = useState<PricingRule[]>([]);
   const [globalSettings, setGlobalSettings] = useState<any>(null);
@@ -116,6 +117,11 @@ export const Checkout: React.FC = () => {
     }
     if (!guestPhone.trim()) {
       setError("Please enter a valid mobile number.");
+      return;
+    }
+
+    if (user && user.tollFreeAccept !== true && !smsOptInChecked) {
+      setError("Please check the SMS Consent Opt-In checkbox to receive automated access codes before proceeding.");
       return;
     }
 
@@ -218,6 +224,14 @@ export const Checkout: React.FC = () => {
       // Save Booking to Firestore as 'pending_payment'
       if (db) {
         await setDoc(doc(db, 'bookings', bookingId), payload);
+        
+        // Persist tollFreeAccept preference to user document in Firestore if accepted
+        if (user && user.tollFreeAccept !== true && smsOptInChecked) {
+          await setDoc(doc(db, 'users', user.uid), {
+            tollFreeAccept: true,
+            updatedAt: serverTimestamp()
+          }, { merge: true });
+        }
       }
 
       // 3. Request Checkout Session from Server
@@ -241,7 +255,11 @@ export const Checkout: React.FC = () => {
         const newWindow = window.open(data.url, '_blank', 'noopener,noreferrer');
         if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
           console.warn("[Checkout] Pop-up blocked or failed to open. Fallback to direct redirect.");
-          window.location.href = data.url;
+          if (window.self === window.top) {
+            window.location.href = data.url;
+          } else {
+            console.log("[Checkout] Running inside an iframe. Blocked automatic redirect to prevent Stripe checkout origin policy block.");
+          }
         }
       } else {
         throw new Error("No payment session URL returned from backend server.");
@@ -351,8 +369,15 @@ export const Checkout: React.FC = () => {
                       <h4 className="font-extrabold text-xl text-slate-800">Proceed to Stripe Payment</h4>
                       <p className="text-sm text-slate-500 leading-relaxed max-w-sm mx-auto">
                          A secure Stripe checkout session has been created. If it did not open in a new tab automatically, click the button below to complete your checkout safely.
-                      </p>
-                   </div>
+                       </p>
+                    </div>
+
+                    {window.self !== window.top && (
+                       <div className="p-4 bg-amber-50 border border-amber-200/60 rounded-2xl text-amber-800 text-xs text-left leading-relaxed space-y-1 max-w-sm mx-auto">
+                          <span className="font-bold block text-amber-900">⚠️ Iframe Sandbox Detected</span>
+                          Stripe Checkout cannot load directly inside the AI Studio preview window. Please click the button below to open secure checkout in a new browser tab.
+                       </div>
+                    )}
                    
                    <a
                       href={redirectUrl}
@@ -560,6 +585,24 @@ export const Checkout: React.FC = () => {
                        required
                     />
                  </div>
+
+                 {user && user.tollFreeAccept !== true && (
+                     <div className="p-4 bg-indigo-50/70 border border-indigo-100 rounded-2xl">
+                        <div className="flex items-start gap-3">
+                           <input 
+                              id="checkout-sms-opt-in"
+                              type="checkbox" 
+                              checked={smsOptInChecked}
+                              onChange={e => setSmsOptInChecked(e.target.checked)}
+                              className="mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                           />
+                           <label htmlFor="checkout-sms-opt-in" className="text-xs text-slate-600 leading-relaxed cursor-pointer select-none">
+                              <span className="font-bold text-slate-800 block mb-1">Required SMS Consent Opt-In</span>
+                              By entering your mobile number, you expressly consent to receive automated text messages (SMS) from REALCal Bookings regarding your stay, including reservation confirmations, reminders, and smart lock access codes. Message and data rates may apply. Frequency is 1 message per booking transaction. Reply STOP to opt-out.
+                           </label>
+                        </div>
+                     </div>
+                  )}
 
                  {isTestProperty && (
                      <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-800 text-xs font-medium">
