@@ -32,6 +32,7 @@ export const Checkout: React.FC = () => {
   const [paymentOption, setPaymentOption] = useState<'full' | 'monthly'>('full');
   const [error, setError] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [redirectUrl, setRedirectUrl] = useState<string | null>(null);
   const [guestEmail, setGuestEmail] = useState('');
   const [guestPhone, setGuestPhone] = useState('');
   const [property, setProperty] = useState<Property | null>(null);
@@ -234,7 +235,14 @@ export const Checkout: React.FC = () => {
       const data = await res.json();
       if (data.url) {
         console.log("[Checkout] Redirecting to Checkout Session URL:", data.url);
-        window.location.href = data.url;
+        setRedirectUrl(data.url);
+        
+        // Try opening in a new window/tab to bypass iframe restrictions in AI Studio preview
+        const newWindow = window.open(data.url, '_blank', 'noopener,noreferrer');
+        if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+          console.warn("[Checkout] Pop-up blocked or failed to open. Fallback to direct redirect.");
+          window.location.href = data.url;
+        }
       } else {
         throw new Error("No payment session URL returned from backend server.");
       }
@@ -334,7 +342,42 @@ export const Checkout: React.FC = () => {
           <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200 h-fit">
              <h3 className="font-bold text-lg mb-6 text-slate-800">Payment Details</h3>
              
-             {isLongTermLease && (
+             {redirectUrl ? (
+                <div className="text-center py-10 space-y-6">
+                   <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto animate-bounce">
+                      <span className="text-2xl">⚡</span>
+                   </div>
+                   <div className="space-y-2">
+                      <h4 className="font-extrabold text-xl text-slate-800">Proceed to Stripe Payment</h4>
+                      <p className="text-sm text-slate-500 leading-relaxed max-w-sm mx-auto">
+                         A secure Stripe checkout session has been created. If it did not open in a new tab automatically, click the button below to complete your checkout safely.
+                      </p>
+                   </div>
+                   
+                   <a
+                      href={redirectUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex w-full bg-indigo-600 hover:bg-indigo-500 text-white py-4 rounded-2xl font-bold justify-center items-center gap-2 text-base transition-colors shadow-md cursor-pointer animate-pulse"
+                   >
+                      <span>Open Secure Checkout</span>
+                      <span>🚀</span>
+                   </a>
+                   
+                   <button
+                      type="button"
+                      onClick={() => {
+                        setRedirectUrl(null);
+                        setProcessing(false);
+                      }}
+                      className="text-xs text-slate-400 hover:text-slate-600 underline cursor-pointer mt-4 block mx-auto"
+                   >
+                      Cancel and return to checkout form
+                   </button>
+                </div>
+             ) : (
+                <>
+                   {isLongTermLease && (
                   <div className="mb-6 p-5 bg-indigo-50/40 border border-indigo-100 rounded-2xl text-left">
                      <h4 className="font-extrabold text-sm text-indigo-950 mb-3 uppercase tracking-wider flex items-center gap-1.5">
                         <span>🔒</span> Long Term Lease Options ({localPriceDetails?.nights} Nights)
@@ -596,6 +639,9 @@ export const Checkout: React.FC = () => {
                    </div>
                  </div>
                </div>
+             )}
+
+                </>
              )}
 
              {/* Booking Controls */}

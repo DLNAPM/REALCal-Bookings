@@ -95,6 +95,7 @@ export const MyBookings: React.FC = () => {
     const [checkoutTargetBooking, setCheckoutTargetBooking] = useState<(Booking & { propertyName?: string; propertyImage?: string; property?: Property | null }) | null>(null);
     const [checkoutProcessing, setCheckoutProcessing] = useState(false);
     const [checkinProcessing, setCheckinProcessing] = useState(false);
+    const [stripeRedirectUrl, setStripeRedirectUrl] = useState<string | null>(null);
 
     const [adminSortOrder, setAdminSortOrder] = useState<'asc' | 'desc'>('desc');
     const [selectedAdminBooking, setSelectedAdminBooking] = useState<(Booking & { propertyName?: string; propertyImage?: string; property?: Property | null }) | null>(null);
@@ -492,7 +493,14 @@ export const MyBookings: React.FC = () => {
                 }
                 const { url } = await sessionRes.json();
                 if (url) {
-                    window.location.href = url;
+                    console.log("[MyBookings] Redirecting to modification checkout session URL:", url);
+                    setEditingBooking(null);
+                    setStripeRedirectUrl(url);
+                    const newWindow = window.open(url, '_blank', 'noopener,noreferrer');
+                    if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+                        console.warn("[MyBookings] Pop-up blocked or failed to open. Fallback to direct redirect.");
+                        window.location.href = url;
+                    }
                 } else {
                     throw new Error("No redirect URL returned from modification checkout session");
                 }
@@ -1368,6 +1376,40 @@ export const MyBookings: React.FC = () => {
                                 onCancelEdit={() => setEditingBooking(null)}
                             />
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {stripeRedirectUrl && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-slate-100 flex flex-col gap-6 text-center animate-in fade-in-50 zoom-in-95 duration-200">
+                        <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto animate-bounce">
+                            <span className="text-2xl">⚡</span>
+                        </div>
+                        <div className="space-y-2">
+                            <h3 className="text-xl font-extrabold tracking-tight text-slate-800">Additional Payment Required</h3>
+                            <p className="text-sm text-slate-500 leading-relaxed">
+                                Your booking modification requires an additional payment. A secure Stripe checkout session has been created. If it did not open in a new tab automatically, click the button below to complete the payment.
+                            </p>
+                        </div>
+                        
+                        <a
+                            href={stripeRedirectUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex w-full bg-indigo-600 hover:bg-indigo-500 text-white py-4 rounded-2xl font-bold justify-center items-center gap-2 text-base transition-colors shadow-md cursor-pointer animate-pulse"
+                        >
+                            <span>Proceed to Payment</span>
+                            <span>🚀</span>
+                        </a>
+                        
+                        <button
+                            type="button"
+                            onClick={() => setStripeRedirectUrl(null)}
+                            className="text-xs text-slate-400 hover:text-slate-600 underline cursor-pointer"
+                        >
+                            Close this message
+                        </button>
                     </div>
                 </div>
             )}
