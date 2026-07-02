@@ -90,6 +90,7 @@ export const AdminDashboard: React.FC = () => {
   const [invoiceCustomNotes, setInvoiceCustomNotes] = useState<string>('');
   const [sendingInvoice, setSendingInvoice] = useState<boolean>(false);
   const [sendingInvoiceId, setSendingInvoiceId] = useState<string | null>(null);
+  const [syncingInvoiceId, setSyncingInvoiceId] = useState<string | null>(null);
 
   // User profile editing states
   const [editingUser, setEditingUser] = useState<any | null>(null);
@@ -1038,6 +1039,7 @@ export const AdminDashboard: React.FC = () => {
       const finalPriceCents = Math.round(grandTotalAmount * 100);
 
       let stripePaymentUrl = '';
+      let stripeSessionId = '';
       try {
          const payLinkRes = await fetch('/api/create-invoice-checkout-session', {
              method: 'POST',
@@ -1056,6 +1058,7 @@ export const AdminDashboard: React.FC = () => {
          if (payLinkRes.ok) {
              const payLinkData = await payLinkRes.json();
              stripePaymentUrl = payLinkData.url || '';
+             stripeSessionId = payLinkData.sessionId || '';
          } else {
              console.warn("Could not create Stripe Checkout Session, status code", payLinkRes.status);
          }
@@ -1073,6 +1076,7 @@ export const AdminDashboard: React.FC = () => {
          customNotes: invoiceCustomNotes,
          sentAt: new Date().toISOString(),
          stripePaymentUrl: stripePaymentUrl || null,
+         stripeSessionId: stripeSessionId || null,
          baseAmount: baseAmount,
          stripeFee: stripeFee,
          grandTotal: grandTotalAmount
@@ -1556,6 +1560,50 @@ C.&S.H. Group Properties, LLC
       alert("SmartLock code updated!");
     } catch (err: any) {
       alert("Error updating SmartLock code: " + err.message);
+    }
+  };
+
+  const handleSyncStripeStatus = async (bookingId: string) => {
+    setSyncingInvoiceId(bookingId);
+    try {
+      const res = await fetch("/api/sync-invoice-stripe-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bookingId })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to sync status");
+      }
+      if (data.updated) {
+        alert("Success! Stripe checkout session is PAID. Booking invoice status updated to Paid.");
+      } else {
+        alert(`Status synced. Current Stripe payment status is: ${data.stripePaymentStatus || data.status || 'unpaid'}. (Stripe Session: ${data.stripeStatus || 'N/A'})`);
+      }
+    } catch (err: any) {
+      alert("Error syncing with Stripe: " + err.message);
+    } finally {
+      setSyncingInvoiceId(null);
+    }
+  };
+
+  const handleMarkInvoicePaidManual = async (bookingId: string) => {
+    const confirmMark = window.confirm("Are you sure you want to manually mark this invoice as PAID? This should be used for offline or alternative payments.");
+    if (!confirmMark) return;
+
+    try {
+      const res = await fetch("/api/mark-invoice-paid", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bookingId })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to mark as paid");
+      }
+      alert("Success! Invoice marked as paid.");
+    } catch (err: any) {
+      alert("Error marking paid: " + err.message);
     }
   };
 
@@ -2936,6 +2984,153 @@ C.&S.H. Group Properties, LLC
                    </tbody>
                 </table>
                 {bookings.length === 0 && <p className="text-center py-8 text-slate-400 text-sm italic">No bookings found.</p>}
+
+                <hr className="my-8 border-slate-200" />
+
+                <div className="mt-8">
+                   <div className="flex justify-between items-center mb-6">
+                      <div>
+                         <h2 className="text-xl font-bold flex items-center gap-2"><FileText className="text-indigo-600" size={20}/> Invoice Transaction Ledger</h2>
+                         <p className="text-xs text-slate-500 mt-1">Real-time status tracking of all created booking invoices. Sync with Stripe directly to verify transaction success.</p>
+                      </div>
+                      <div className="flex gap-2 text-xs font-semibold">
+                         <span className="bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-md font-bold uppercase">{bookings.filter(b => b.invoiceDetails?.paid).length} Paid</span>
+                         <span className="bg-amber-100 text-amber-800 px-2.5 py-1 rounded-md font-bold uppercase">{bookings.filter(b => b.invoiceDetails && !b.invoiceDetails.paid).length} Unpaid</span>
+                      </div>
+                   </div>
+                   
+                   <div className="overflow-x-auto">
+                      <table className="w-full text-sm text-left">
+                         <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-y border-slate-100">
+                            <tr>
+                               <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest">Invoice #</th>
+                               <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest">Sponsor Name & Email</th>
+                               <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest">Amount (USD)</th>
+                               <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest">Invoice Sent Date</th>
+                               <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest">Payment Status</th>
+                               <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest text-right">Actions</th>
+                            </tr>
+                         </thead>
+                         <tbody className="divide-y divide-slate-100">
+                            {bookings.filter(b => !!b.invoiceDetails).sort((a, b) => new Date(b.invoiceDetails.sentAt || b.createdAt).getTime() - new Date(a.invoiceDetails.sentAt || a.createdAt).getTime()).map((b) => {
+                               const inv = b.invoiceDetails;
+                               const prop = properties.find(p => p.id === b.propertyId);
+                               const formattedSentDate = inv.sentAt ? new Date(inv.sentAt).toLocaleString() : 'N/A';
+                               const formattedPaidDate = inv.paidAt ? new Date(inv.paidAt).toLocaleString() : '';
+                               
+                               return (
+                                  <tr key={b.id} className="hover:bg-slate-50 transition-colors">
+                                     <td className="px-4 py-4 font-mono text-xs font-bold text-indigo-600">
+                                        <div className="flex flex-col">
+                                           <span>#{inv.invoiceNumber || 'Manual'}</span>
+                                           <span className="text-[10px] text-slate-400 font-normal">Ref: {b.bookingRef || '—'}</span>
+                                        </div>
+                                     </td>
+                                     <td className="px-4 py-4">
+                                        <div className="font-semibold text-slate-800">{inv.sponsorName || 'Unknown Sponsor'}</div>
+                                        <div className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                                           <Mail size={12} className="text-slate-400" />
+                                           {inv.sponsorEmail}
+                                        </div>
+                                        {inv.sponsorPhone && (
+                                           <div className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                                              <Phone size={12} className="text-slate-400" />
+                                              {inv.sponsorPhone}
+                                           </div>
+                                        )}
+                                     </td>
+                                     <td className="px-4 py-4">
+                                        <div className="font-bold text-slate-800">${(inv.grandTotal || b.totalPrice / 100).toFixed(2)}</div>
+                                        <div className="text-[10px] text-slate-400 leading-normal mt-0.5">
+                                           Base: ${(inv.baseAmount || (b.totalPrice / 100) - (inv.stripeFee || 0)).toFixed(2)} <br />
+                                           Stripe Fee: ${(inv.stripeFee || 0).toFixed(2)}
+                                        </div>
+                                     </td>
+                                     <td className="px-4 py-4 text-slate-600 text-xs font-mono">
+                                        {formattedSentDate}
+                                     </td>
+                                     <td className="px-4 py-4 space-y-1">
+                                        <div>
+                                           {inv.paid ? (
+                                              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800 inline-flex items-center gap-1">
+                                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                                 Paid
+                                              </span>
+                                           ) : (
+                                              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase bg-amber-100 text-amber-800 inline-flex items-center gap-1">
+                                                 <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                                 Pending
+                                              </span>
+                                           )}
+                                        </div>
+                                        {inv.paid && formattedPaidDate && (
+                                           <div className="text-[9px] text-slate-400 font-mono">
+                                              At: {formattedPaidDate}
+                                           </div>
+                                        )}
+                                     </td>
+                                     <td className="px-4 py-4 text-right">
+                                        <div className="flex justify-end gap-2 flex-wrap">
+                                           {inv.stripePaymentUrl && !inv.paid && (
+                                              <a
+                                                 href={inv.stripePaymentUrl}
+                                                 target="_blank"
+                                                 rel="noopener noreferrer"
+                                                 className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1 rounded-lg transition-all inline-flex items-center gap-1 cursor-pointer"
+                                                 title="View Stripe Checkout URL"
+                                              >
+                                                 Checkout Link
+                                              </a>
+                                           )}
+                                           
+                                           {inv.stripeSessionId && !inv.paid && (
+                                              <button
+                                                 onClick={() => handleSyncStripeStatus(b.id)}
+                                                 disabled={syncingInvoiceId === b.id}
+                                                 className="text-[10px] font-bold text-slate-700 hover:text-indigo-600 bg-slate-100 hover:bg-indigo-50 border border-slate-300 hover:border-indigo-200 px-2.5 py-1 rounded-lg transition-all inline-flex items-center gap-1 disabled:opacity-50 cursor-pointer"
+                                                 title="Sync live status directly from Stripe.com"
+                                              >
+                                                 {syncingInvoiceId === b.id ? (
+                                                    <>
+                                                       <Loader2 size={12} className="animate-spin" /> Syncing...
+                                                    </>
+                                                 ) : (
+                                                    <>
+                                                       <RefreshCw size={12} /> Sync Stripe
+                                                    </>
+                                                 )}
+                                              </button>
+                                           )}
+
+                                           {!inv.paid && (
+                                              <button
+                                                 onClick={() => handleMarkInvoicePaidManual(b.id)}
+                                                 className="text-[10px] font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2.5 py-1 rounded-lg transition-all inline-flex items-center gap-1 cursor-pointer"
+                                                 title="Manually mark paid (e.g. offline pay)"
+                                              >
+                                                 <CheckCircle size={12} /> Mark Paid
+                                              </button>
+                                           )}
+                                           
+                                           <button
+                                              onClick={() => handleResendInvoice(b)}
+                                              disabled={sendingInvoiceId === b.id}
+                                              className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1 rounded-lg transition-all inline-flex items-center gap-1 disabled:opacity-50 cursor-pointer"
+                                           >
+                                              {sendingInvoiceId === b.id ? 'Sending...' : 'Resend Email'}
+                                           </button>
+                                        </div>
+                                     </td>
+                                  </tr>
+                               );
+                            })}
+                         </tbody>
+                      </table>
+                      {bookings.filter(b => !!b.invoiceDetails).length === 0 && (
+                         <p className="text-center py-8 text-slate-400 text-sm italic">No generated invoices found.</p>
+                      )}
+                   </div>
+                </div>
              </div>
           </div>
 

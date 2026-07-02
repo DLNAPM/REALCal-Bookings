@@ -1467,9 +1467,83 @@ async function startServer() {
         }
       });
 
-      res.json({ url: session.url });
+      res.json({ url: session.url, sessionId: session.id });
     } catch (e: any) {
       console.error("Error creating invoice checkout session:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/sync-invoice-stripe-status", async (req, res) => {
+    try {
+      const { bookingId } = req.body;
+      if (!bookingId) {
+        return res.status(400).json({ error: "bookingId is required" });
+      }
+
+      let activeDb = db;
+      if (!activeDb) {
+        const configPath = path.resolve(process.cwd(), "firebase-applet-config.json");
+        if (fs.existsSync(configPath)) {
+          const firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+          if (admin.apps.length === 0) {
+            admin.initializeApp({ projectId: firebaseConfig.projectId });
+          }
+          const dbId = firebaseConfig.firestoreDatabaseId || "(default)";
+          activeDb = getFirestore(admin.app(), dbId);
+        }
+      }
+
+      if (!activeDb) {
+        return res.status(500).json({ error: "Database not initialized" });
+      }
+
+      const bookingRef = activeDb.collection('bookings').doc(bookingId);
+      const bookingDoc = await bookingRef.get();
+
+      if (!bookingDoc.exists) {
+        return res.status(404).json({ error: `Booking with ID ${bookingId} not found` });
+      }
+
+      const data = bookingDoc.data() || {};
+      const invoiceDetails = data.invoiceDetails || {};
+
+      if (!invoiceDetails.stripeSessionId) {
+        return res.status(400).json({ error: "This invoice does not have a Stripe checkout session ID for automated syncing." });
+      }
+
+      const key = process.env.STRIPE_SECRET_KEY;
+      if (!key || key === "sk_test_...") {
+        return res.status(400).json({ error: "STRIPE_SECRET_KEY is not configured." });
+      }
+
+      const stripe = new Stripe(key);
+      const session = await stripe.checkout.sessions.retrieve(invoiceDetails.stripeSessionId);
+
+      const isPaid = session.payment_status === "paid" || session.status === "complete";
+      
+      if (isPaid && !invoiceDetails.paid) {
+        invoiceDetails.paid = true;
+        invoiceDetails.paidAt = new Date().toISOString();
+        
+        await bookingRef.update({
+          invoiceDetails,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+        
+        return res.json({ success: true, status: "paid", updated: true });
+      }
+
+      return res.json({ 
+        success: true, 
+        status: isPaid ? "paid" : "unpaid", 
+        stripeStatus: session.status,
+        stripePaymentStatus: session.payment_status,
+        updated: false 
+      });
+
+    } catch (e: any) {
+      console.error("Error syncing stripe invoice status on server:", e);
       res.status(500).json({ error: e.message });
     }
   });
