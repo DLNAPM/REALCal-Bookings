@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, Link, Navigate } from 'react-router-dom';
+import { useParams, Link, Navigate, useLocation } from 'react-router-dom';
 import { Calendar } from '../components/Calendar';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
@@ -12,6 +12,8 @@ import { LegalFooter } from '../components/LegalFooter';
 
 export const PropertyDetail: React.FC = () => {
     const { id } = useParams<{id: string}>();
+    const location = useLocation();
+    const clearDates = location.state?.clearDates || false;
     const { user, loading: authLoading } = useAuth();
     const [property, setProperty] = useState<Property | null>(null);
     const [loading, setLoading] = useState(true);
@@ -194,7 +196,7 @@ export const PropertyDetail: React.FC = () => {
                     </div>
                 </div>
 
-               <Calendar propertyId={property.id} property={property} />
+               <Calendar propertyId={property.id} property={property} clearDates={clearDates} />
             </main>
             <LegalFooter />
         

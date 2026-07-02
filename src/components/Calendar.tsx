@@ -7,7 +7,7 @@ import { BlackoutDate, PricingRule } from '../types';
 import { Property } from '../types';
 import { cn } from '../lib/utils';
 import { ChevronLeft, ChevronRight, Lock, CheckCircle2, AlertCircle, FileText, Loader2, RefreshCw, HelpCircle } from 'lucide-react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { getNightlyRate, calculatePriceDetails } from '../lib/pricing';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -21,9 +21,10 @@ export const Calendar: React.FC<{
     initialSelectedRoom?: any,
     initialSelectedRooms?: any[],
     initialDailySelections?: any,
+    clearDates?: boolean,
     onSaveEdit?: (checkIn: string, checkOut: string, priceDetails: any, selectedRooms: any[], rentalMode: 'entire' | 'room', dailySelections?: any) => void,
     onCancelEdit?: () => void
-}> = ({ propertyId, property, isEditMode, editingBookingId, initialCheckIn, initialCheckOut, initialSelectedRoom, initialSelectedRooms, initialDailySelections, onSaveEdit, onCancelEdit }) => {
+}> = ({ propertyId, property, isEditMode, editingBookingId, initialCheckIn, initialCheckOut, initialSelectedRoom, initialSelectedRooms, initialDailySelections, clearDates, onSaveEdit, onCancelEdit }) => {
   const parseLocalDate = (dateStr: string) => {
     if (!dateStr) return null;
     const [year, month, day] = dateStr.split('T')[0].split('-').map(Number);
@@ -90,6 +91,24 @@ export const Calendar: React.FC<{
   const [leaseFormSuccess, setLeaseFormSuccess] = useState<boolean>(false);
 
   const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (clearDates) {
+      console.log("[Calendar] clearDates flag detected. Flushing previous selection and resetting calendar state.");
+      setCheckIn(null);
+      setCheckOut(null);
+      setSelectedRooms([]);
+      setDailySelections(null);
+      setAgreedToHouseRules(false);
+      setAgreedToNoKidsUnder10(false);
+      setEnteredLeaseCode('');
+      setValidatedLeaseCode(null);
+      setLeaseDetails(null);
+      // Clear navigation state to prevent infinite clearing on reload
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [clearDates, location.pathname, navigate]);
 
   // Reset and pre-populate lease form whenever checkout dates or rental mode change
   useEffect(() => {

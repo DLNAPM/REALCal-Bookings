@@ -1,8 +1,8 @@
 /// <reference types="vite/client" />
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { doc, setDoc, serverTimestamp, getDoc, getDocs, query, collection, where } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, getDoc, getDocs, query, collection, where, deleteDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { v4 as uuidv4 } from 'uuid'; 
 import { calculatePriceDetails, PricingRule } from '../lib/pricing';
@@ -58,6 +58,23 @@ export const Checkout: React.FC = () => {
 
   const [showWarningModal, setShowWarningModal] = useState(false);
   const [warningConfirmed, setWarningConfirmed] = useState(false);
+
+  const [activeBookingId, setActiveBookingId] = useState<string | null>(null);
+  const activeBookingIdRef = useRef<string | null>(null);
+  const isRedirectingToStripe = useRef<boolean>(false);
+
+  // Clean up booking on unmount if it was created but not completed (abandoned)
+  useEffect(() => {
+    return () => {
+      const bookingIdToClean = activeBookingIdRef.current;
+      if (bookingIdToClean && db && !isRedirectingToStripe.current) {
+        console.log("[Checkout] Cleaning up abandoned booking on unmount:", bookingIdToClean);
+        deleteDoc(doc(db, 'bookings', bookingIdToClean)).catch(err => {
+          console.error("[Checkout] Failed to clean up abandoned booking on unmount:", err);
+        });
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (user?.email && !guestEmail) {
@@ -144,6 +161,8 @@ export const Checkout: React.FC = () => {
     setError(null);
 
     const bookingId = uuidv4();
+    setActiveBookingId(bookingId);
+    activeBookingIdRef.current = bookingId;
     const e164Phone = formatPhoneE164(guestPhone);
     const bookingRef = Math.random().toString(36).substring(2, 8).toUpperCase();
 
@@ -252,6 +271,7 @@ export const Checkout: React.FC = () => {
         
         if (window.self === window.top) {
           // If we are at the top level, try to open in a new tab first, fallback to direct redirect
+          isRedirectingToStripe.current = true;
           const newWindow = window.open(data.url, '_blank', 'noopener,noreferrer');
           if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
             console.warn("[Checkout] Pop-up blocked or failed to open. Fallback to direct redirect.");
@@ -390,7 +410,18 @@ export const Checkout: React.FC = () => {
                    
                    <button
                       type="button"
-                      onClick={() => {
+                      onClick={async () => {
+                        const bookingIdToClean = activeBookingIdRef.current;
+                        if (bookingIdToClean && db) {
+                          try {
+                            await deleteDoc(doc(db, 'bookings', bookingIdToClean));
+                            console.log("[Checkout] Successfully cleaned up pending_payment booking on manual cancel:", bookingIdToClean);
+                          } catch (err) {
+                            console.error("[Checkout] Failed to clean up pending_payment booking on manual cancel:", err);
+                          }
+                        }
+                        setActiveBookingId(null);
+                        activeBookingIdRef.current = null;
                         setRedirectUrl(null);
                         setProcessing(false);
                       }}
@@ -689,7 +720,7 @@ export const Checkout: React.FC = () => {
              {/* Booking Controls */}
              <div className="mt-8 pt-6 border-t border-slate-200 flex flex-col sm:flex-row gap-4 justify-between items-center">
                  <button 
-                    onClick={() => navigate(`/property/${propertyId}`)}
+                    onClick={() => navigate(`/property/${propertyId}`, { state: { clearDates: true } })}
                     className="text-indigo-600 hover:text-indigo-800 font-medium text-sm transition-colors cursor-pointer"
                  >
                     Edit Booking Dates
