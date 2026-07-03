@@ -169,8 +169,17 @@ export const Checkout: React.FC = () => {
     try {
       // 1. Create accessCode (lookup manual code first, or assign placeholder)
       let accessCode = '';
-      if (property?.hasSmartLock && property?.frontDoorCode) {
+      if (property?.hasSmartLock && property?.frontDoorCode && property.frontDoorCode.trim()) {
         accessCode = property.frontDoorCode.trim();
+      }
+
+      if (!accessCode) {
+        // Automatically assign it to be the same as the Guest Room's LOCK# at Checkout
+        if (selectedBedrooms && selectedBedrooms.length > 0) {
+          accessCode = (selectedBedrooms[0].roomLockNumber || '').trim();
+        } else if (property?.bedrooms && property.bedrooms.length > 0) {
+          accessCode = (property.bedrooms[0].roomLockNumber || '').trim();
+        }
       }
 
       // 2. Prepare Firestore payload (initially as 'pending_payment')
