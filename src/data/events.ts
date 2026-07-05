@@ -56,7 +56,7 @@ export function getEventsForCurrentMonth(currentDate: Date): EventItem[] {
       rawDate: createDateInCurrentMonth(15, 19),
       date: formatDate(createDateInCurrentMonth(15)),
       description: 'Catch the fast-paced WNBA action live as the Atlanta Dream take on the defending champions at the Gateway Center Arena in College Park.',
-      ticketUrl: 'https://www.ticketmaster.com/atlanta-dream-tickets/artist/1199346',
+      ticketUrl: 'https://dream.wnba.com/',
       venue: 'Gateway Center Arena (College Park)',
       distance: '9.2 miles'
     });
@@ -147,7 +147,7 @@ export function getEventsForCurrentMonth(currentDate: Date): EventItem[] {
       rawDate: createDateInCurrentMonth(24, 19),
       date: formatDate(createDateInCurrentMonth(24)),
       description: 'The WNBA season returns! Witness elite women\'s professional basketball live at the Gateway Center Arena in College Park.',
-      ticketUrl: 'https://www.ticketmaster.com/atlanta-dream-tickets/artist/1199346',
+      ticketUrl: 'https://dream.wnba.com/',
       venue: 'Gateway Center Arena (College Park)',
       distance: '9.2 miles'
     });
@@ -175,7 +175,7 @@ export function getEventsForCurrentMonth(currentDate: Date): EventItem[] {
     rawDate: createDateInCurrentMonth(4, 20),
     date: formatDate(createDateInCurrentMonth(4, 20)),
     description: 'An intimate evening of premier live contemporary jazz, soul, and R&B music. Exceptional acoustics paired with a refined dinner menu.',
-    ticketUrl: 'https://www.ticketmaster.com/st-james-live-tickets/artist/230182',
+    ticketUrl: 'https://www.stjamesliveatl.com/',
     venue: 'St. James Live',
     distance: '10.8 miles'
   });
@@ -188,7 +188,7 @@ export function getEventsForCurrentMonth(currentDate: Date): EventItem[] {
       rawDate: createDateInCurrentMonth(11, 18),
       date: formatDate(createDateInCurrentMonth(11, 18)),
       description: 'Gather under the stars at South Fulton\'s premier open-air amphitheater for an exquisite evening of R&B, funk, and classic soul acts.',
-      ticketUrl: 'https://www.ticketmaster.com/wolf-creek-amphitheater-tickets-college-park/venue/115546',
+      ticketUrl: 'https://www.wolfcreekamphitheater.com/',
       venue: 'Wolf Creek Amphitheater',
       distance: '5.4 miles'
     });
@@ -213,7 +213,7 @@ export function getEventsForCurrentMonth(currentDate: Date): EventItem[] {
     rawDate: createDateInCurrentMonth(25, 20),
     date: formatDate(createDateInCurrentMonth(25, 20)),
     description: 'Sip on locally made, award-winning craft wines while enjoying an intimate performance from touring singer-songwriters at Ponce City Market.',
-    ticketUrl: 'https://www.ticketmaster.com/city-winery-atlanta-tickets-atlanta/venue/115456',
+    ticketUrl: 'https://www.citywinery.com/atlanta',
     venue: 'City Winery Atlanta',
     distance: '14.1 miles'
   });
@@ -226,7 +226,7 @@ export function getEventsForCurrentMonth(currentDate: Date): EventItem[] {
     rawDate: createDateInCurrentMonth(29, 20),
     date: formatDate(createDateInCurrentMonth(29, 20)),
     description: 'Immerse yourself in a majestic evening of classical masterpieces and modern cinematic scores, performed live at Symphony Hall.',
-    ticketUrl: 'https://www.ticketmaster.com/atlanta-symphony-hall-tickets-atlanta/venue/114691',
+    ticketUrl: 'https://www.aso.org/',
     venue: 'Atlanta Symphony Hall',
     distance: '13.9 miles'
   });
@@ -348,7 +348,7 @@ export function getEventsForCurrentMonth(currentDate: Date): EventItem[] {
         rawDate: createDateInCurrentMonth(extraDay, 19),
         date: formatDate(createDateInCurrentMonth(extraDay)),
         description: 'Cheer on local teams in this high-energy athletic showcase packed with food trucks, fan games, and pre-match music.',
-        ticketUrl: 'https://atlantasilverbackspark.com/',
+        ticketUrl: 'https://silverbackspark.com/',
         venue: 'Silverbacks Park',
         distance: '21.0 miles'
       });
