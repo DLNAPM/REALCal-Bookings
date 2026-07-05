@@ -74,6 +74,14 @@ export const Home: React.FC = () => {
         }
     };
 
+    const getLinkDetails = (url: string) => {
+        const isTicketmaster = url.toLowerCase().includes('ticketmaster.com');
+        return {
+            label: isTicketmaster ? 'Get Tickets on Ticketmaster' : 'Visit Event Website',
+            isTicketmaster
+        };
+    };
+
     return (
         <div className="min-h-screen bg-white flex flex-col font-sans text-slate-900 pb-12 overflow-x-hidden">
             <header className="pt-6 px-6 max-w-7xl mx-auto w-full z-10 relative">
@@ -417,8 +425,12 @@ export const Home: React.FC = () => {
                                                 rel="noopener noreferrer" 
                                                 className="w-full bg-slate-900 hover:bg-indigo-600 text-white font-bold text-xs py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-colors group shadow-sm"
                                             >
-                                                <Ticket size={14} className="group-hover:rotate-12 transition-transform" />
-                                                <span>Get Tickets on Ticketmaster</span>
+                                                {getLinkDetails(event.ticketUrl).isTicketmaster ? (
+                                                    <Ticket size={14} className="group-hover:rotate-12 transition-transform" />
+                                                ) : (
+                                                    <Compass size={14} className="group-hover:rotate-12 transition-transform" />
+                                                )}
+                                                <span>{getLinkDetails(event.ticketUrl).label}</span>
                                             </a>
                                         </div>
                                     </div>
@@ -469,8 +481,12 @@ export const Home: React.FC = () => {
                                                 rel="noopener noreferrer" 
                                                 className="w-full bg-slate-900 hover:bg-indigo-600 text-white font-bold text-xs py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-colors group shadow-sm"
                                             >
-                                                <Ticket size={14} className="group-hover:rotate-12 transition-transform" />
-                                                <span>Get Tickets</span>
+                                                {getLinkDetails(event.ticketUrl).isTicketmaster ? (
+                                                    <Ticket size={14} className="group-hover:rotate-12 transition-transform" />
+                                                ) : (
+                                                    <Compass size={14} className="group-hover:rotate-12 transition-transform" />
+                                                )}
+                                                <span>{getLinkDetails(event.ticketUrl).label}</span>
                                             </a>
                                         </div>
                                     </div>
@@ -521,8 +537,12 @@ export const Home: React.FC = () => {
                                                 rel="noopener noreferrer" 
                                                 className="w-full bg-slate-900 hover:bg-indigo-600 text-white font-bold text-xs py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-colors group shadow-sm"
                                             >
-                                                <Ticket size={14} className="group-hover:rotate-12 transition-transform" />
-                                                <span>Explore Event</span>
+                                                {getLinkDetails(event.ticketUrl).isTicketmaster ? (
+                                                    <Ticket size={14} className="group-hover:rotate-12 transition-transform" />
+                                                ) : (
+                                                    <Compass size={14} className="group-hover:rotate-12 transition-transform" />
+                                                )}
+                                                <span>{getLinkDetails(event.ticketUrl).label}</span>
                                             </a>
                                         </div>
                                     </div>
@@ -573,8 +593,12 @@ export const Home: React.FC = () => {
                                                 rel="noopener noreferrer" 
                                                 className="w-full bg-slate-900 hover:bg-indigo-600 text-white font-bold text-xs py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-colors group shadow-sm"
                                             >
-                                                <Ticket size={14} className="group-hover:rotate-12 transition-transform" />
-                                                <span>Explore Event</span>
+                                                {getLinkDetails(event.ticketUrl).isTicketmaster ? (
+                                                    <Ticket size={14} className="group-hover:rotate-12 transition-transform" />
+                                                ) : (
+                                                    <Compass size={14} className="group-hover:rotate-12 transition-transform" />
+                                                )}
+                                                <span>{getLinkDetails(event.ticketUrl).label}</span>
                                             </a>
                                         </div>
                                     </div>

@@ -253,7 +253,7 @@ export function getEventsForCurrentMonth(currentDate: Date): EventItem[] {
     rawDate: createDateInCurrentMonth(12, 10),
     date: formatDate(createDateInCurrentMonth(12, 10)),
     description: 'A beautiful community gathering in Atlanta\'s historic park featuring live music, food truck rallies, and handmade local crafts.',
-    ticketUrl: 'https://www.ticketmaster.com/',
+    ticketUrl: 'https://www.piedmontpark.org/',
     venue: 'Piedmont Park',
     distance: '14.2 miles'
   });
@@ -265,7 +265,7 @@ export function getEventsForCurrentMonth(currentDate: Date): EventItem[] {
     rawDate: createDateInCurrentMonth(19, 10),
     date: formatDate(createDateInCurrentMonth(19, 10)),
     description: 'Stroll through a stunning wonderland of massive living plant sculptures and dynamic glass artwork reflecting beautifully in the gardens.',
-    ticketUrl: 'https://www.ticketmaster.com/',
+    ticketUrl: 'https://atlantabg.org/',
     venue: 'Atlanta Botanical Garden',
     distance: '14.3 miles'
   });
@@ -277,7 +277,7 @@ export function getEventsForCurrentMonth(currentDate: Date): EventItem[] {
     rawDate: createDateInCurrentMonth(26, 11),
     date: formatDate(createDateInCurrentMonth(26, 11)),
     description: 'Travel through time from prehistoric dinosaurs to the cosmos. Discover immersive outdoor nature trails and massive 3D theater screens.',
-    ticketUrl: 'https://www.ticketmaster.com/',
+    ticketUrl: 'https://www.fernbankmuseum.org/',
     venue: 'Fernbank Museum of Natural History',
     distance: '16.1 miles'
   });
@@ -291,7 +291,7 @@ export function getEventsForCurrentMonth(currentDate: Date): EventItem[] {
     rawDate: createDateInCurrentMonth(3, 13),
     date: formatDate(createDateInCurrentMonth(3, 13)),
     description: 'Experience mesmerizing puppetry performances, followed by a hands-on workshop where kids build and take home their very own custom puppets.',
-    ticketUrl: 'https://www.ticketmaster.com/',
+    ticketUrl: 'https://puppet.org/',
     venue: 'Center for Puppetry Arts',
     distance: '13.8 miles'
   });
@@ -303,7 +303,7 @@ export function getEventsForCurrentMonth(currentDate: Date): EventItem[] {
     rawDate: createDateInCurrentMonth(9, 10),
     date: formatDate(createDateInCurrentMonth(9, 10)),
     description: 'Inspire young explorers with a journey through the world\'s largest aquatic exhibits, home to whale sharks, manta rays, and playful sea otters.',
-    ticketUrl: 'https://www.ticketmaster.com/',
+    ticketUrl: 'https://www.georgiaaquarium.org/',
     venue: 'Georgia Aquarium',
     distance: '11.8 miles'
   });
@@ -315,7 +315,7 @@ export function getEventsForCurrentMonth(currentDate: Date): EventItem[] {
     rawDate: createDateInCurrentMonth(17, 10),
     date: formatDate(createDateInCurrentMonth(17, 10)),
     description: 'Get up close and personal with giant pandas, african elephants, and exotic wildlife. Highly educational and perfect for young animal lovers.',
-    ticketUrl: 'https://www.ticketmaster.com/',
+    ticketUrl: 'https://zooatlanta.org/',
     venue: 'Zoo Atlanta',
     distance: '12.4 miles'
   });
@@ -327,7 +327,7 @@ export function getEventsForCurrentMonth(currentDate: Date): EventItem[] {
     rawDate: createDateInCurrentMonth(24, 10),
     date: formatDate(createDateInCurrentMonth(24, 10)),
     description: 'Spark child-led discovery and imagination with dynamic, hands-on scientific experiments, engineering exhibits, and creative arts workshops.',
-    ticketUrl: 'https://www.ticketmaster.com/',
+    ticketUrl: 'https://childrensmuseumatlanta.org/',
     venue: 'Children\'s Museum of Atlanta',
     distance: '11.9 miles'
   });
@@ -348,7 +348,7 @@ export function getEventsForCurrentMonth(currentDate: Date): EventItem[] {
         rawDate: createDateInCurrentMonth(extraDay, 19),
         date: formatDate(createDateInCurrentMonth(extraDay)),
         description: 'Cheer on local teams in this high-energy athletic showcase packed with food trucks, fan games, and pre-match music.',
-        ticketUrl: 'https://www.ticketmaster.com/',
+        ticketUrl: 'https://atlantasilverbackspark.com/',
         venue: 'Silverbacks Park',
         distance: '21.0 miles'
       });
@@ -360,8 +360,8 @@ export function getEventsForCurrentMonth(currentDate: Date): EventItem[] {
         rawDate: createDateInCurrentMonth(extraDay, 20),
         date: formatDate(createDateInCurrentMonth(extraDay, 20)),
         description: 'An intimate, dimly lit acoustic set showcasing local singer-songwriters, folk music, and gourmet small plates.',
-        ticketUrl: 'https://www.ticketmaster.com/',
-        venue: 'The Soundboard Lounge',
+        ticketUrl: 'https://thevelvetnote.com/',
+        venue: 'The Velvet Note Lounge',
         distance: '12.5 miles'
       });
     } else if (category === 'Family') {
@@ -372,7 +372,7 @@ export function getEventsForCurrentMonth(currentDate: Date): EventItem[] {
         rawDate: createDateInCurrentMonth(extraDay, 10),
         date: formatDate(createDateInCurrentMonth(extraDay, 10)),
         description: 'A gorgeous family-friendly walking tour exploring beautiful public murals, sculptures, and vibrant local culinary hotspots along the Eastside Trail.',
-        ticketUrl: 'https://www.ticketmaster.com/',
+        ticketUrl: 'https://www.beltline.org/',
         venue: 'Atlanta BeltLine (Eastside)',
         distance: '14.5 miles'
       });
@@ -384,7 +384,7 @@ export function getEventsForCurrentMonth(currentDate: Date): EventItem[] {
         rawDate: createDateInCurrentMonth(extraDay, 11),
         date: formatDate(createDateInCurrentMonth(extraDay, 11)),
         description: 'A spectacular, vibrant kid\'s weekend event featuring face painting, instrument petting zoos, watercolor tents, and inflatable obstacle courses.',
-        ticketUrl: 'https://www.ticketmaster.com/',
+        ticketUrl: 'https://www.chastainparkconservancy.org/',
         venue: 'Chastain Park Amphitheatre Grounds',
         distance: '19.2 miles'
       });
