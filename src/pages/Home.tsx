@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { Property } from '../types';
 import { PrivacyPolicyModal } from '../components/PrivacyPolicyModal';
+import { WeatherWidget } from '../components/WeatherWidget';
 
 import { LegalFooter } from '../components/LegalFooter';
 import { getEventsForCurrentMonth, EventItem } from '../data/events';
@@ -86,12 +87,15 @@ export const Home: React.FC = () => {
         <div className="min-h-screen bg-white flex flex-col font-sans text-slate-900 pb-12 overflow-x-hidden">
             <header className="pt-6 px-6 max-w-7xl mx-auto w-full z-10 relative">
                 <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6">
-                    <Link to="/" className="flex items-center gap-2 sm:gap-3 hover:opacity-85 transition-opacity flex-shrink-0">
-                        <div className="w-9 h-9 sm:w-10 sm:h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200">
-                            <CalendarIcon size={18} />
-                        </div>
-                        <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-800">REALCal <span className="text-indigo-600">Bookings</span></h1>
-                    </Link>
+                    <div className="flex flex-col items-center sm:items-start gap-1 flex-shrink-0">
+                        <Link to="/" className="flex items-center gap-2 sm:gap-3 hover:opacity-85 transition-opacity">
+                            <div className="w-9 h-9 sm:w-10 sm:h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200">
+                                <CalendarIcon size={18} />
+                            </div>
+                            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-800">REALCal <span className="text-indigo-600">Bookings</span></h1>
+                        </Link>
+                        {user && <WeatherWidget />}
+                    </div>
                     <div className="flex items-center gap-3 sm:gap-4 flex-wrap justify-center sm:justify-end w-full sm:w-auto">
                         {loading ? (
                             <div className="flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2 bg-slate-100 rounded-xl">
