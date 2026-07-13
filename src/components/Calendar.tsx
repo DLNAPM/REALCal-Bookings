@@ -69,6 +69,7 @@ export const Calendar: React.FC<{
   const [globalSettings, setGlobalSettings] = useState<any>(null);
   const [agreedToHouseRules, setAgreedToHouseRules] = useState<boolean>(false);
   const [agreedToNoKidsUnder10, setAgreedToNoKidsUnder10] = useState<boolean>(false);
+  const [agreedToBookingAgreement, setAgreedToBookingAgreement] = useState<boolean>(false);
   
   // Lease code validation states
   const [enteredLeaseCode, setEnteredLeaseCode] = useState<string>('');
@@ -102,6 +103,7 @@ export const Calendar: React.FC<{
       setDailySelections(null);
       setAgreedToHouseRules(false);
       setAgreedToNoKidsUnder10(false);
+      setAgreedToBookingAgreement(false);
       setEnteredLeaseCode('');
       setValidatedLeaseCode(null);
       setLeaseDetails(null);
@@ -1438,6 +1440,24 @@ if (false) setSelectedRooms(prev =>
                      </div>
                   </label>
 
+                  <div className="pt-3 border-t border-slate-800 text-left mt-3">
+                     <label className="flex items-start gap-3 cursor-pointer select-none text-slate-300">
+                        <input 
+                          type="checkbox" 
+                          id="agree-booking-agreement-checkbox"
+                          checked={agreedToBookingAgreement}
+                          onChange={(e) => setAgreedToBookingAgreement(e.target.checked)}
+                          className="mt-0.5 w-4 h-4 rounded border-slate-700 bg-slate-800 text-indigo-600 focus:ring-indigo-500 focus:text-indigo-600 accent-indigo-600 cursor-pointer flex-shrink-0"
+                        />
+                        <div className="leading-relaxed">
+                           <span className="font-bold text-slate-100 block mb-1 uppercase tracking-wider text-[10px] text-indigo-400">BOOKING AGREEMENT</span>
+                           <span className="text-slate-300 text-[11px]">
+                             In consideration of being allowed to stay at this property, the guest agrees to release and hold harmless the Property from any and all liability for injuries, including falls, cuts, and burns. Guest uses all facilities at their own risk
+                           </span>
+                        </div>
+                     </label>
+                  </div>
+
                   {rentalMode === 'room' && (
                      <div className="pt-3 border-t border-slate-800 space-y-2 mt-3 text-left">
                         <label className="flex items-start gap-3 cursor-pointer select-none text-slate-300">
@@ -1484,7 +1504,7 @@ if (false) setSelectedRooms(prev =>
                       handleBook();
                   }
               }}
-              disabled={!checkIn || !checkOut || (!agreedToHouseRules && !isEditMode) || (rentalMode === 'room' && !agreedToNoKidsUnder10 && !isEditMode) || (priceDetails && priceDetails.nights > 30 && (globalSettings?.allowLongTermRentals === false || !validatedLeaseCode) && !isEditMode)}
+              disabled={!checkIn || !checkOut || (!agreedToHouseRules && !isEditMode) || (!agreedToBookingAgreement && !isEditMode) || (rentalMode === 'room' && !agreedToNoKidsUnder10 && !isEditMode) || (priceDetails && priceDetails.nights > 30 && (globalSettings?.allowLongTermRentals === false || !validatedLeaseCode) && !isEditMode)}
               className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-2xl transition-colors flex items-center justify-center gap-2 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed"
             >
               {isEditMode ? 'Save Changes' : 'Proceed to Checkout'}
