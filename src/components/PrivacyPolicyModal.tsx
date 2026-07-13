@@ -51,7 +51,7 @@ export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen, 
                     <section>
                         <h3 className="text-lg font-bold text-slate-900 mb-2">3. Third-Party Sharing</h3>
                         <p className="leading-relaxed text-sm">
-                            We do not sell your personal data. We only share necessary data securely with our highly vetted service providers to execute your booking. This includes Stripe (for secure payment processing), Email/Twilio (for email and SMS notifications), and Seam/York (to securely provision your physical access code).
+                            We do not sell your personal data. We only share necessary data securely with our highly vetted service providers to execute your booking. This includes Stripe (for secure payment processing), Email/Twilio (for email and SMS notifications), and Seam/YAMIRY (to securely provision your physical access code).
                         </p>
                     </section>
                     
@@ -72,7 +72,7 @@ export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen, 
                                 <ShieldCheck size={18} />
                             </div>
                             <div className="text-xs text-indigo-900 font-medium leading-relaxed italic">
-                                To consent to automated messaging (SMS or text messaging) for access codes and booking updates, please use the <a href="/opt-in" className="underline font-bold text-indigo-700">Opt-in link</a> in the main menu. This step is required for Yorkshire smart lock code delivery.
+                                To consent to automated messaging (SMS or text messaging) for access codes and booking updates, please use the <a href="/opt-in" className="underline font-bold text-indigo-700">Opt-in link</a> in the main menu. This step is required for YAMIRY smart lock code delivery.
                             </div>
                         </div>
                     </section>

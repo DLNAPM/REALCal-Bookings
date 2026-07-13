@@ -100,7 +100,7 @@ export const PrivacyPolicy: React.FC = () => {
                 <div>
                   <h4 className="font-bold text-slate-900 mb-2">Verification & Consent Required</h4>
                   <p className="text-sm text-slate-500 mb-4 italic leading-relaxed">
-                    To satisfy vendor verification and ensure Yorkshire smart lock code delivery, please visit our <button onClick={() => navigate('/opt-in')} className="text-indigo-600 underline font-bold group hover:text-indigo-500 transition-colors">dedicated Opt-in menu <ChevronRight size={14} className="inline group-hover:translate-x-0.5 transition-transform" /></button> to manage your communication preferences.
+                    To satisfy vendor verification and ensure YAMIRY smart lock code delivery, please visit our <button onClick={() => navigate('/opt-in')} className="text-indigo-600 underline font-bold group hover:text-indigo-500 transition-colors">dedicated Opt-in menu <ChevronRight size={14} className="inline group-hover:translate-x-0.5 transition-transform" /></button> to manage your communication preferences.
                   </p>
                   <div className="flex flex-wrap gap-3">
                     <button 

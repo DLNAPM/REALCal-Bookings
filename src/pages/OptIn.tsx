@@ -181,7 +181,7 @@ export const OptIn: React.FC = () => {
                 </div>
                 <h3 className="text-xl font-bold text-slate-900 mb-3">SMS Booking Notifications</h3>
                 <p className="text-sm text-slate-500 leading-relaxed italic">
-                  Receive reservation confirmations, reminders, and York smart lock access code updates via automated text messaging (SMS).
+                  Receive reservation confirmations, reminders, and YAMIRY smart lock access code updates via automated text messaging (SMS).
                 </p>
                 {smsConsent && (
                   <div className="mt-6 flex items-center gap-2">
