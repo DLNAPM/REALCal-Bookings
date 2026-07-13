@@ -56,17 +56,17 @@ export const HelpModal: React.FC = () => {
                                 </p>
                             </section>
 
-                            <section className="bg-amber-50 rounded-2xl p-6 border border-amber-200/60">
-                                <h3 className="text-lg font-bold text-amber-900 mb-2 flex items-center gap-2">
+                            <section className="bg-slate-50 rounded-2xl p-6 border border-slate-200">
+                                <h3 className="text-lg font-bold text-slate-900 mb-2 flex items-center gap-2">
                                     Disclaimer & Intended Use
                                 </h3>
-                                <p className="text-amber-800 text-sm leading-relaxed mb-3">
-                                    The automation of physical property access (Smart Locks) and direct payment processing carries inherent security and liability risks. 
+                                <p className="text-slate-700 text-sm leading-relaxed mb-3">
+                                    This application is configured in a live, production environment integrated with Render.com hosting, utilizing live production API keys for payment gateways, SMS notifications, and physical access code generation.
                                 </p>
-                                <ul className="list-disc list-inside text-amber-700/90 text-sm space-y-1.5 ml-2">
-                                    <li><strong>Not for unverified guests:</strong> Always ensure you have a robust offline identity verification process or deposit system before granting automated physical access to high-value assets.</li>
-                                    <li><strong>Test Environment:</strong> The current environment is configured with test keys for demonstration. Do not expect real locks or real credit cards to process until you fully replace the environment variables with live API credentials.</li>
-                                    <li><strong>Liability:</strong> The creators of this software template are not liable for property damage, unauthorized access, or financial loss resulting from improper configuration of your IoT devices or payment portals.</li>
+                                <ul className="list-disc list-inside text-slate-600 text-sm space-y-1.5 ml-2">
+                                    <li><strong>Production Environment:</strong> Payments, guest records, and smart-lock physical integrations are live and fully active. Real charges will occur on standard transactions, and actual YAMIRY smart locks will be provisioned.</li>
+                                    <li><strong>Security & Verification:</strong> Ensure all direct bookings go through proper identification and guest screening, as smart-lock authorization is automatically completed on successful checkout.</li>
+                                    <li><strong>Liability & Support:</strong> The operators and hosting platform are not liable for property damage, unauthorized access incidents, or financial processing disputes resulting from improper manual overrides or IoT hardware disconnects.</li>
                                 </ul>
                             </section>
                         </div>
