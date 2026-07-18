@@ -3094,7 +3094,7 @@ C.&S.H. Group Properties, LLC
                    
                    <div className="overflow-x-auto">
                       <table className="w-full text-sm text-left">
-                         <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-y border-slate-100">
+                         <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-y border-slate-100 sticky top-0 z-10">
                             <tr>
                                <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest">Invoice #</th>
                                <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest">Sponsor Name & Email</th>
@@ -3250,9 +3250,9 @@ C.&S.H. Group Properties, LLC
                   {refreshingUsers ? 'Refreshing...' : 'Refresh Directory'}
                 </button>
              </div>
-             <div className="overflow-x-auto">
+             <div className={cn("overflow-x-auto", users.length > 10 && "max-h-[500px] overflow-y-auto")}>
                 <table className="w-full text-sm text-left">
-                   <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-y border-slate-100">
+                   <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-y border-slate-100 sticky top-0 z-10">
                       <tr>
                          <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest">User</th>
                          <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest">Email</th>
