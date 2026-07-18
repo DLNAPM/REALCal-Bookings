@@ -297,25 +297,88 @@ export const AdminDashboard: React.FC = () => {
       reader.onload = (e) => {
         const img = new Image();
         img.onload = () => {
-          const canvas = document.createElement('canvas');
-          let { width, height } = img;
-          const MAX_SIZE = 600;
-          if (width > height) {
-            if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; }
-          } else {
-            if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; }
-          }
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx?.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL('image/jpeg', 0.6)); // compressed 60% jpeg fits ~30kb
+          let maxDimension = 500;
+          let quality = 0.5;
+          let dataUrl = '';
+          let attempts = 0;
+          
+          do {
+            const canvas = document.createElement('canvas');
+            let { width, height } = img;
+            if (width > height) {
+              if (width > maxDimension) { height *= maxDimension / width; width = maxDimension; }
+            } else {
+              if (height > maxDimension) { width *= maxDimension / height; height = maxDimension; }
+            }
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx?.drawImage(img, 0, 0, width, height);
+            dataUrl = canvas.toDataURL('image/jpeg', quality);
+            
+            if (dataUrl.length <= 22000 || attempts >= 5) {
+              break;
+            }
+            
+            maxDimension = Math.max(200, Math.floor(maxDimension * 0.8));
+            quality = Math.max(0.15, quality * 0.8);
+            attempts++;
+          } while (attempts < 5);
+          
+          resolve(dataUrl);
         };
         img.onerror = () => reject("Image load error");
         img.src = e.target?.result as string;
       };
       reader.onerror = () => reject("File read error");
       reader.readAsDataURL(file);
+    });
+  };
+
+  const optimizeBase64Image = (base64Str: string): Promise<string> => {
+    if (!base64Str || base64Str.length <= 22000) {
+      return Promise.resolve(base64Str);
+    }
+    if (!base64Str.startsWith('data:image/')) {
+      return Promise.resolve(base64Str);
+    }
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        let maxDimension = 500;
+        let quality = 0.5;
+        let dataUrl = '';
+        let attempts = 0;
+        
+        do {
+          const canvas = document.createElement('canvas');
+          let { width, height } = img;
+          if (width > height) {
+            if (width > maxDimension) { height *= maxDimension / width; width = maxDimension; }
+          } else {
+            if (height > maxDimension) { width *= maxDimension / height; height = maxDimension; }
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+          dataUrl = canvas.toDataURL('image/jpeg', quality);
+          
+          if (dataUrl.length <= 22000 || attempts >= 5) {
+            break;
+          }
+          
+          maxDimension = Math.max(200, Math.floor(maxDimension * 0.8));
+          quality = Math.max(0.15, quality * 0.8);
+          attempts++;
+        } while (attempts < 5);
+        
+        resolve(dataUrl);
+      };
+      img.onerror = () => {
+        resolve(base64Str);
+      };
+      img.src = base64Str;
     });
   };
 
@@ -582,6 +645,16 @@ export const AdminDashboard: React.FC = () => {
       const fd = new FormData(e.target as HTMLFormElement);
       try {
           const hasSmartLock = fd.get('hasSmartLock') === 'on';
+          
+          // Check for existing bloated images to optimize
+          const activeProp = properties.find(p => p.id === activePropertyId);
+          let optimizedImages = activeProp?.images || [];
+          const hasBloatedImages = optimizedImages.some(imgStr => imgStr && imgStr.length > 22000);
+          
+          if (hasBloatedImages) {
+              optimizedImages = await Promise.all(optimizedImages.map(imgStr => optimizeBase64Image(imgStr)));
+          }
+
           await updateDoc(doc(db, 'properties', activePropertyId), {
               name: fd.get('name') as string,
               location: fd.get('location') as string,
@@ -590,7 +663,7 @@ export const AdminDashboard: React.FC = () => {
               frontDoorCode: hasSmartLock ? (fd.get('frontDoorCode') as string || '') : '',
               allowIndividualRoomRental: fd.get('allowIndividualRoomRental') === 'on',
               bedrooms: editingBedrooms,
-              // Note: images updating requires a separate flow or overriding
+              ...(hasBloatedImages ? { images: optimizedImages } : {})
           });
           alert("Property updated!");
       } catch (err: any) { alert(err.message); }
@@ -599,8 +672,9 @@ export const AdminDashboard: React.FC = () => {
   const handleUpdatePropertyImages = async (newImages: string[]) => {
       if (!db || !activePropertyId) return;
       try {
+          const optimized = await Promise.all(newImages.map(imgStr => optimizeBase64Image(imgStr)));
           await updateDoc(doc(db, 'properties', activePropertyId), {
-              images: newImages
+              images: optimized
           });
       } catch (err: any) { alert(err.message); }
   }
