@@ -2,12 +2,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { doc, setDoc, serverTimestamp, getDoc, getDocs, query, collection, where, deleteDoc } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, getDoc, getDocs, query, collection, where, deleteDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { v4 as uuidv4 } from 'uuid'; 
 import { calculatePriceDetails, PricingRule } from '../lib/pricing';
 import { cn } from '../lib/utils';
-import { Property } from '../types';
+import { Property, DiscountCode } from '../types';
 
 const formatPhoneE164 = (phone: string) => {
   let cleaned = phone.replace(/\D/g, '');
@@ -41,16 +41,6 @@ export const Checkout: React.FC = () => {
   const [globalSettings, setGlobalSettings] = useState<any>(null);
   const [localPriceDetails, setLocalPriceDetails] = useState<any>(priceDetails);
 
-  const isLongTermLease = localPriceDetails && localPriceDetails.nights > 60;
-  const numMonths = localPriceDetails ? Math.ceil(localPriceDetails.nights / 30) : 0;
-  const securityDeposit = localPriceDetails?.securityDeposit || 0;
-  const grandTotal = localPriceDetails?.grandTotal || 0;
-  const monthlyAmount = numMonths > 0 ? (grandTotal / numMonths) : 0;
-  
-  const upfrontAmount = isLongTermLease
-    ? (paymentOption === 'full' ? (grandTotal + securityDeposit) : (monthlyAmount + securityDeposit))
-    : grandTotal;
-
   const isTestProperty = !!property?.isTestProperty;
   
   const [selectedBedrooms, setSelectedBedrooms] = useState<any[]>(location.state?.selectedBedrooms || []);
@@ -62,6 +52,120 @@ export const Checkout: React.FC = () => {
   const [activeBookingId, setActiveBookingId] = useState<string | null>(null);
   const activeBookingIdRef = useRef<string | null>(null);
   const isRedirectingToStripe = useRef<boolean>(false);
+
+  // Discount Booking Rate Code states
+  const [discountCodeText, setDiscountCodeText] = useState('');
+  const [appliedDiscountCode, setAppliedDiscountCode] = useState<DiscountCode | null>(null);
+  const [discountError, setDiscountError] = useState<string | null>(null);
+  const [discountSuccess, setDiscountSuccess] = useState<string | null>(null);
+  const [validatingDiscount, setValidatingDiscount] = useState(false);
+
+  const finalPriceDetails = React.useMemo(() => {
+    if (!localPriceDetails) return null;
+    if (!appliedDiscountCode) return localPriceDetails;
+
+    const baseTotal = localPriceDetails.baseTotal;
+    let promoDiscount = 0;
+    if (appliedDiscountCode.discountType === 'percentage') {
+      promoDiscount = baseTotal * (appliedDiscountCode.discountValue / 100);
+    } else {
+      promoDiscount = appliedDiscountCode.discountValue;
+    }
+    // Limit discount to baseTotal
+    promoDiscount = Math.min(baseTotal, promoDiscount);
+
+    const newDiscount = (localPriceDetails.discount || 0) + promoDiscount;
+    const adjustedBase = Math.max(0, baseTotal - promoDiscount);
+    const newTaxes = (adjustedBase + localPriceDetails.cleaningFee) * 0.12;
+    const newGrandTotal = adjustedBase + localPriceDetails.cleaningFee + newTaxes + (localPriceDetails.sameDayModificationFee || 0);
+
+    return {
+      ...localPriceDetails,
+      discount: newDiscount,
+      promoDiscount, // Track this specifically
+      taxes: newTaxes,
+      grandTotal: newGrandTotal
+    };
+  }, [localPriceDetails, appliedDiscountCode]);
+
+  const isLongTermLease = finalPriceDetails && finalPriceDetails.nights > 60;
+  const numMonths = finalPriceDetails ? Math.ceil(finalPriceDetails.nights / 30) : 0;
+  const securityDeposit = finalPriceDetails?.securityDeposit || 0;
+  const grandTotal = finalPriceDetails?.grandTotal || 0;
+  const monthlyAmount = numMonths > 0 ? (grandTotal / numMonths) : 0;
+  
+  const upfrontAmount = isLongTermLease
+    ? (paymentOption === 'full' ? (grandTotal + securityDeposit) : (monthlyAmount + securityDeposit))
+    : grandTotal;
+
+  const handleApplyDiscountCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!db) return;
+    if (!discountCodeText.trim()) return;
+
+    setValidatingDiscount(true);
+    setDiscountError(null);
+    setDiscountSuccess(null);
+
+    try {
+      const codeToSearch = discountCodeText.trim().toUpperCase();
+      const q = query(collection(db, 'discount_codes'), where('code', '==', codeToSearch));
+      const snap = await getDocs(q);
+
+      if (snap.empty) {
+        setDiscountError(`Invalid discount code "${codeToSearch}".`);
+        setAppliedDiscountCode(null);
+        return;
+      }
+
+      const dcDoc = snap.docs[0];
+      const dcData = { id: dcDoc.id, ...dcDoc.data() } as DiscountCode;
+
+      // 1. Check if active
+      if (!dcData.isActive) {
+        setDiscountError("This discount code is no longer active.");
+        setAppliedDiscountCode(null);
+        return;
+      }
+
+      // 2. Check if expired (useCount >= maxUses)
+      if (dcData.maxUses && dcData.useCount >= dcData.maxUses) {
+        setDiscountError("This discount code has reached its maximum usage limit.");
+        setAppliedDiscountCode(null);
+        return;
+      }
+
+      // 3. Check property restriction
+      if (dcData.propertyRestriction && dcData.propertyRestriction !== propertyId) {
+        setDiscountError("This discount code is not applicable to this property.");
+        setAppliedDiscountCode(null);
+        return;
+      }
+
+      // 4. Check guest email restriction (matching the checkout email or current authenticated user)
+      const currentEmail = guestEmail.trim().toLowerCase() || user?.email?.toLowerCase();
+      if (dcData.guestEmailRestriction && dcData.guestEmailRestriction.toLowerCase() !== currentEmail) {
+        setDiscountError(`This discount code is restricted to a specific guest (${dcData.guestEmailRestriction}).`);
+        setAppliedDiscountCode(null);
+        return;
+      }
+
+      // If all checks pass!
+      setAppliedDiscountCode(dcData);
+      setDiscountSuccess(`Discount code "${codeToSearch}" applied successfully!`);
+    } catch (err: any) {
+      setDiscountError(`Error applying code: ${err.message}`);
+    } finally {
+      setValidatingDiscount(false);
+    }
+  };
+
+  const handleRemoveDiscountCode = () => {
+    setAppliedDiscountCode(null);
+    setDiscountCodeText('');
+    setDiscountSuccess(null);
+    setDiscountError(null);
+  };
 
   // Clean up booking on unmount if it was created but not completed (abandoned)
   useEffect(() => {
@@ -196,10 +300,35 @@ export const Checkout: React.FC = () => {
         guestEmail: guestEmail,
         guestName: user.displayName || "Guest",
         guests: 1,
-        priceDetails: localPriceDetails,
+        priceDetails: finalPriceDetails,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       };
+
+      // Increment Discount Code usage counter if applied
+      if (appliedDiscountCode && db) {
+        try {
+          const dcRef = doc(db, 'discount_codes', appliedDiscountCode.id);
+          // Fetch latest to make sure it hasn't expired in the last second
+          const dcSnap = await getDoc(dcRef);
+          if (dcSnap.exists()) {
+            const dcLatest = dcSnap.data();
+            if (dcLatest.maxUses && dcLatest.useCount >= dcLatest.maxUses) {
+              setError("The applied discount code has just run out of uses. Please remove it and try again.");
+              setProcessing(false);
+              return;
+            }
+            await updateDoc(dcRef, {
+              useCount: (dcLatest.useCount || 0) + 1
+            });
+            // Add discount code details to the payload so it's logged in the booking
+            payload.discountCodeUsed = appliedDiscountCode.code;
+            payload.discountCodeId = appliedDiscountCode.id;
+          }
+        } catch (dcErr: any) {
+          console.error("Failed to increment discount code usage count:", dcErr);
+        }
+      }
 
       if (leaseCode) {
         payload.leaseCode = leaseCode;
@@ -211,7 +340,7 @@ export const Checkout: React.FC = () => {
         payload.accessCode = accessCode;
       }
 
-      if (localPriceDetails?.nights > 60) {
+      if (finalPriceDetails && finalPriceDetails.nights > 60) {
         payload.paymentOption = paymentOption;
         payload.securityDeposit = securityDeposit;
         payload.numMonths = numMonths;
@@ -325,26 +454,26 @@ export const Checkout: React.FC = () => {
             
             <div className="space-y-3 border-t border-slate-800 pt-6 text-sm text-slate-400">
                <div className="flex justify-between">
-                  <span>Base Rate ({localPriceDetails.nights} nights)</span>
-                  <span className="font-mono text-white">${(localPriceDetails.baseTotal).toFixed(2)}</span>
+                  <span>Base Rate ({finalPriceDetails?.nights} nights)</span>
+                  <span className="font-mono text-white">${(finalPriceDetails?.baseTotal || 0).toFixed(2)}</span>
                </div>
-               {localPriceDetails.discount > 0 && (
+               {finalPriceDetails && finalPriceDetails.discount > 0 && (
                    <div className="flex justify-between text-emerald-400">
                       <span>Discount</span>
-                      <span className="font-mono">-${(localPriceDetails.discount).toFixed(2)}</span>
+                      <span className="font-mono">-${(finalPriceDetails.discount).toFixed(2)}</span>
                    </div>
                )}
                <div className="flex justify-between">
                   <span>Cleaning Fee</span>
-                  <span className="font-mono text-white">${(localPriceDetails.cleaningFee).toFixed(2)}</span>
+                  <span className="font-mono text-white">${(finalPriceDetails?.cleaningFee || 0).toFixed(2)}</span>
                </div>
                <div className="flex justify-between">
                   <span>Occupancy Taxes</span>
-                  <span className="font-mono text-white">${(localPriceDetails.taxes).toFixed(2)}</span>
+                  <span className="font-mono text-white">${(finalPriceDetails?.taxes || 0).toFixed(2)}</span>
                </div>
                <div className="flex justify-between border-b border-slate-800 pb-3 mb-2 font-medium">
                   <span className="text-white">Lease Booking Subtotal</span>
-                  <span className="font-mono text-white">${(localPriceDetails.grandTotal).toFixed(2)}</span>
+                  <span className="font-mono text-white">${(finalPriceDetails?.grandTotal || 0).toFixed(2)}</span>
                </div>
 
                {isLongTermLease && (
@@ -377,6 +506,66 @@ export const Checkout: React.FC = () => {
                   <span className="text-white font-bold">{isLongTermLease ? "Amt Due Today" : "Total Due"}</span>
                   <span className="font-mono text-3xl font-black text-indigo-400">${(upfrontAmount).toFixed(2)}</span>
                </div>
+            </div>
+
+            {/* Promo / Discount Rate Code Box */}
+            <div className="mt-6 border-t border-slate-800 pt-6">
+               <h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-widest block mb-3">
+                  Have a special rate code?
+               </h4>
+               {appliedDiscountCode ? (
+                  <div className="flex items-center justify-between bg-indigo-950/40 border border-indigo-900 rounded-2xl p-3">
+                     <div className="flex items-center gap-2">
+                        <span className="text-base">🎫</span>
+                        <div>
+                           <div className="font-mono font-extrabold text-sm text-indigo-300">
+                              {appliedDiscountCode.code}
+                           </div>
+                           <div className="text-[10px] text-indigo-400 font-medium">
+                              {appliedDiscountCode.discountType === 'percentage' 
+                                 ? `${appliedDiscountCode.discountValue}% Off Base Rate` 
+                                 : `$${appliedDiscountCode.discountValue.toFixed(2)} Off Base Rate`}
+                           </div>
+                        </div>
+                     </div>
+                     <button 
+                        type="button" 
+                        onClick={handleRemoveDiscountCode}
+                        className="text-xs text-indigo-400 hover:text-indigo-200 font-bold px-2 py-1 rounded-lg bg-indigo-900/30 hover:bg-indigo-900/60 transition-all cursor-pointer"
+                     >
+                        Remove
+                     </button>
+                  </div>
+               ) : (
+                  <form onSubmit={handleApplyDiscountCode} className="space-y-2">
+                     <div className="flex gap-2">
+                        <input 
+                           type="text"
+                           value={discountCodeText}
+                           onChange={(e) => {
+                              setDiscountCodeText(e.target.value.toUpperCase().replace(/\s+/g, ''));
+                              setDiscountError(null);
+                              setDiscountSuccess(null);
+                           }}
+                           placeholder="Enter Special Code"
+                           className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white placeholder:text-slate-600 font-mono focus:outline-hidden focus:border-indigo-500 uppercase font-bold"
+                        />
+                        <button
+                           type="submit"
+                           disabled={validatingDiscount || !discountCodeText.trim()}
+                           className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-500 text-white font-bold text-xs px-4 rounded-xl transition-all cursor-pointer flex items-center justify-center min-w-[70px]"
+                        >
+                           {validatingDiscount ? '...' : 'Apply'}
+                        </button>
+                     </div>
+                     {discountError && (
+                        <p className="text-rose-400 text-xs mt-1 pl-1 font-semibold">⚠️ {discountError}</p>
+                     )}
+                     {discountSuccess && (
+                        <p className="text-emerald-400 text-xs mt-1 pl-1 font-semibold">✓ {discountSuccess}</p>
+                     )}
+                  </form>
+               )}
             </div>
 
             <div className="mt-8 flex justify-center gap-3 opacity-60">

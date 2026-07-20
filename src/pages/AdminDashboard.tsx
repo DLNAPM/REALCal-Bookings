@@ -5,8 +5,8 @@ import { collection, query, onSnapshot, addDoc, serverTimestamp, getDocs, doc, d
 import { Navigate, useNavigate, Link } from 'react-router-dom';
 import { format, eachDayOfInterval, parseISO, addDays } from 'date-fns';
 import { cn } from '../lib/utils';
-import { BlackoutDate, PricingRule, Booking, Property, PropertyManager, PropertyImage, getImageUrl, getImageRoomNumber } from '../types';
-import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight, RefreshCw, MessageSquare, CheckCircle, Loader2, FileText, XCircle, HelpCircle, MapPin, Upload, Database } from 'lucide-react';
+import { BlackoutDate, PricingRule, Booking, Property, PropertyManager, PropertyImage, getImageUrl, getImageRoomNumber, DiscountCode } from '../types';
+import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight, RefreshCw, MessageSquare, CheckCircle, Loader2, FileText, XCircle, HelpCircle, MapPin, Upload, Database, Ticket } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 const formatPhoneE164 = (phone: string) => {
@@ -128,6 +128,17 @@ export const AdminDashboard: React.FC = () => {
   const [selectedCreateImageIndex, setSelectedCreateImageIndex] = useState<number | null>(null);
   const [selectedEditImageIndex, setSelectedEditImageIndex] = useState<number | null>(null);
 
+  // Discount Booking Rate Codes states
+  const [discountCodes, setDiscountCodes] = useState<DiscountCode[]>([]);
+  const [newCode, setNewCode] = useState('');
+  const [newDiscountType, setNewDiscountType] = useState<'percentage' | 'flat'>('percentage');
+  const [newDiscountValue, setNewDiscountValue] = useState<number>(10);
+  const [newGuestEmail, setNewGuestEmail] = useState('');
+  const [newPropertyId, setNewPropertyId] = useState('');
+  const [newMaxUses, setNewMaxUses] = useState('');
+  const [newNotes, setNewNotes] = useState('');
+  const [submittingDiscount, setSubmittingDiscount] = useState(false);
+
   const moveImageInArray = (arr: any[], fromIndex: number, toIndex: number): any[] => {
       const result = [...arr];
       const [removed] = result.splice(fromIndex, 1);
@@ -154,6 +165,9 @@ export const AdminDashboard: React.FC = () => {
     });
     onSnapshot(query(collection(db, 'property_managers')), (snap) => setPropertyManagers(snap.docs.map(d => ({id: d.id, ...d.data() } as PropertyManager))), (error) => {
       console.error("Admin property managers snapshot error:", error);
+    });
+    onSnapshot(query(collection(db, 'discount_codes')), (snap) => setDiscountCodes(snap.docs.map(d => ({id: d.id, ...d.data() } as DiscountCode))), (error) => {
+      console.error("Admin discount codes snapshot error:", error);
     });
     onSnapshot(query(collection(db, 'lease_requests')), (snap) => {
       const reqs = snap.docs.map(d => ({ id: d.id, ...d.data() })) as any[];
@@ -647,6 +661,72 @@ export const AdminDashboard: React.FC = () => {
       await deleteDoc(doc(db, 'property_managers', id));
     }
   }
+
+  const handleCreateDiscountCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!db) return alert("Firebase not configured");
+    if (!newCode.trim()) return alert("Code cannot be empty");
+    
+    setSubmittingDiscount(true);
+    try {
+      const sanitizedCode = newCode.toUpperCase().replace(/\s+/g, '');
+      
+      // Check if code already exists
+      const codeExists = discountCodes.some(dc => dc.code === sanitizedCode);
+      if (codeExists) {
+        alert(`The discount code "${sanitizedCode}" already exists.`);
+        setSubmittingDiscount(false);
+        return;
+      }
+
+      await addDoc(collection(db, 'discount_codes'), {
+        code: sanitizedCode,
+        discountType: newDiscountType,
+        discountValue: Number(newDiscountValue),
+        guestEmailRestriction: newGuestEmail.trim().toLowerCase() || '',
+        propertyRestriction: newPropertyId || '',
+        maxUses: newMaxUses ? Number(newMaxUses) : null,
+        useCount: 0,
+        isActive: true,
+        notes: newNotes.trim() || '',
+        createdAt: serverTimestamp()
+      });
+
+      // Reset form
+      setNewCode('');
+      setNewDiscountType('percentage');
+      setNewDiscountValue(10);
+      setNewGuestEmail('');
+      setNewPropertyId('');
+      setNewMaxUses('');
+      setNewNotes('');
+      alert(`Discount code ${sanitizedCode} created successfully!`);
+    } catch (err: any) {
+      alert(`Error creating discount code: ${err.message}`);
+    } finally {
+      setSubmittingDiscount(false);
+    }
+  };
+
+  const toggleDiscountCode = async (id: string, currentStatus: boolean) => {
+    if (!db) return alert("Firebase not configured");
+    try {
+      await updateDoc(doc(db, 'discount_codes', id), { isActive: !currentStatus });
+    } catch (err: any) {
+      alert(`Error toggling code: ${err.message}`);
+    }
+  };
+
+  const handleDeleteDiscountCode = async (id: string, code: string) => {
+    if (!db) return alert("Firebase not configured");
+    if (window.confirm(`Are you sure you want to delete discount code "${code}"?`)) {
+      try {
+        await deleteDoc(doc(db, 'discount_codes', id));
+      } catch (err: any) {
+        alert(`Error deleting code: ${err.message}`);
+      }
+    }
+  };
 
   const handleUpdateProperty = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -2281,6 +2361,246 @@ C.&S.H. Group Properties, LLC
                         )}
                     </div>
                  </div>
+              </div>
+          </div>
+
+          {/* Discount Booking Rate Codes Card */}
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm mt-8">
+              <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
+                  <Ticket className="text-indigo-600" size={20}/> Discount Booking Rate Codes
+              </h2>
+              
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                  {/* Create New Code Form */}
+                  <form onSubmit={handleCreateDiscountCode} className="lg:col-span-5 border border-slate-200 p-6 rounded-2xl bg-slate-50/50 space-y-4 h-fit">
+                      <h3 className="font-bold text-slate-800 text-md border-b border-slate-200 pb-2 flex items-center gap-1.5">
+                          <Plus size={16} className="text-indigo-600" /> Create Special Rate Code
+                      </h3>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                          <div className="col-span-2">
+                              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-tight block">Rate Code</label>
+                              <input 
+                                  type="text" 
+                                  value={newCode}
+                                  onChange={(e) => setNewCode(e.target.value.toUpperCase().replace(/\s+/g, ''))}
+                                  placeholder="e.g. SPECIALARRANGEMENT20" 
+                                  required
+                                  className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm uppercase font-mono font-bold text-indigo-700 placeholder:normal-case placeholder:font-normal" 
+                              />
+                              <p className="text-[10px] text-slate-400 mt-1">Alphanumeric, no spaces. Guest enters this code on checkout.</p>
+                          </div>
+                          
+                          <div>
+                              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-tight block">Discount Type</label>
+                              <select 
+                                  value={newDiscountType} 
+                                  onChange={(e) => setNewDiscountType(e.target.value as 'percentage' | 'flat')} 
+                                  className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm font-semibold text-slate-700"
+                              >
+                                  <option value="percentage">Percentage (%)</option>
+                                  <option value="flat">Flat Amount ($)</option>
+                              </select>
+                          </div>
+                          
+                          <div>
+                              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-tight block">
+                                  {newDiscountType === 'percentage' ? 'Discount Percent' : 'Discount Amount'}
+                              </label>
+                              <div className="relative flex items-center mt-1">
+                                  {newDiscountType === 'flat' && (
+                                      <span className="absolute left-3 text-slate-400 font-bold text-sm">$</span>
+                                  )}
+                                  <input 
+                                      type="number" 
+                                      min="1" 
+                                      max={newDiscountType === 'percentage' ? 100 : undefined}
+                                      value={newDiscountValue}
+                                      onChange={(e) => setNewDiscountValue(Number(e.target.value))}
+                                      required
+                                      className={cn(
+                                          "w-full border border-slate-200 rounded-xl p-2.5 bg-white shadow-sm text-sm font-mono font-bold text-slate-800",
+                                          newDiscountType === 'flat' ? 'pl-7' : 'pr-7'
+                                      )}
+                                  />
+                                  {newDiscountType === 'percentage' && (
+                                      <span className="absolute right-3.5 text-slate-400 font-bold text-sm">%</span>
+                                  )}
+                              </div>
+                          </div>
+                      </div>
+
+                      <div className="border-t border-slate-200 pt-4 mt-2 space-y-3">
+                          <h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-widest block">Arrangement Restrictions</h4>
+                          
+                          <div>
+                              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-tight block">Restricted to Guest Email</label>
+                              <input 
+                                  type="email" 
+                                  value={newGuestEmail} 
+                                  onChange={(e) => setNewGuestEmail(e.target.value)}
+                                  placeholder="e.g. guest@example.com" 
+                                  className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm" 
+                              />
+                              <p className="text-[10px] text-slate-400 mt-1">Leave blank for any guest who has the code.</p>
+                          </div>
+
+                          <div>
+                              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-tight block">Restricted to Property</label>
+                              <select 
+                                  value={newPropertyId} 
+                                  onChange={(e) => setNewPropertyId(e.target.value)}
+                                  className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm text-slate-700"
+                              >
+                                  <option value="">All Properties</option>
+                                  {properties.map(p => (
+                                      <option key={p.id} value={p.id}>{p.name}</option>
+                                  ))}
+                              </select>
+                              <p className="text-[10px] text-slate-400 mt-1">Leave blank to allow use for any property.</p>
+                          </div>
+
+                          <div>
+                              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-tight block">Max Uses Limit</label>
+                              <input 
+                                  type="number" 
+                                  min="1" 
+                                  value={newMaxUses} 
+                                  onChange={(e) => setNewMaxUses(e.target.value)}
+                                  placeholder="e.g. 1" 
+                                  className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm" 
+                              />
+                              <p className="text-[10px] text-slate-400 mt-1">Leave blank for unlimited uses.</p>
+                          </div>
+
+                          <div>
+                              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-tight block">Private Notes / Purpose</label>
+                              <textarea 
+                                  rows={2}
+                                  value={newNotes} 
+                                  onChange={(e) => setNewNotes(e.target.value)}
+                                  placeholder="e.g. Agreed with guest John Doe due to flight cancellation last stay." 
+                                  className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm" 
+                              />
+                          </div>
+                      </div>
+
+                      <button 
+                          type="submit" 
+                          disabled={submittingDiscount}
+                          className="w-full bg-slate-900 text-white px-4 py-3 rounded-xl font-bold hover:bg-indigo-600 disabled:bg-slate-400 transition-colors shadow-sm flex items-center justify-center gap-1 cursor-pointer"
+                      >
+                          {submittingDiscount ? 'Creating...' : <><Plus size={16}/> Save Special Rate Code</>}
+                      </button>
+                  </form>
+
+                  {/* Existing Saved Codes List */}
+                  <div className="lg:col-span-7 flex flex-col space-y-4">
+                      <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                          <h3 className="font-bold text-slate-800 text-md flex items-center gap-1.5">
+                              Saved Rate Codes ({discountCodes.length})
+                          </h3>
+                      </div>
+
+                      {discountCodes.length === 0 ? (
+                          <div className="text-center py-12 border border-dashed border-slate-200 rounded-2xl bg-slate-50/50">
+                              <Ticket className="text-slate-300 mx-auto mb-3" size={32} />
+                              <p className="text-slate-500 text-sm font-medium">No discount booking rate codes found.</p>
+                              <p className="text-slate-400 text-xs mt-1">Create one on the left to get started.</p>
+                          </div>
+                      ) : (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[600px] overflow-y-auto pr-1">
+                              {discountCodes.map((dc) => {
+                                  const propName = properties.find(p => p.id === dc.propertyRestriction)?.name || 'All Properties';
+                                  const isExpired = dc.maxUses ? dc.useCount >= dc.maxUses : false;
+                                  
+                                  return (
+                                      <div 
+                                          key={dc.id} 
+                                          className={cn(
+                                              "border rounded-2xl p-4 bg-white shadow-xs flex flex-col justify-between transition-all relative overflow-hidden",
+                                              dc.isActive && !isExpired ? "border-slate-200" : "border-slate-100 opacity-60"
+                                          )}
+                                      >
+                                          {/* Ticket outline header decorative element */}
+                                          <div className="absolute top-1/2 -left-2 w-4 h-4 rounded-full bg-slate-50 border-r border-slate-200 -translate-y-1/2"></div>
+                                          <div className="absolute top-1/2 -right-2 w-4 h-4 rounded-full bg-slate-50 border-l border-slate-200 -translate-y-1/2"></div>
+
+                                          <div>
+                                              <div className="flex justify-between items-start mb-3">
+                                                  <div>
+                                                      <span className="inline-block bg-indigo-50 border border-indigo-100 text-indigo-700 text-xs font-mono font-extrabold tracking-wide px-2.5 py-1 rounded-lg">
+                                                          {dc.code}
+                                                      </span>
+                                                      <div className="text-xs font-bold text-slate-800 mt-1">
+                                                          {dc.discountType === 'percentage' ? `${dc.discountValue}% Off` : `$${dc.discountValue.toFixed(2)} Off`}
+                                                      </div>
+                                                  </div>
+                                                  
+                                                  <div className="flex items-center gap-1.5 z-10">
+                                                      <button 
+                                                          type="button"
+                                                          onClick={() => toggleDiscountCode(dc.id, dc.isActive)}
+                                                          className={cn(
+                                                              "text-[10px] font-bold px-2 py-1 rounded-md transition-all cursor-pointer",
+                                                              dc.isActive 
+                                                                  ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100" 
+                                                                  : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                                                          )}
+                                                      >
+                                                          {dc.isActive ? 'Active' : 'Inactive'}
+                                                      </button>
+                                                      <button 
+                                                          type="button"
+                                                          onClick={() => handleDeleteDiscountCode(dc.id, dc.code)}
+                                                          className="text-slate-400 hover:text-red-500 p-1 rounded-md hover:bg-red-50 transition-colors cursor-pointer"
+                                                          title="Delete Code"
+                                                      >
+                                                          <Trash2 size={14} />
+                                                      </button>
+                                                  </div>
+                                              </div>
+
+                                              <div className="space-y-1.5 text-xs text-slate-600 mt-2 border-t border-slate-100 pt-2.5 pl-2">
+                                                  {dc.guestEmailRestriction && (
+                                                      <div className="flex items-center gap-1">
+                                                          <span className="font-bold text-[10px] text-slate-400 uppercase tracking-tight block w-14">Guest:</span>
+                                                          <span className="text-indigo-600 font-semibold truncate max-w-[150px]" title={dc.guestEmailRestriction}>
+                                                              {dc.guestEmailRestriction}
+                                                          </span>
+                                                      </div>
+                                                  )}
+                                                  {dc.propertyRestriction && (
+                                                      <div className="flex items-center gap-1">
+                                                          <span className="font-bold text-[10px] text-slate-400 uppercase tracking-tight block w-14">Property:</span>
+                                                          <span className="text-slate-700 font-medium truncate max-w-[150px]">
+                                                              {propName}
+                                                          </span>
+                                                      </div>
+                                                  )}
+                                                  <div className="flex items-center gap-1">
+                                                      <span className="font-bold text-[10px] text-slate-400 uppercase tracking-tight block w-14">Uses:</span>
+                                                      <span className="font-semibold text-slate-800">
+                                                          {dc.useCount} / {dc.maxUses || '∞'}
+                                                      </span>
+                                                      {isExpired && (
+                                                          <span className="text-[9px] bg-red-100 text-red-700 px-1 py-0.5 rounded font-extrabold ml-1 uppercase">Sold Out</span>
+                                                      )}
+                                                  </div>
+                                              </div>
+                                          </div>
+
+                                          {dc.notes && (
+                                              <div className="mt-3 bg-slate-50/70 p-2 rounded-xl text-[11px] text-slate-500 italic border border-slate-100">
+                                                  {dc.notes}
+                                              </div>
+                                          )}
+                                      </div>
+                                  );
+                              })}
+                          </div>
+                      )}
+                  </div>
               </div>
           </div>
 

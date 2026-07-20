@@ -138,3 +138,18 @@ export interface LeaseRequest {
   createdAt: any;
 }
 
+export interface DiscountCode {
+  id: string;
+  code: string;
+  discountType: 'percentage' | 'flat';
+  discountValue: number;
+  guestEmailRestriction?: string;
+  propertyRestriction?: string;
+  maxUses?: number;
+  useCount: number;
+  isActive: boolean;
+  notes?: string;
+  createdAt: any;
+}
+
+
