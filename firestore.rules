@@ -268,5 +268,13 @@ service cloud.firestore {
       allow update: if isValidId(requestId) && isValidLeaseRequest(incoming());
       allow delete: if isAdmin();
     }
+
+    match /discount_codes/{codeId} {
+      allow get: if true;
+      allow list: if true;
+      allow create: if isAdmin() && isValidId(codeId);
+      allow update: if isAdmin() || (isSignedIn() && incoming().diff(existing()).affectedKeys().hasOnly(['useCount']));
+      allow delete: if isAdmin();
+    }
   }
 }
