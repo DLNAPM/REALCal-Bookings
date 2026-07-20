@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, MapPin, Home, Shield, Sparkles } from 'lucide-react';
-import { Property } from '../types';
+import { Property, getImageUrl, getImageRoomNumber } from '../types';
 import { isAppleOS, getMapLink } from '../lib/utils';
 
 import { LegalFooter } from '../components/LegalFooter';
@@ -70,11 +70,8 @@ export const PropertyDetail: React.FC = () => {
     if (loading) return <div>Loading...</div>;
     if (!property) return <div>Property not found</div>;
 
-    const topImage = property.images[0] || 'https://picsum.photos/seed/villa1/1200/800';
+    const topImage = getImageUrl(property.images[0]) || 'https://picsum.photos/seed/villa1/1200/800';
     const subImages = property.images.slice(1, 3);
-    while (subImages.length < 2) {
-        subImages.push('https://picsum.photos/seed/villa/600/400');
-    }
 
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col font-sans overflow-hidden text-slate-900 border-none">
@@ -90,7 +87,7 @@ export const PropertyDetail: React.FC = () => {
                     )}
                 </div>
             </header>
-
+ 
             <main className="flex-1 pb-12 w-full">
                <div className="max-w-7xl mx-auto px-6 mb-8 pt-6">
                    {property.isTestProperty && (
@@ -102,11 +99,34 @@ export const PropertyDetail: React.FC = () => {
                    <p className="text-xl text-slate-500 mb-8 max-w-3xl">{property.description}</p>
                    
                    <div className="h-[460px] w-full rounded-3xl overflow-hidden mb-12 flex gap-4 p-2 bg-white border border-slate-200 shadow-sm">
-                       <img src={topImage} alt="Main Image" onClick={() => { if (property.images.length > 0) { setEnlargedImageIndex(0); } }} className={`${property.images.length === 1 ? 'w-full' : 'w-2/3'} h-full object-cover rounded-2xl shadow-sm cursor-pointer hover:opacity-95 transition-opacity duration-200`} referrerPolicy="no-referrer" />
+                       <div className={`relative ${property.images.length === 1 ? 'w-full' : 'w-2/3'} h-full rounded-2xl overflow-hidden shadow-sm`}>
+                           <img src={topImage} alt="Main Image" onClick={() => { if (property.images.length > 0) { setEnlargedImageIndex(0); } }} className="w-full h-full object-cover cursor-pointer hover:opacity-95 transition-opacity duration-200" referrerPolicy="no-referrer" />
+                           {getImageRoomNumber(property.images[0]) && (
+                               <div className="absolute bottom-3 right-3 bg-indigo-950/90 backdrop-blur-xs text-white text-xs font-bold font-sans px-2.5 py-1.5 rounded-lg border border-white/20 shadow-md">
+                                   Room {getImageRoomNumber(property.images[0])}
+                               </div>
+                           )}
+                       </div>
                        {property.images.length > 1 && (
                          <div className="w-1/3 flex flex-col gap-4">
-                            <img src={subImages[0]} alt="Sub Image 1" onClick={() => setEnlargedImageIndex(1)} className="w-full h-[calc(50%-0.5rem)] object-cover rounded-2xl shadow-sm cursor-pointer hover:opacity-95 transition-opacity duration-200" referrerPolicy="no-referrer" />
-                            {property.images.length > 2 && <img src={subImages[1]} alt="Sub Image 2" onClick={() => setEnlargedImageIndex(2)} className="w-full h-[calc(50%-0.5rem)] object-cover rounded-2xl shadow-sm cursor-pointer hover:opacity-95 transition-opacity duration-200" referrerPolicy="no-referrer" />}
+                            <div className="relative w-full h-[calc(50%-0.5rem)] rounded-2xl overflow-hidden shadow-sm">
+                                <img src={getImageUrl(subImages[0]) || 'https://picsum.photos/seed/villa/600/400'} alt="Sub Image 1" onClick={() => setEnlargedImageIndex(1)} className="w-full h-full object-cover cursor-pointer hover:opacity-95 transition-opacity duration-200" referrerPolicy="no-referrer" />
+                                {getImageRoomNumber(property.images[1]) && (
+                                    <div className="absolute bottom-3 right-3 bg-indigo-950/90 backdrop-blur-xs text-white text-xs font-bold font-sans px-2.5 py-1.5 rounded-lg border border-white/20 shadow-md">
+                                        Room {getImageRoomNumber(property.images[1])}
+                                    </div>
+                                )}
+                            </div>
+                            {property.images.length > 2 && (
+                                <div className="relative w-full h-[calc(50%-0.5rem)] rounded-2xl overflow-hidden shadow-sm">
+                                    <img src={getImageUrl(subImages[1]) || 'https://picsum.photos/seed/villa/600/400'} alt="Sub Image 2" onClick={() => setEnlargedImageIndex(2)} className="w-full h-full object-cover cursor-pointer hover:opacity-95 transition-opacity duration-200" referrerPolicy="no-referrer" />
+                                    {getImageRoomNumber(property.images[2]) && (
+                                        <div className="absolute bottom-3 right-3 bg-indigo-950/90 backdrop-blur-xs text-white text-xs font-bold font-sans px-2.5 py-1.5 rounded-lg border border-white/20 shadow-md">
+                                            Room {getImageRoomNumber(property.images[2])}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                          </div>
                        )}
                    </div>
@@ -115,7 +135,14 @@ export const PropertyDetail: React.FC = () => {
                    {property.images.length > 3 && (
                        <div className="flex gap-4 overflow-x-auto pb-4 mb-8 snap-x px-2">
                            {property.images.slice(3).map((img, idx) => (
-                               <img key={idx} src={img} onClick={() => setEnlargedImageIndex(idx + 3)} className="h-32 w-48 rounded-2xl object-cover snap-start border border-slate-200 shadow-sm cursor-pointer hover:opacity-95 transition-opacity duration-200 flex-shrink-0" referrerPolicy="no-referrer" />
+                               <div key={idx} className="relative h-32 w-48 rounded-2xl overflow-hidden snap-start border border-slate-200 shadow-sm flex-shrink-0">
+                                   <img src={getImageUrl(img)} onClick={() => setEnlargedImageIndex(idx + 3)} className="w-full h-full object-cover cursor-pointer hover:opacity-95 transition-opacity duration-200" referrerPolicy="no-referrer" />
+                                   {getImageRoomNumber(img) && (
+                                       <div className="absolute bottom-2 right-2 bg-indigo-950/90 backdrop-blur-xs text-white text-[10px] font-bold font-sans px-2 py-1 rounded-md border border-white/20 shadow-sm">
+                                           Room {getImageRoomNumber(img)}
+                                       </div>
+                                   )}
+                               </div>
                            ))}
                        </div>
                    )}
@@ -241,13 +268,20 @@ export const PropertyDetail: React.FC = () => {
 
                          {/* Enlarged image */}
                          <div className="flex-1 h-full max-h-[70vh] flex items-center justify-center p-2">
-                             <img 
-                                 src={property.images[enlargedImageIndex]} 
-                                 alt={`Enlarged property display ${enlargedImageIndex + 1}`} 
-                                 className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl select-none animate-in zoom-in-95 duration-200"
-                                 onClick={(e) => e.stopPropagation()}
-                                 referrerPolicy="no-referrer"
-                             />
+                             <div className="relative">
+                                 <img 
+                                     src={getImageUrl(property.images[enlargedImageIndex as number])} 
+                                     alt={`Enlarged property display ${(enlargedImageIndex as number) + 1}`} 
+                                     className="max-w-full max-h-[70vh] object-contain rounded-2xl shadow-2xl select-none animate-in zoom-in-95 duration-200"
+                                     onClick={(e) => e.stopPropagation()}
+                                     referrerPolicy="no-referrer"
+                                 />
+                                 {getImageRoomNumber(property.images[enlargedImageIndex as number]) && (
+                                     <div className="absolute bottom-4 right-4 bg-indigo-600 backdrop-blur-xs text-white text-sm font-bold font-sans px-3 py-1.5 rounded-lg border border-white/20 shadow-xl z-20">
+                                         Room {getImageRoomNumber(property.images[enlargedImageIndex as number])}
+                                     </div>
+                                 )}
+                             </div>
                          </div>
 
                          {/* Next Indicator / Button */}
@@ -283,7 +317,12 @@ export const PropertyDetail: React.FC = () => {
                                          : "border-transparent opacity-50 hover:opacity-100"
                                  }`}
                              >
-                                 <img src={img} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                 <img src={getImageUrl(img)} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                 {getImageRoomNumber(img) && (
+                                     <div className="absolute bottom-0.5 right-0.5 bg-indigo-900/90 text-white text-[8px] font-bold px-1 rounded-sm border border-white/10 scale-90 z-20">
+                                         R{getImageRoomNumber(img)}
+                                     </div>
+                                 )}
                              </button>
                          ))}
                      </div>

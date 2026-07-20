@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
 import { YamiryLockGuide } from '../components/YamiryLockGuide';
 import { collection, query, where, getDocs, doc, updateDoc, getDoc, serverTimestamp, deleteDoc, setDoc } from 'firebase/firestore';
-import { Booking, Property } from '../types';
+import { Booking, Property, getImageUrl } from '../types';
 import { useNavigate, Link } from 'react-router-dom';
 import { ChevronLeft, Calendar as CalendarIcon, XCircle, CheckCircle, Home, MapPin, Edit3, X, Trash2, Printer, CreditCard, Loader2, AlertCircle, ArrowUpDown } from 'lucide-react';
 import { parseISO, differenceInHours } from 'date-fns';
@@ -208,7 +208,7 @@ export const MyBookings: React.FC = () => {
                            property = { id: pSnap.id, ...pData };
                            propertyName = pData.name;
                            if (pData.images && pData.images.length > 0) {
-                               propertyImage = pData.images[0];
+                               propertyImage = getImageUrl(pData.images[0]);
                            }
                        }
                     } catch (e) {}

@@ -8,7 +8,7 @@ import {
   ShieldCheck, MessageSquare, HelpCircle, MapPin, Ticket, Sparkles, 
   Music, Trophy, Compass, Smile 
 } from 'lucide-react';
-import { Property } from '../types';
+import { Property, getImageUrl } from '../types';
 import { PrivacyPolicyModal } from '../components/PrivacyPolicyModal';
 import { WeatherWidget } from '../components/WeatherWidget';
 
@@ -343,7 +343,7 @@ export const Home: React.FC = () => {
                                 <div key={p.id} className="bg-white rounded-3xl overflow-hidden border border-slate-200 shadow-sm group cursor-pointer hover:shadow-xl hover:border-indigo-200 transition-all hover:-translate-y-1 block" onClick={() => checkOptInAndNavigate(`/property/${p.id}`)}>
                                     <div className="h-64 relative overflow-hidden bg-slate-100 flex items-center justify-center">
                                         {p.images && p.images.length > 0 ? (
-                                           <img src={p.images[0]} className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700 ease-out" />
+                                           <img src={getImageUrl(p.images[0])} className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700 ease-out" />
                                         ) : (
                                            <div className="w-full h-full flex items-center justify-center text-slate-400">No images</div>
                                         )}

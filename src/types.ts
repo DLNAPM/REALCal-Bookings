@@ -1,17 +1,34 @@
 export type RuleType = 'default' | 'weekend' | 'holiday' | 'custom' | 'daily' | 'five_day' | 'weekly' | 'monthly';
 
+export interface PropertyImage {
+  url: string;
+  roomNumber?: string;
+}
+
 export interface Property {
   id: string;
   name: string;
   location?: string;
   description: string;
-  images: string[];
+  images: (string | PropertyImage)[];
   isTestProperty?: boolean;
   hasSmartLock?: boolean;
   frontDoorCode?: string;
   allowIndividualRoomRental?: boolean;
   bedrooms?: { roomNumber: string; roomLockNumber: string; type: 'Master Bed' | 'Guest Bedroom'; sqFt: number; fee: number; maxCapacity?: number }[];
   createdAt: any;
+}
+
+export function getImageUrl(img: string | PropertyImage | undefined | null): string {
+  if (!img) return '';
+  if (typeof img === 'string') return img;
+  return img.url || '';
+}
+
+export function getImageRoomNumber(img: string | PropertyImage | undefined | null): string | undefined {
+  if (!img) return undefined;
+  if (typeof img === 'string') return undefined;
+  return img.roomNumber;
 }
 
 export interface PricingRule {
