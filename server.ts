@@ -234,6 +234,42 @@ async function sendInvoicePaymentAdminNotification(bookingId: string, bookingDat
   }
 }
 
+async function updateGuestTollFreeAcceptIfNeeded(bookingData: any, activeDb: any) {
+  try {
+    const userId = bookingData.userId;
+    if (!userId) {
+      console.log("[TollFreeAccept] No userId associated with this booking data.");
+      return;
+    }
+
+    const userRef = activeDb.collection('users').doc(userId);
+    const userSnap = await userRef.get();
+    if (!userSnap.exists) {
+      console.log(`[TollFreeAccept] User document for ${userId} does not exist.`);
+      return;
+    }
+
+    const userData = userSnap.data() || {};
+    // "their 'TOLL-FREE-ACCEPT' is pending, update their 'TOLL-FREE-ACCEPT' status to 'ACCEPTED'"
+    // Pending means u.tollFreeAccept is undefined, null, or false, or maybe string 'PENDING'
+    const currentAccept = userData.tollFreeAccept;
+    const isPending = currentAccept === undefined || currentAccept === null || currentAccept === false || String(currentAccept).toUpperCase() === 'PENDING';
+
+    if (isPending) {
+      console.log(`[TollFreeAccept] Guest ${userId}'s TOLL-FREE-ACCEPT is currently pending/not accepted. Updating to ACCEPTED (true).`);
+      await userRef.update({
+        tollFreeAccept: true,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+      console.log(`[TollFreeAccept] Guest ${userId} tollFreeAccept set to true (ACCEPTED).`);
+    } else {
+      console.log(`[TollFreeAccept] Guest ${userId}'s TOLL-FREE-ACCEPT status is not pending (${currentAccept}). Skipping update.`);
+    }
+  } catch (err) {
+    console.error("[TollFreeAccept] Error updating tollFreeAccept for guest:", err);
+  }
+}
+
 function getCheckoutDeadline(checkOutDate: string): Date {
   const [year, month, day] = checkOutDate.split("-").map(Number);
   
@@ -1678,6 +1714,7 @@ async function startServer() {
         // Trigger notification to enabled Admins
         const updatedBookingData = { ...data, invoiceDetails };
         await sendInvoicePaymentAdminNotification(bookingId, updatedBookingData, activeDb);
+        await updateGuestTollFreeAcceptIfNeeded(updatedBookingData, activeDb);
         
         return res.json({ success: true, status: "paid", updated: true });
       }
@@ -1744,6 +1781,7 @@ async function startServer() {
         // Trigger notification to enabled Admins
         const updatedBookingData = { ...data, invoiceDetails };
         await sendInvoicePaymentAdminNotification(bookingId, updatedBookingData, activeDb);
+        await updateGuestTollFreeAcceptIfNeeded(updatedBookingData, activeDb);
       }
 
       console.log(`[Server] Marked invoice for booking ${bookingId} as paid successfully.`);
