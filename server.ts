@@ -146,6 +146,94 @@ function formatPhoneToE164(phone: string | undefined): string {
   return cleaned;
 }
 
+async function sendInvoicePaymentAdminNotification(bookingId: string, bookingData: any, activeDb: any) {
+  try {
+    const invoiceDetails = bookingData.invoiceDetails || {};
+    const invoiceNumber = invoiceDetails.invoiceNumber || 'Manual';
+    const amount = invoiceDetails.grandTotal !== undefined ? invoiceDetails.grandTotal : (bookingData.totalPrice ? (bookingData.totalPrice / 100) : 0);
+    const guestName = bookingData.guestName || invoiceDetails.sponsorName || "Guest";
+    const sponsorEmail = invoiceDetails.sponsorEmail || bookingData.guestEmail || "";
+    
+    // Fetch property name
+    let propertyName = "Lodging Property";
+    if (bookingData.propertyId) {
+      try {
+        const propSnap = await activeDb.collection('properties').doc(bookingData.propertyId).get();
+        if (propSnap.exists) {
+          propertyName = propSnap.data().name;
+        }
+      } catch (err) {
+        console.error("[Notification] Failed to fetch property name for invoice notification:", err);
+      }
+    }
+
+    // Build the message
+    const message = `ALERT: Guest/Sponsor ${guestName} (${sponsorEmail}) has PAID invoice #${invoiceNumber} in full for property "${propertyName}".\n\n` +
+                    `Amount Paid: $${Number(amount).toFixed(2)}\n` +
+                    `Check-in: ${bookingData.checkIn || 'N/A'}\n` +
+                    `Check-out: ${bookingData.checkOut || 'N/A'}\n` +
+                    `Booking Ref: ${bookingData.bookingRef || 'N/A'}`;
+
+    console.log(`[Notification] Preparing to send invoice paid notifications to enabled admins: "${message.replace(/\n/g, ' ')}"`);
+
+    // Setup Notification Services
+    const useSmtpEmail = !!process.env.SMTP_HOST;
+
+    let twilioClient: any = null;
+    const tSid = process.env.TWILIO_ACCOUNT_SID;
+    const tTok = process.env.TWILIO_AUTH_TOKEN;
+    const tFrom = process.env.TWILIO_PHONE_NUMBER;
+    
+    if (tSid && tTok && tSid.startsWith('AC') && !tSid.includes('PROVIDE_REAL')) {
+      try {
+        const twilioPkg = await import('twilio');
+        const twilio = twilioPkg.default || twilioPkg;
+        twilioClient = (twilio as any)(tSid, tTok);
+      } catch (e) {
+        console.error("[Notification] Error loading Twilio client:", e);
+      }
+    }
+
+    // Fetch enabled admins (property_managers)
+    const managersSnap = await activeDb.collection("property_managers").where("enabled", "==", true).get();
+    if (!managersSnap.empty) {
+      for (const mDoc of managersSnap.docs) {
+        const m = mDoc.data();
+        // Send email if configured
+        if (useSmtpEmail && m.email) {
+          try {
+            await sendSmtpEmail({
+              to: m.email,
+              subject: `Invoice Paid: #${invoiceNumber} for ${propertyName}`,
+              text: message
+            });
+            console.log(`[Notification] Invoice paid email notification sent to Admin ${m.email}`);
+          } catch (e: any) {
+            console.error(`[Notification] Failed to send email to Admin ${m.email}:`, e);
+          }
+        }
+        // Send SMS if configured
+        if (twilioClient && m.phone && tFrom) {
+          try {
+            await twilioClient.messages.create({
+              body: message,
+              from: tFrom,
+              to: formatPhoneToE164(m.phone)
+            });
+            console.log(`[Notification] Invoice paid SMS notification sent to Admin ${m.phone}`);
+          } catch (e: any) {
+            console.error(`[Notification] Failed to send SMS to Admin ${m.phone}:`, e);
+          }
+        }
+      }
+    } else {
+      console.log("[Notification] No enabled property managers (Admins) found to notify.");
+    }
+  } catch (err) {
+    console.error("[Notification] Error inside sendInvoicePaymentAdminNotification:", err);
+  }
+}
+
 function getCheckoutDeadline(checkOutDate: string): Date {
   const [year, month, day] = checkOutDate.split("-").map(Number);
   
@@ -1586,6 +1674,10 @@ async function startServer() {
           invoiceDetails,
           updatedAt: admin.firestore.FieldValue.serverTimestamp()
         });
+
+        // Trigger notification to enabled Admins
+        const updatedBookingData = { ...data, invoiceDetails };
+        await sendInvoicePaymentAdminNotification(bookingId, updatedBookingData, activeDb);
         
         return res.json({ success: true, status: "paid", updated: true });
       }
@@ -1638,6 +1730,8 @@ async function startServer() {
       const data = bookingDoc.data() || {};
       const invoiceDetails = data.invoiceDetails || {};
 
+      const alreadyPaid = !!invoiceDetails.paid;
+
       invoiceDetails.paid = true;
       invoiceDetails.paidAt = new Date().toISOString();
 
@@ -1645,6 +1739,12 @@ async function startServer() {
         invoiceDetails,
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
       });
+
+      if (!alreadyPaid) {
+        // Trigger notification to enabled Admins
+        const updatedBookingData = { ...data, invoiceDetails };
+        await sendInvoicePaymentAdminNotification(bookingId, updatedBookingData, activeDb);
+      }
 
       console.log(`[Server] Marked invoice for booking ${bookingId} as paid successfully.`);
       res.json({ success: true });
