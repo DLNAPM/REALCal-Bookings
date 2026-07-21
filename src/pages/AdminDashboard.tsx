@@ -93,6 +93,12 @@ export const AdminDashboard: React.FC = () => {
   const [syncingInvoiceId, setSyncingInvoiceId] = useState<string | null>(null);
   const [viewingInvoiceBooking, setViewingInvoiceBooking] = useState<any | null>(null);
 
+  // Paid confirmation resend states
+  const [resendingConfirmationBooking, setResendingConfirmationBooking] = useState<Booking | null>(null);
+  const [resendNotifyAdmins, setResendNotifyAdmins] = useState(true);
+  const [resendNotifyGuest, setResendNotifyGuest] = useState(true);
+  const [isResendingConfirmation, setIsResendingConfirmation] = useState(false);
+
   // User profile editing states
   const [editingUser, setEditingUser] = useState<any | null>(null);
   const [editUserRole, setEditUserRole] = useState<'user' | 'admin'>('user');
@@ -1993,6 +1999,32 @@ C.&S.H. Group Properties, LLC
     }
   };
 
+  const handleResendPaidConfirmation = async () => {
+    if (!resendingConfirmationBooking) return;
+    setIsResendingConfirmation(true);
+    try {
+      const res = await fetch("/api/resend-invoice-confirmation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bookingId: resendingConfirmationBooking.id,
+          notifyAdmins: resendNotifyAdmins,
+          notifyGuest: resendNotifyGuest
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to resend confirmation notification.");
+      }
+      alert(`Success! Invoice confirmation resent. (Admins: ${data.sentToAdmins ? "Yes" : "No"}, Guest: ${data.sentToGuest ? "Yes" : "No"})`);
+      setResendingConfirmationBooking(null);
+    } catch (err: any) {
+      alert("Error resending confirmation: " + err.message);
+    } finally {
+      setIsResendingConfirmation(false);
+    }
+  };
+
   const handleAdminCancelBooking = async (bookingId: string) => {
     if (!db || !window.confirm("Are you sure you want to cancel this booking?")) return;
     try {
@@ -3372,13 +3404,22 @@ C.&S.H. Group Properties, LLC
                                   {b.invoiceDetails && (
                                      <span className="inline-block mr-2 align-middle font-sans">
                                         {b.invoiceDetails.paid ? (
-                                           <button
-                                              disabled={true}
-                                              className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg inline-flex items-center gap-1 opacity-80 cursor-not-allowed"
-                                           >
-                                              <CheckCircle size={12} className="text-emerald-550" /> Invoice Paid
-                                           </button>
-                                        ) : (
+                                            <div className="inline-flex gap-1.5 items-center">
+                                               <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg inline-flex items-center gap-1">
+                                                  <CheckCircle size={12} className="text-emerald-550" /> Paid
+                                               </span>
+                                               <button
+                                                  onClick={() => {
+                                                     setResendingConfirmationBooking(b);
+                                                     setResendNotifyAdmins(true);
+                                                     setResendNotifyGuest(true);
+                                                  }}
+                                                  className="text-[10px] font-bold text-indigo-600 hover:text-indigo-850 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1 rounded-lg transition-all inline-flex items-center gap-1 cursor-pointer"
+                                               >
+                                                  <Mail size={12} /> Resend Receipt
+                                               </button>
+                                            </div>
+                                         ) : (
                                            <button
                                               onClick={() => handleResendInvoice(b)}
                                               disabled={sendingInvoiceId === b.id}
@@ -3544,14 +3585,27 @@ C.&S.H. Group Properties, LLC
                                               </button>
                                            )}
                                            
-                                           <button
-                                              onClick={() => handleResendInvoice(b)}
-                                              disabled={sendingInvoiceId === b.id}
-                                              className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1 rounded-lg transition-all inline-flex items-center gap-1 disabled:opacity-50 cursor-pointer"
-                                           >
-                                              {sendingInvoiceId === b.id ? 'Sending...' : 'Resend Email'}
-                                           </button>
-                                        </div>
+                                            {inv.paid ? (
+                                               <button
+                                                  onClick={() => {
+                                                     setResendingConfirmationBooking(b);
+                                                     setResendNotifyAdmins(true);
+                                                     setResendNotifyGuest(true);
+                                                  }}
+                                                  className="text-[10px] font-bold text-teal-600 hover:text-teal-800 bg-teal-50 hover:bg-teal-100 border border-teal-200 px-2.5 py-1 rounded-lg transition-all inline-flex items-center gap-1 cursor-pointer"
+                                               >
+                                                  <Mail size={12} /> Resend Paid Receipt
+                                               </button>
+                                            ) : (
+                                               <button
+                                                  onClick={() => handleResendInvoice(b)}
+                                                  disabled={sendingInvoiceId === b.id}
+                                                  className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1 rounded-lg transition-all inline-flex items-center gap-1 disabled:opacity-50 cursor-pointer"
+                                               >
+                                                  {sendingInvoiceId === b.id ? "Sending..." : "Resend Email"}
+                                               </button>
+                                            )}
+                                         </div>
                                      </td>
                                   </tr>
                                );
@@ -5017,6 +5071,94 @@ C.&S.H. Group Properties, LLC
                             className="text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-500 border border-indigo-700 px-5 py-2.5 rounded-xl transition-all inline-flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
                          >
                             {sendingInvoiceId === liveBooking.id ? 'Sending...' : 'Resend Invoice Email'}
+                         </button>
+                      </div>
+                   </div>
+                </div>
+             );
+          })()}
+
+          {resendingConfirmationBooking && (() => {
+             const inv = resendingConfirmationBooking.invoiceDetails;
+             if (!inv) return null;
+             const guestName = resendingConfirmationBooking.guestName || inv.sponsorName || "Guest";
+             return (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+                   <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200 text-left">
+                      {/* Header */}
+                      <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                         <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                            <span className="p-1.5 bg-indigo-100 text-indigo-700 rounded-lg flex items-center justify-center"><Mail size={16}/></span>
+                            Resend Paid Confirmation
+                         </h3>
+                         <button 
+                            onClick={() => setResendingConfirmationBooking(null)} 
+                            className="text-slate-400 hover:text-slate-600 transition-colors bg-white border border-slate-200 hover:border-slate-300 p-1.5 rounded-full cursor-pointer flex items-center justify-center"
+                            title="Close modal"
+                         >
+                            <XCircle size={16} />
+                         </button>
+                      </div>
+
+                      {/* Content */}
+                      <div className="p-6 space-y-4">
+                         <p className="text-xs text-slate-500">
+                            Choose who should receive the invoice paid confirmation notification for Invoice <strong className="text-slate-700">#{inv.invoiceNumber || "Manual"}</strong> (Guest: {guestName}).
+                         </p>
+
+                         <div className="space-y-3">
+                            <label className="flex items-start gap-3 p-3 rounded-xl border border-slate-100 hover:bg-slate-50/50 cursor-pointer transition-all">
+                               <input 
+                                  type="checkbox" 
+                                  checked={resendNotifyAdmins} 
+                                  onChange={(e) => setResendNotifyAdmins(e.target.checked)}
+                                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                               />
+                               <div className="text-xs">
+                                  <span className="font-bold text-slate-800 block">Notify Enabled Admins</span>
+                                  <span className="text-slate-500">Send confirmation alert (email/SMS) to all active property managers in the system.</span>
+                               </div>
+                            </label>
+
+                            <label className="flex items-start gap-3 p-3 rounded-xl border border-slate-100 hover:bg-slate-50/50 cursor-pointer transition-all">
+                               <input 
+                                  type="checkbox" 
+                                  checked={resendNotifyGuest} 
+                                  onChange={(e) => setResendNotifyGuest(e.target.checked)}
+                                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                               />
+                               <div className="text-xs">
+                                  <span className="font-bold text-slate-800 block">Notify Guest / Sponsor</span>
+                                  <span className="text-slate-500">Send confirmation email to guest/sponsor, and SMS if opted-in.</span>
+                               </div>
+                            </label>
+                         </div>
+                      </div>
+
+                      {/* Footer */}
+                      <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3 bg-slate-50 items-center">
+                         <button 
+                            type="button"
+                            onClick={() => setResendingConfirmationBooking(null)} 
+                            className="px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-xs transition-all cursor-pointer"
+                         >
+                            Cancel
+                         </button>
+                         <button 
+                            type="button"
+                            disabled={isResendingConfirmation || (!resendNotifyAdmins && !resendNotifyGuest)}
+                            onClick={handleResendPaidConfirmation}
+                            className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-300 text-white px-5 py-2 rounded-xl font-bold flex items-center gap-2 text-xs transition-colors shadow-md shadow-indigo-100 cursor-pointer"
+                         >
+                            {isResendingConfirmation ? (
+                               <>
+                                  <Loader2 className="animate-spin" size={14}/> Resending...
+                               </>
+                            ) : (
+                               <>
+                                  <Mail size={14}/> Send Notification(s)
+                               </>
+                            )}
                          </button>
                       </div>
                    </div>

@@ -234,6 +234,124 @@ async function sendInvoicePaymentAdminNotification(bookingId: string, bookingDat
   }
 }
 
+async function sendInvoicePaymentGuestNotification(bookingId: string, bookingData: any, activeDb: any) {
+  try {
+    const invoiceDetails = bookingData.invoiceDetails || {};
+    const invoiceNumber = invoiceDetails.invoiceNumber || 'Manual';
+    const amount = invoiceDetails.grandTotal !== undefined ? invoiceDetails.grandTotal : (bookingData.totalPrice ? (bookingData.totalPrice / 100) : 0);
+    const guestName = bookingData.guestName || invoiceDetails.sponsorName || "Guest";
+    const guestEmail = bookingData.guestEmail || invoiceDetails.sponsorEmail || "";
+    const guestPhone = bookingData.guestPhone || invoiceDetails.sponsorPhone || "";
+    const sponsorEmail = invoiceDetails.sponsorEmail || "";
+    const sponsorPhone = invoiceDetails.sponsorPhone || "";
+
+    // Fetch property name
+    let propertyName = "Lodging Property";
+    if (bookingData.propertyId) {
+      try {
+        const propSnap = await activeDb.collection('properties').doc(bookingData.propertyId).get();
+        if (propSnap.exists) {
+          propertyName = propSnap.data().name;
+        }
+      } catch (err) {
+        console.error("[Notification] Failed to fetch property name for guest invoice notification:", err);
+      }
+    }
+
+    const message = `Dear ${guestName},\n\n` +
+                    `We are pleased to confirm that payment has been RECEIVED IN FULL for Invoice #${invoiceNumber} for your upcoming stay at "${propertyName}".\n\n` +
+                    `Amount Paid: $${Number(amount).toFixed(2)}\n` +
+                    `Check-in Date: ${bookingData.checkIn || 'N/A'}\n` +
+                    `Check-out Date: ${bookingData.checkOut || 'N/A'}\n` +
+                    `Booking Reference: ${bookingData.bookingRef || 'N/A'}\n\n` +
+                    `Thank you for your business!\n\n` +
+                    `Best regards,\n` +
+                    `REALCal Bookings\n` +
+                    `C.&S.H. Group Properties, LLC`;
+
+    console.log(`[Notification] Preparing to send invoice payment confirmation to Guest: "${message.replace(/\n/g, ' ')}"`);
+
+    // Setup Notification Services
+    const useSmtpEmail = !!process.env.SMTP_HOST;
+
+    let twilioClient: any = null;
+    const tSid = process.env.TWILIO_ACCOUNT_SID;
+    const tTok = process.env.TWILIO_AUTH_TOKEN;
+    const tFrom = process.env.TWILIO_PHONE_NUMBER;
+    
+    if (tSid && tTok && tSid.startsWith('AC') && !tSid.includes('PROVIDE_REAL')) {
+      try {
+        const twilioPkg = await import('twilio');
+        const twilio = twilioPkg.default || twilioPkg;
+        twilioClient = (twilio as any)(tSid, tTok);
+      } catch (e) {
+        console.error("[Notification] Error loading Twilio client for guest confirmation:", e);
+      }
+    }
+
+    // Send email to sponsor if they are different from guest, and to guest
+    const emailsToNotify = new Set<string>();
+    if (guestEmail) emailsToNotify.add(guestEmail.trim().toLowerCase());
+    if (sponsorEmail) emailsToNotify.add(sponsorEmail.trim().toLowerCase());
+
+    if (useSmtpEmail) {
+      for (const email of emailsToNotify) {
+        try {
+          await sendSmtpEmail({
+            to: email,
+            subject: `Payment Confirmed: Invoice #${invoiceNumber} for ${propertyName}`,
+            text: message
+          });
+          console.log(`[Notification] Invoice paid confirmation email sent to ${email}`);
+        } catch (e: any) {
+          console.error(`[Notification] Failed to send email to ${email}:`, e);
+        }
+      }
+    }
+
+    // Send SMS to Guest/Sponsor if opt-in / configured
+    // Check user tollFreeAccept status
+    let userSmsAllowed = true;
+    if (bookingData.userId) {
+      try {
+        const userSnap = await activeDb.collection('users').doc(bookingData.userId).get();
+        if (userSnap.exists) {
+          const uData = userSnap.data() || {};
+          // If explicitly opted out (false), we respect it. Since we just updated it to true (ACCEPTED) upon payment,
+          // they should be opted in now. Let's still check.
+          if (uData.tollFreeAccept === false) {
+            userSmsAllowed = false;
+          }
+        }
+      } catch (err) {
+        console.error("[Notification] Failed to fetch guest toll-free status for confirmation SMS:", err);
+      }
+    }
+
+    if (twilioClient && tFrom && userSmsAllowed) {
+      const smsBody = `Payment Received! Invoice #${invoiceNumber} for stay at ${propertyName} (${bookingData.checkIn} to ${bookingData.checkOut}) is paid in full. Thank you!`;
+      const phonesToNotify = new Set<string>();
+      if (guestPhone) phonesToNotify.add(formatPhoneToE164(guestPhone));
+      if (sponsorPhone) phonesToNotify.add(formatPhoneToE164(sponsorPhone));
+
+      for (const phone of phonesToNotify) {
+        try {
+          await twilioClient.messages.create({
+            body: smsBody,
+            from: tFrom,
+            to: phone
+          });
+          console.log(`[Notification] Invoice paid confirmation SMS sent to ${phone}`);
+        } catch (e: any) {
+          console.error(`[Notification] Failed to send SMS to ${phone}:`, e);
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[Notification] Error inside sendInvoicePaymentGuestNotification:", err);
+  }
+}
+
 async function updateGuestTollFreeAcceptIfNeeded(bookingData: any, activeDb: any) {
   try {
     const userId = bookingData.userId;
@@ -1711,9 +1829,10 @@ async function startServer() {
           updatedAt: admin.firestore.FieldValue.serverTimestamp()
         });
 
-        // Trigger notification to enabled Admins
+        // Trigger notification to enabled Admins and the Guest
         const updatedBookingData = { ...data, invoiceDetails };
         await sendInvoicePaymentAdminNotification(bookingId, updatedBookingData, activeDb);
+        await sendInvoicePaymentGuestNotification(bookingId, updatedBookingData, activeDb);
         await updateGuestTollFreeAcceptIfNeeded(updatedBookingData, activeDb);
         
         return res.json({ success: true, status: "paid", updated: true });
@@ -1778,9 +1897,10 @@ async function startServer() {
       });
 
       if (!alreadyPaid) {
-        // Trigger notification to enabled Admins
+        // Trigger notification to enabled Admins and the Guest
         const updatedBookingData = { ...data, invoiceDetails };
         await sendInvoicePaymentAdminNotification(bookingId, updatedBookingData, activeDb);
+        await sendInvoicePaymentGuestNotification(bookingId, updatedBookingData, activeDb);
         await updateGuestTollFreeAcceptIfNeeded(updatedBookingData, activeDb);
       }
 
@@ -1788,6 +1908,64 @@ async function startServer() {
       res.json({ success: true });
     } catch (e: any) {
       console.error("Error setting invoice to paid on server:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/resend-invoice-confirmation", async (req, res) => {
+    try {
+      const { bookingId, notifyAdmins, notifyGuest } = req.body;
+      if (!bookingId) {
+        return res.status(400).json({ error: "bookingId is required" });
+      }
+
+      let activeDb = db;
+      if (!activeDb) {
+        const configPath = path.resolve(process.cwd(), "firebase-applet-config.json");
+        if (fs.existsSync(configPath)) {
+          const firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+          if (admin.apps.length === 0) {
+            admin.initializeApp({ projectId: firebaseConfig.projectId });
+          }
+          const dbId = firebaseConfig.firestoreDatabaseId || "(default)";
+          activeDb = getFirestore(admin.app(), dbId);
+        }
+      }
+
+      if (!activeDb) {
+        return res.status(500).json({ error: "Database not initialized" });
+      }
+
+      const bookingRef = activeDb.collection('bookings').doc(bookingId);
+      const bookingDoc = await bookingRef.get();
+
+      if (!bookingDoc.exists) {
+        return res.status(404).json({ error: `Booking with ID ${bookingId} not found` });
+      }
+
+      const data = bookingDoc.data() || {};
+      const invoiceDetails = data.invoiceDetails || {};
+
+      if (!invoiceDetails.paid) {
+        return res.status(400).json({ error: "Cannot resend payment confirmation for an unpaid invoice." });
+      }
+
+      let sentToAdmins = false;
+      let sentToGuest = false;
+
+      if (notifyAdmins) {
+        await sendInvoicePaymentAdminNotification(bookingId, data, activeDb);
+        sentToAdmins = true;
+      }
+
+      if (notifyGuest) {
+        await sendInvoicePaymentGuestNotification(bookingId, data, activeDb);
+        sentToGuest = true;
+      }
+
+      res.json({ success: true, sentToAdmins, sentToGuest });
+    } catch (e: any) {
+      console.error("Error resending invoice confirmation notification:", e);
       res.status(500).json({ error: e.message });
     }
   });
