@@ -97,6 +97,12 @@ export interface Booking {
   sent1hReminder?: boolean;
   invoiceDetails?: any;
   invoiceEmailed?: boolean;
+  rentalMode?: string;
+  propertyName?: string;
+  propertyImage?: string;
+  agreedToHouseRules?: boolean;
+  agreedToBookingAgreement?: boolean;
+  agreementsAcceptedAt?: string;
 }
 
 export interface GlobalSettings {

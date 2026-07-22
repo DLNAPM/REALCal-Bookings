@@ -5,7 +5,7 @@ import { YamiryLockGuide } from '../components/YamiryLockGuide';
 import { collection, query, where, getDocs, doc, updateDoc, getDoc, serverTimestamp, deleteDoc, setDoc } from 'firebase/firestore';
 import { Booking, Property, getImageUrl } from '../types';
 import { useNavigate, Link } from 'react-router-dom';
-import { ChevronLeft, Calendar as CalendarIcon, XCircle, CheckCircle, Home, MapPin, Edit3, X, Trash2, Printer, CreditCard, Loader2, AlertCircle, ArrowUpDown } from 'lucide-react';
+import { ChevronLeft, Calendar as CalendarIcon, XCircle, CheckCircle, Home, MapPin, Edit3, X, Trash2, Printer, CreditCard, Loader2, AlertCircle, ArrowUpDown, Receipt } from 'lucide-react';
 import { parseISO, differenceInHours } from 'date-fns';
 import { Calendar } from '../components/Calendar';
 import { LegalFooter } from '../components/LegalFooter';
@@ -955,6 +955,25 @@ export const MyBookings: React.FC = () => {
                                                 </button>
                                             )}
                                         </div>
+
+                                        {booking.invoiceDetails && !booking.invoiceDetails.paid && (
+                                            <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shadow-sm">
+                                                <div className="space-y-1">
+                                                    <div className="text-xs font-extrabold text-amber-900 uppercase tracking-wide flex items-center gap-1.5">
+                                                        <Receipt size={16} className="text-amber-600" /> Pending Sponsor Invoice #{booking.invoiceDetails.invoiceNumber || "Manual"}
+                                                    </div>
+                                                    <p className="text-xs text-amber-800">
+                                                        Amount Due: <strong className="font-mono text-slate-900">${(booking.invoiceDetails.grandTotal || (booking.totalPrice / 100)).toFixed(2)}</strong> &bull; Due: {booking.invoiceDetails.dueDate || "Upon Receipt"}
+                                                    </p>
+                                                </div>
+                                                <Link 
+                                                    to={`/pay-invoice/${booking.id}`}
+                                                    className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl transition-all shadow-md flex items-center gap-1.5 shrink-0"
+                                                >
+                                                    <CreditCard size={14} /> Review Agreements & Pay Invoice
+                                                </Link>
+                                            </div>
+                                        )}
 
                                         <div className="grid grid-cols-2 gap-4 mb-6">
                                             <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">

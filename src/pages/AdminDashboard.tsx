@@ -1249,7 +1249,8 @@ export const AdminDashboard: React.FC = () => {
          dueDate: invoiceDueDate,
          customNotes: invoiceCustomNotes,
          sentAt: new Date().toISOString(),
-         stripePaymentUrl: stripePaymentUrl || null,
+         stripePaymentUrl: `${window.location.origin}/pay-invoice/${bookingId}`,
+         stripeCheckoutUrl: stripePaymentUrl || null,
          stripeSessionId: stripeSessionId || null,
          baseAmount: baseAmount,
          stripeFee: stripeFee,
@@ -1805,7 +1806,9 @@ C.&S.H. Group Properties, LLC
       const baseAmountVal = b.invoiceDetails.baseAmount !== undefined ? b.invoiceDetails.baseAmount : (b.totalPrice / 100);
       const stripeFeeVal = b.invoiceDetails.stripeFee !== undefined ? b.invoiceDetails.stripeFee : 0;
       const grandTotalVal = b.invoiceDetails.grandTotal !== undefined ? b.invoiceDetails.grandTotal : (b.totalPrice / 100);
-      const stripePaymentUrl = b.invoiceDetails.stripePaymentUrl || '';
+      const stripePaymentUrl = (b.invoiceDetails.stripePaymentUrl && b.invoiceDetails.stripePaymentUrl.includes('/pay-invoice/')) 
+        ? b.invoiceDetails.stripePaymentUrl 
+        : `${window.location.origin}/pay-invoice/${b.id}`;
 
       const invoiceNumber = b.invoiceDetails.invoiceNumber || 'Manual';
       const invoiceDueDate = b.invoiceDetails.dueDate || '';

@@ -1738,6 +1738,19 @@ async function startServer() {
       }
 
       console.log(`[Server] Creating checkout session for invoice #${invoiceNumber || 'Manual'} with origin URL: ${hostUrl}`);
+
+      if (bookingId && db) {
+        try {
+          await db.collection("bookings").doc(bookingId).update({
+            agreedToHouseRules: true,
+            agreedToBookingAgreement: true,
+            agreementsAcceptedAt: new Date().toISOString()
+          });
+          console.log(`[Server] Updated agreements accepted status for booking ${bookingId}`);
+        } catch (err: any) {
+          console.warn(`[Server] Could not update agreements on booking ${bookingId}:`, err.message);
+        }
+      }
       
       const session = await stripe.checkout.sessions.create({
         payment_method_types: ['card'],
