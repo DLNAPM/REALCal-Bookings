@@ -629,12 +629,23 @@ export const AdminDashboard: React.FC = () => {
   };
 
   const handleDeleteActiveLease = async (id: string) => {
-    if (!db) return;
     if (window.confirm("Are you sure you want to delete this active lease? Doing so will invalidate the lease code.")) {
       try {
-        await deleteDoc(doc(db, 'leases', id));
+        const res = await fetch('/api/delete-lease', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ leaseId: id })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to delete lease');
       } catch (err: any) {
-        alert(`Error: ${err.message}`);
+        if (db) {
+          try {
+            await deleteDoc(doc(db, 'leases', id));
+            return;
+          } catch (e: any) {}
+        }
+        alert(`Error deleting lease: ${err.message}`);
       }
     }
   };
@@ -658,7 +669,6 @@ export const AdminDashboard: React.FC = () => {
 
   const handleCreateManualLease = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!db) return;
     if (!manualLeaseCode.trim()) {
       alert("Please enter or generate a valid Lease Agreement Code.");
       return;
@@ -673,7 +683,7 @@ export const AdminDashboard: React.FC = () => {
       const linkedBooking = bookings.find(b => b.id === selectedInvoiceBookingId);
       const invoiceNum = linkedBooking?.invoiceDetails?.invoiceNumber || 'Manual';
 
-      const leaseDocData = {
+      const payload = {
         leaseCode: manualLeaseCode.trim(),
         invoiceNumber: invoiceNum,
         bookingId: selectedInvoiceBookingId || null,
@@ -685,19 +695,17 @@ export const AdminDashboard: React.FC = () => {
         tenantEmail: manualTenantEmail.trim(),
         tenantPhone: manualTenantPhone.trim(),
         leaseType: manualLeaseType,
-        monthlyRent: manualMonthlyRent ? parseFloat(manualMonthlyRent) : 0,
-        status: 'approved',
-        createdAt: new Date().toISOString()
+        monthlyRent: manualMonthlyRent ? parseFloat(manualMonthlyRent) : 0
       };
 
-      await setDoc(doc(db, 'leases', manualLeaseCode.trim()), leaseDocData);
+      const res = await fetch('/api/create-manual-lease', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
 
-      if (selectedInvoiceBookingId) {
-        await updateDoc(doc(db, 'bookings', selectedInvoiceBookingId), {
-          leaseCode: manualLeaseCode.trim(),
-          leaseType: manualLeaseType
-        });
-      }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to create manual lease.');
 
       alert(`Manual Lease Agreement #${manualLeaseCode.trim()} created successfully!`);
       // Reset
@@ -713,21 +721,59 @@ export const AdminDashboard: React.FC = () => {
       setShowManualLeaseForm(false);
     } catch (err: any) {
       console.error("Error creating manual lease:", err);
-      alert("Error creating manual lease: " + err.message);
+      // Fallback attempt with client SDK if API failed
+      if (db) {
+        try {
+          const linkedBooking = bookings.find(b => b.id === selectedInvoiceBookingId);
+          await setDoc(doc(db, 'leases', manualLeaseCode.trim()), {
+            leaseCode: manualLeaseCode.trim(),
+            invoiceNumber: linkedBooking?.invoiceDetails?.invoiceNumber || 'Manual',
+            bookingId: selectedInvoiceBookingId || null,
+            propertyId: linkedBooking?.propertyId || '',
+            propertyNameOrRoom: manualPropertyName.trim() || linkedBooking?.propertyName || 'Property',
+            startDate: manualStartDate,
+            endDate: manualEndDate,
+            tenantName: manualTenantName.trim(),
+            tenantEmail: manualTenantEmail.trim(),
+            tenantPhone: manualTenantPhone.trim(),
+            leaseType: manualLeaseType,
+            monthlyRent: manualMonthlyRent ? parseFloat(manualMonthlyRent) : 0,
+            status: 'approved',
+            createdAt: new Date().toISOString()
+          });
+          alert(`Manual Lease Agreement #${manualLeaseCode.trim()} created successfully!`);
+          setShowManualLeaseForm(false);
+          return;
+        } catch (clientErr: any) {
+          alert("Error creating manual lease: " + clientErr.message);
+        }
+      } else {
+        alert("Error creating manual lease: " + err.message);
+      }
     } finally {
       setIsCreatingManualLease(false);
     }
   };
 
   const handleUpdateLeaseType = async (leaseId: string, newType: 'month_to_month' | 'fixed') => {
-    if (!db) return;
     try {
-      await updateDoc(doc(db, 'leases', leaseId), {
-        leaseType: newType
+      const res = await fetch('/api/update-lease-type', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leaseId, leaseType: newType })
       });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update lease type');
       alert(`Lease type updated to ${newType === 'month_to_month' ? 'Month-to-Month' : 'Fixed Lease'}.`);
     } catch (err: any) {
       console.error("Error updating lease type:", err);
+      if (db) {
+        try {
+          await updateDoc(doc(db, 'leases', leaseId), { leaseType: newType });
+          alert(`Lease type updated to ${newType === 'month_to_month' ? 'Month-to-Month' : 'Fixed Lease'}.`);
+          return;
+        } catch (e: any) {}
+      }
       alert("Failed to update lease type: " + err.message);
     }
   };

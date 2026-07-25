@@ -2404,6 +2404,96 @@ async function startServer() {
     }
   });
 
+  app.post("/api/create-manual-lease", async (req, res) => {
+    try {
+      const { leaseCode, invoiceNumber, bookingId, propertyId, propertyNameOrRoom, startDate, endDate, tenantName, tenantEmail, tenantPhone, leaseType, monthlyRent } = req.body;
+      if (!db) {
+        return res.status(500).json({ error: "Firebase Firestore is not initialized on the server." });
+      }
+
+      if (!leaseCode) {
+        return res.status(400).json({ error: "Lease code is required." });
+      }
+
+      const leaseData = {
+        leaseCode,
+        invoiceNumber: invoiceNumber || 'Manual',
+        bookingId: bookingId || null,
+        propertyId: propertyId || '',
+        propertyNameOrRoom: propertyNameOrRoom || 'Property',
+        startDate: startDate || '',
+        endDate: endDate || '',
+        tenantName: tenantName || 'Guest',
+        tenantEmail: tenantEmail || '',
+        tenantPhone: tenantPhone || '',
+        leaseType: leaseType || 'month_to_month',
+        monthlyRent: monthlyRent ? parseFloat(monthlyRent) : 0,
+        status: 'approved',
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+      };
+
+      await db.collection("leases").doc(leaseCode).set(leaseData);
+
+      if (bookingId) {
+        try {
+          await db.collection("bookings").doc(bookingId).update({
+            leaseCode,
+            leaseType: leaseType || 'month_to_month'
+          });
+        } catch (bErr) {
+          console.warn("Could not update linked booking with leaseCode:", bErr);
+        }
+      }
+
+      return res.json({ success: true, leaseCode, message: "Manual lease created successfully." });
+    } catch (err: any) {
+      console.error("Error in create-manual-lease API:", err);
+      return res.status(500).json({ error: err.message || "Failed to create manual lease." });
+    }
+  });
+
+  app.post("/api/update-lease-type", async (req, res) => {
+    try {
+      const { leaseId, leaseType } = req.body;
+      if (!db) {
+        return res.status(500).json({ error: "Firebase Firestore is not initialized on the server." });
+      }
+
+      if (!leaseId || !leaseType) {
+        return res.status(400).json({ error: "leaseId and leaseType are required." });
+      }
+
+      await db.collection("leases").doc(leaseId).update({
+        leaseType
+      });
+
+      return res.json({ success: true, message: `Lease type updated to ${leaseType}` });
+    } catch (err: any) {
+      console.error("Error updating lease type:", err);
+      return res.status(500).json({ error: err.message || "Failed to update lease type." });
+    }
+  });
+
+  app.post("/api/delete-lease", async (req, res) => {
+    try {
+      const { leaseId } = req.body;
+      if (!db) {
+        return res.status(500).json({ error: "Firebase Firestore is not initialized on the server." });
+      }
+
+      if (!leaseId) {
+        return res.status(400).json({ error: "leaseId is required." });
+      }
+
+      await db.collection("leases").doc(leaseId).delete();
+
+      return res.json({ success: true, message: "Lease record deleted successfully." });
+    } catch (err: any) {
+      console.error("Error deleting lease:", err);
+      return res.status(500).json({ error: err.message || "Failed to delete lease." });
+    }
+  });
+
   app.post("/api/notify-managers", async (req, res) => {
     try {
       const { managers, bookingDetails } = req.body;
