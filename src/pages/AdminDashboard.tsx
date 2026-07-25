@@ -6,7 +6,7 @@ import { Navigate, useNavigate, Link } from 'react-router-dom';
 import { format, eachDayOfInterval, parseISO, addDays } from 'date-fns';
 import { cn } from '../lib/utils';
 import { BlackoutDate, PricingRule, Booking, Property, PropertyManager, PropertyImage, getImageUrl, getImageRoomNumber, DiscountCode } from '../types';
-import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight, RefreshCw, MessageSquare, CheckCircle, Loader2, FileText, XCircle, HelpCircle, MapPin, Upload, Database, Ticket } from 'lucide-react';
+import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight, RefreshCw, MessageSquare, CheckCircle, Loader2, FileText, XCircle, HelpCircle, MapPin, Upload, Database, Ticket, Send, Clock, Bell, FileCheck, RotateCw, CheckSquare } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 const formatPhoneE164 = (phone: string) => {
@@ -98,6 +98,21 @@ export const AdminDashboard: React.FC = () => {
   const [resendNotifyAdmins, setResendNotifyAdmins] = useState(true);
   const [resendNotifyGuest, setResendNotifyGuest] = useState(true);
   const [isResendingConfirmation, setIsResendingConfirmation] = useState(false);
+
+  // Manual Lease Creation & Management States
+  const [showManualLeaseForm, setShowManualLeaseForm] = useState<boolean>(false);
+  const [selectedInvoiceBookingId, setSelectedInvoiceBookingId] = useState<string>('');
+  const [manualLeaseCode, setManualLeaseCode] = useState<string>('LSE-' + Math.random().toString(36).substring(2, 7).toUpperCase());
+  const [manualLeaseType, setManualLeaseType] = useState<'month_to_month' | 'fixed'>('month_to_month');
+  const [manualTenantName, setManualTenantName] = useState<string>('');
+  const [manualTenantEmail, setManualTenantEmail] = useState<string>('');
+  const [manualTenantPhone, setManualTenantPhone] = useState<string>('');
+  const [manualPropertyName, setManualPropertyName] = useState<string>('');
+  const [manualStartDate, setManualStartDate] = useState<string>('');
+  const [manualEndDate, setManualEndDate] = useState<string>('');
+  const [manualMonthlyRent, setManualMonthlyRent] = useState<string>('');
+  const [isCreatingManualLease, setIsCreatingManualLease] = useState<boolean>(false);
+  const [sendingReminderLeaseId, setSendingReminderLeaseId] = useState<string | null>(null);
 
   // User profile editing states
   const [editingUser, setEditingUser] = useState<any | null>(null);
@@ -621,6 +636,129 @@ export const AdminDashboard: React.FC = () => {
       } catch (err: any) {
         alert(`Error: ${err.message}`);
       }
+    }
+  };
+
+  const handleInvoiceSelectionForLease = (bookingId: string) => {
+    setSelectedInvoiceBookingId(bookingId);
+    if (!bookingId) return;
+    const b = bookings.find(item => item.id === bookingId);
+    if (b && b.invoiceDetails) {
+      const inv = b.invoiceDetails;
+      setManualTenantName(inv.sponsorName || b.guestName || '');
+      setManualTenantEmail(inv.sponsorEmail || b.guestEmail || '');
+      setManualTenantPhone(inv.sponsorPhone || b.guestPhone || '');
+      setManualPropertyName(b.propertyName || (properties.find(p => p.id === b.propertyId)?.name) || 'Property');
+      setManualStartDate(b.checkIn ? b.checkIn.split('T')[0] : '');
+      setManualEndDate(b.checkOut ? b.checkOut.split('T')[0] : '');
+      const rentAmt = inv.grandTotal !== undefined ? inv.grandTotal : (inv.baseAmount || (b.totalPrice / 100));
+      setManualMonthlyRent(rentAmt ? rentAmt.toString() : '');
+    }
+  };
+
+  const handleCreateManualLease = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!db) return;
+    if (!manualLeaseCode.trim()) {
+      alert("Please enter or generate a valid Lease Agreement Code.");
+      return;
+    }
+    if (!manualTenantName.trim() || !manualTenantEmail.trim()) {
+      alert("Please enter Tenant Name and Email.");
+      return;
+    }
+
+    setIsCreatingManualLease(true);
+    try {
+      const linkedBooking = bookings.find(b => b.id === selectedInvoiceBookingId);
+      const invoiceNum = linkedBooking?.invoiceDetails?.invoiceNumber || 'Manual';
+
+      const leaseDocData = {
+        leaseCode: manualLeaseCode.trim(),
+        invoiceNumber: invoiceNum,
+        bookingId: selectedInvoiceBookingId || null,
+        propertyId: linkedBooking?.propertyId || '',
+        propertyNameOrRoom: manualPropertyName.trim() || linkedBooking?.propertyName || 'Property',
+        startDate: manualStartDate,
+        endDate: manualEndDate,
+        tenantName: manualTenantName.trim(),
+        tenantEmail: manualTenantEmail.trim(),
+        tenantPhone: manualTenantPhone.trim(),
+        leaseType: manualLeaseType,
+        monthlyRent: manualMonthlyRent ? parseFloat(manualMonthlyRent) : 0,
+        status: 'approved',
+        createdAt: new Date().toISOString()
+      };
+
+      await setDoc(doc(db, 'leases', manualLeaseCode.trim()), leaseDocData);
+
+      if (selectedInvoiceBookingId) {
+        await updateDoc(doc(db, 'bookings', selectedInvoiceBookingId), {
+          leaseCode: manualLeaseCode.trim(),
+          leaseType: manualLeaseType
+        });
+      }
+
+      alert(`Manual Lease Agreement #${manualLeaseCode.trim()} created successfully!`);
+      // Reset
+      setManualLeaseCode('LSE-' + Math.random().toString(36).substring(2, 7).toUpperCase());
+      setSelectedInvoiceBookingId('');
+      setManualTenantName('');
+      setManualTenantEmail('');
+      setManualTenantPhone('');
+      setManualPropertyName('');
+      setManualStartDate('');
+      setManualEndDate('');
+      setManualMonthlyRent('');
+      setShowManualLeaseForm(false);
+    } catch (err: any) {
+      console.error("Error creating manual lease:", err);
+      alert("Error creating manual lease: " + err.message);
+    } finally {
+      setIsCreatingManualLease(false);
+    }
+  };
+
+  const handleUpdateLeaseType = async (leaseId: string, newType: 'month_to_month' | 'fixed') => {
+    if (!db) return;
+    try {
+      await updateDoc(doc(db, 'leases', leaseId), {
+        leaseType: newType
+      });
+      alert(`Lease type updated to ${newType === 'month_to_month' ? 'Month-to-Month' : 'Fixed Lease'}.`);
+    } catch (err: any) {
+      console.error("Error updating lease type:", err);
+      alert("Failed to update lease type: " + err.message);
+    }
+  };
+
+  const handleResendLeaseReminder = async (lease: any) => {
+    setSendingReminderLeaseId(lease.id || lease.leaseCode);
+    try {
+      const res = await fetch('/api/resend-lease-reminder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          leaseId: lease.id,
+          leaseCode: lease.leaseCode,
+          tenantEmail: lease.tenantEmail,
+          tenantName: lease.tenantName,
+          propertyName: lease.propertyNameOrRoom,
+          endDate: lease.endDate,
+          monthlyRent: lease.monthlyRent,
+          invoiceNumber: lease.invoiceNumber
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to send reminder email.');
+
+      alert(`Lease Payment & Renewal Reminder sent successfully to ${lease.tenantEmail}!`);
+    } catch (err: any) {
+      console.error("Error resending lease reminder:", err);
+      alert("Error sending lease payment reminder: " + err.message);
+    } finally {
+      setSendingReminderLeaseId(null);
     }
   };
 
@@ -3108,23 +3246,210 @@ C.&S.H. Group Properties, LLC
                     ))}
                  </div>
               </div>
-          </div>
-
-          {/* Lease Agreements & Requests Manager Section */}
+             {/* Lease Agreements & Requests Manager Section */}
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm mt-8">
-             <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-100 text-left">
-                <h2 className="text-xl font-bold flex items-center gap-2 text-slate-800">
-                   <FileText className="text-indigo-600" size={20} /> Lease Agreements & Requests Manager
-                </h2>
-                <div className="flex gap-2 text-xs font-bold">
-                   <span className="bg-amber-100 text-amber-700 px-2.5 py-1 rounded-md uppercase">
+             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 pb-4 border-b border-slate-100 text-left">
+                <div>
+                  <h2 className="text-xl font-bold flex items-center gap-2 text-slate-800">
+                     <FileText className="text-indigo-600" size={20} /> Lease Agreements & Requests Manager
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-0.5">Manage lease requests, assign manual agreement numbers from invoices, set lease terms, and dispatch payment reminders.</p>
+                </div>
+                <div className="flex items-center gap-2 text-xs font-bold">
+                   <button
+                     onClick={() => setShowManualLeaseForm(!showManualLeaseForm)}
+                     className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                   >
+                     <Plus size={15} /> {showManualLeaseForm ? "Close Form" : "Create Manual Lease"}
+                   </button>
+                   <span className="bg-amber-100 text-amber-700 px-2.5 py-2 rounded-xl uppercase">
                       {leaseRequests.filter(r => r.status === 'pending').length} Requests Pending
                    </span>
-                   <span className="bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-md uppercase">
+                   <span className="bg-indigo-100 text-indigo-700 px-2.5 py-2 rounded-xl uppercase">
                       {leases.length} Active Leases
                    </span>
                 </div>
              </div>
+
+             {/* Manual Lease Creation Form */}
+             {showManualLeaseForm && (
+               <div className="bg-slate-50 border border-indigo-200 rounded-2xl p-5 mb-8 text-left transition-all shadow-inner">
+                 <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-200">
+                   <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                     <FileCheck className="text-indigo-600" size={18} /> Create Manual Lease Agreement from Invoice Ledger
+                   </h3>
+                   <button 
+                     type="button"
+                     onClick={() => setShowManualLeaseForm(false)}
+                     className="text-xs text-slate-400 hover:text-slate-600 font-bold cursor-pointer"
+                   >
+                     Close ✕
+                   </button>
+                 </div>
+
+                 <form onSubmit={handleCreateManualLease} className="space-y-4">
+                   <div>
+                     <label className="block text-xs font-bold text-slate-700 mb-1">
+                       Select Invoice # from "Invoice Transaction Ledger" (Auto-fills Lease Info):
+                     </label>
+                     <select
+                       value={selectedInvoiceBookingId}
+                       onChange={(e) => handleInvoiceSelectionForLease(e.target.value)}
+                       className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer"
+                     >
+                       <option value="">-- Select Invoice # from Transaction Ledger --</option>
+                       {bookings
+                         .filter(b => !!b.invoiceDetails)
+                         .sort((a, b) => new Date(b.invoiceDetails.sentAt || b.createdAt).getTime() - new Date(a.invoiceDetails.sentAt || a.createdAt).getTime())
+                         .map((b) => {
+                           const inv = b.invoiceDetails;
+                           const prop = properties.find(p => p.id === b.propertyId);
+                           const invNum = inv.invoiceNumber || 'Manual';
+                           const sponsor = inv.sponsorName || b.guestName || 'Guest';
+                           const total = (inv.grandTotal !== undefined ? inv.grandTotal : (inv.baseAmount || (b.totalPrice / 100))).toFixed(2);
+                           const propName = b.propertyName || prop?.name || 'Property';
+                           return (
+                             <option key={b.id} value={b.id}>
+                               Invoice #{invNum} — {sponsor} (${total}) — {propName}
+                             </option>
+                           );
+                         })}
+                     </select>
+                   </div>
+
+                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                     <div>
+                       <div className="flex justify-between items-center mb-1">
+                         <label className="text-xs font-bold text-slate-700">Lease Agreement Number # *</label>
+                         <button
+                           type="button"
+                           onClick={() => setManualLeaseCode('LSE-' + Math.random().toString(36).substring(2, 7).toUpperCase())}
+                           className="text-[10px] text-indigo-650 hover:underline font-bold"
+                         >
+                           Generate Random
+                         </button>
+                       </div>
+                       <input
+                         type="text"
+                         required
+                         value={manualLeaseCode}
+                         onChange={(e) => setManualLeaseCode(e.target.value.toUpperCase())}
+                         placeholder="e.g. LSE-9K2L1"
+                         className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono font-bold text-indigo-700 uppercase focus:ring-2 focus:ring-indigo-500 outline-none"
+                       />
+                     </div>
+
+                     <div>
+                       <label className="block text-xs font-bold text-slate-700 mb-1">Lease Status / Type *</label>
+                       <select
+                         value={manualLeaseType}
+                         onChange={(e) => setManualLeaseType(e.target.value as 'month_to_month' | 'fixed')}
+                         className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer"
+                       >
+                         <option value="month_to_month">Month-to-Month Lease</option>
+                         <option value="fixed">Fixed Lease</option>
+                       </select>
+                     </div>
+
+                     <div>
+                       <label className="block text-xs font-bold text-slate-700 mb-1">Property / Unit Name</label>
+                       <input
+                         type="text"
+                         value={manualPropertyName}
+                         onChange={(e) => setManualPropertyName(e.target.value)}
+                         placeholder="Property Name"
+                         className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
+                       />
+                     </div>
+
+                     <div>
+                       <label className="block text-xs font-bold text-slate-700 mb-1">Tenant Name *</label>
+                       <input
+                         type="text"
+                         required
+                         value={manualTenantName}
+                         onChange={(e) => setManualTenantName(e.target.value)}
+                         placeholder="Tenant Full Name"
+                         className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
+                       />
+                     </div>
+
+                     <div>
+                       <label className="block text-xs font-bold text-slate-700 mb-1">Tenant Email *</label>
+                       <input
+                         type="email"
+                         required
+                         value={manualTenantEmail}
+                         onChange={(e) => setManualTenantEmail(e.target.value)}
+                         placeholder="tenant@example.com"
+                         className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
+                       />
+                     </div>
+
+                     <div>
+                       <label className="block text-xs font-bold text-slate-700 mb-1">Tenant Phone</label>
+                       <input
+                         type="tel"
+                         value={manualTenantPhone}
+                         onChange={(e) => setManualTenantPhone(e.target.value)}
+                         placeholder="(555) 000-0000"
+                         className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
+                       />
+                     </div>
+
+                     <div>
+                       <label className="block text-xs font-bold text-slate-700 mb-1">Lease Start Date</label>
+                       <input
+                         type="date"
+                         value={manualStartDate}
+                         onChange={(e) => setManualStartDate(e.target.value)}
+                         className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
+                       />
+                     </div>
+
+                     <div>
+                       <label className="block text-xs font-bold text-slate-700 mb-1">Lease End Date</label>
+                       <input
+                         type="date"
+                         value={manualEndDate}
+                         onChange={(e) => setManualEndDate(e.target.value)}
+                         className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
+                       />
+                     </div>
+
+                     <div>
+                       <label className="block text-xs font-bold text-slate-700 mb-1">Monthly Rent Amount ($ USD)</label>
+                       <input
+                         type="number"
+                         step="0.01"
+                         value={manualMonthlyRent}
+                         onChange={(e) => setManualMonthlyRent(e.target.value)}
+                         placeholder="1500.00"
+                         className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
+                       />
+                     </div>
+                   </div>
+
+                   <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
+                     <button
+                       type="button"
+                       onClick={() => setShowManualLeaseForm(false)}
+                       className="px-4 py-2 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-100 cursor-pointer"
+                     >
+                       Cancel
+                     </button>
+                     <button
+                       type="submit"
+                       disabled={isCreatingManualLease}
+                       className="px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl flex items-center gap-1.5 shadow-sm disabled:opacity-50 cursor-pointer"
+                     >
+                       {isCreatingManualLease ? <Loader2 className="animate-spin" size={14} /> : <CheckCircle size={14} />}
+                       Create & Authorize Lease
+                     </button>
+                   </div>
+                 </form>
+               </div>
+             )}
 
              <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
                 {/* Incoming Requests Column */}
@@ -3159,7 +3484,7 @@ C.&S.H. Group Properties, LLC
                                            {req.status === 'rejected' && (
                                               <span className="bg-red-100 text-red-700 text-[10px] px-2 py-0.5 rounded font-black uppercase tracking-wider">
                                                  Rejected
-                                               </span>
+                                              </span>
                                            )}
                                         </div>
                                         <div className="space-y-1 text-xs text-slate-600">
@@ -3251,36 +3576,119 @@ C.&S.H. Group Properties, LLC
                          No active authorized leases in database.
                       </div>
                    ) : (
-                      <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
-                         {leases.map((l) => (
-                            <div key={l.id} className="p-4 rounded-xl border border-slate-100 hover:border-slate-300 transition-colors bg-white shadow-sm flex justify-between items-center gap-4 text-left">
-                               <div>
-                                  <div className="flex items-center gap-2 flex-wrap mb-1 text-left">
-                                     <span className="font-mono text-sm font-black text-indigo-600 tracking-wider select-all">{l.leaseCode}</span>
-                                     <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded font-bold uppercase select-none">
-                                        {l.bookingType === 'long-term' ? 'Long-Term' : 'Short-Term'}
-                                     </span>
+                      <div className="space-y-4 max-h-[550px] overflow-y-auto pr-1">
+                         {leases.map((l: any) => {
+                            const isMonthToMonth = (l.leaseType || 'month_to_month') === 'month_to_month';
+                            let paymentDueDateStr = "Day after term end";
+                            let reminderDateStr = "5 days prior to end";
+
+                            if (l.endDate && l.endDate.includes("-")) {
+                               try {
+                                  const endDt = new Date(l.endDate);
+                                  if (!isNaN(endDt.getTime())) {
+                                     const nextDay = new Date(endDt);
+                                     nextDay.setDate(nextDay.getDate() + 1);
+                                     paymentDueDateStr = nextDay.toISOString().split("T")[0];
+
+                                     const remDay = new Date(endDt);
+                                     remDay.setDate(remDay.getDate() - 5);
+                                     reminderDateStr = remDay.toISOString().split("T")[0];
+                                  }
+                               } catch (e) {}
+                            }
+
+                            return (
+                               <div key={l.id} className="p-4 rounded-2xl border border-slate-200 hover:border-slate-300 transition-all bg-white shadow-sm flex flex-col justify-between gap-3 text-left">
+                                  <div>
+                                     <div className="flex items-center justify-between gap-2 flex-wrap mb-1.5 text-left">
+                                        <div className="flex items-center gap-2">
+                                           <span className="font-mono text-sm font-black text-indigo-600 tracking-wider select-all">{l.leaseCode}</span>
+                                           {l.invoiceNumber && (
+                                              <span className="text-[10px] bg-slate-100 text-slate-600 border border-slate-200 px-1.5 py-0.5 rounded font-mono font-bold">
+                                                 Inv #{l.invoiceNumber}
+                                              </span>
+                                           )}
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                           <label className="text-[10px] font-bold text-slate-400 uppercase">Status:</label>
+                                           <select
+                                              value={l.leaseType || 'month_to_month'}
+                                              onChange={(e) => handleUpdateLeaseType(l.id, e.target.value as 'month_to_month' | 'fixed')}
+                                              className="text-[10px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-200 rounded px-2 py-0.5 outline-none cursor-pointer uppercase"
+                                           >
+                                              <option value="month_to_month">Month-to-Month</option>
+                                              <option value="fixed">Fixed Lease</option>
+                                           </select>
+                                        </div>
+                                     </div>
+
+                                     <div className="space-y-1 text-xs text-slate-600 text-left mt-2">
+                                        <div><strong className="text-slate-400">Tenant:</strong> <span className="font-semibold text-slate-800">{l.tenantName}</span></div>
+                                        <div><strong className="text-slate-400">Email:</strong> {l.tenantEmail} {l.tenantPhone ? `• ${l.tenantPhone}` : ''}</div>
+                                        <div><strong className="text-slate-400">Unit:</strong> <span className="text-slate-700 font-medium">{l.propertyNameOrRoom || "Property"}</span></div>
+                                        <div className="font-mono text-[11px]"><strong className="text-slate-400">Lease Term:</strong> {l.startDate || "N/A"} to {l.endDate || "N/A"}</div>
+                                        {l.monthlyRent ? (
+                                           <div className="text-xs font-bold text-slate-700"><strong className="text-slate-400 font-normal">Monthly Rent:</strong> ${Number(l.monthlyRent).toFixed(2)}</div>
+                                        ) : null}
+                                     </div>
+
+                                     {isMonthToMonth && (
+                                        <div className="mt-3 p-3 bg-indigo-50/50 border border-indigo-100 rounded-xl space-y-1 text-xs text-slate-700">
+                                           <div className="flex justify-between items-center text-[11px]">
+                                              <span className="text-slate-500 font-medium">⏰ 5-Day Reminder Date:</span>
+                                              <span className="font-mono font-bold text-slate-800">{reminderDateStr}</span>
+                                           </div>
+                                           <div className="flex justify-between items-center text-[11px]">
+                                              <span className="text-slate-500 font-medium">💳 Payment Due Date (Day After Term):</span>
+                                              <span className="font-mono font-extrabold text-indigo-600">{paymentDueDateStr}</span>
+                                           </div>
+                                           <div className="flex justify-between items-center pt-1.5 border-t border-indigo-100 text-[11px]">
+                                              <span className="text-slate-500 font-medium">Guest Validation Status:</span>
+                                              {l.validatedForNextMonth ? (
+                                                 <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase px-2 py-0.5 rounded-md flex items-center gap-1">
+                                                    <CheckCircle size={10} /> Validated & Renewed
+                                                 </span>
+                                              ) : (
+                                                 <span className="bg-amber-100 text-amber-800 text-[10px] font-black uppercase px-2 py-0.5 rounded-md">
+                                                    Pending Validation
+                                                 </span>
+                                              )}
+                                           </div>
+                                        </div>
+                                     )}
                                   </div>
-                                  <div className="space-y-0.5 text-xs text-slate-500 text-left">
-                                     <div><strong className="text-slate-400">Tenant:</strong> {l.tenantName}</div>
-                                     <div><strong className="text-slate-400">Email:</strong> {l.tenantEmail}</div>
-                                     <div className="font-mono text-[11px]"><strong className="text-slate-400">Term:</strong> {l.startDate} to {l.endDate}</div>
+
+                                  <div className="mt-2 flex items-center justify-between gap-2 border-t border-slate-100 pt-3">
+                                     <button
+                                        onClick={() => handleResendLeaseReminder(l)}
+                                        disabled={sendingReminderLeaseId === (l.id || l.leaseCode)}
+                                        className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 text-white text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                                        title="Resend Lease Payment & Renewal Reminder Email to Guest"
+                                     >
+                                        {sendingReminderLeaseId === (l.id || l.leaseCode) ? (
+                                           <Loader2 className="animate-spin" size={13} />
+                                        ) : (
+                                           <Send size={13} />
+                                        )}
+                                        Resend Payment Reminder
+                                     </button>
+
+                                     <button
+                                        onClick={() => handleDeleteActiveLease(l.id)}
+                                        className="text-red-500 hover:bg-red-50 p-1.5 rounded-xl transition-colors cursor-pointer"
+                                        title="Delete Permanent Lease Record"
+                                     >
+                                        <Trash2 size={16} />
+                                     </button>
                                   </div>
                                </div>
-                               <button
-                                  onClick={() => handleDeleteActiveLease(l.id)}
-                                  className="text-red-500 hover:bg-red-50 p-2 rounded-xl transition-colors"
-                                  title="Delete Permanent Lease Record"
-                               >
-                                  <Trash2 size={16} />
-                               </button>
-                            </div>
-                         ))}
+                            );
+                         })}
                       </div>
                    )}
                 </div>
              </div>
-          </div>
+          </div>         </div>
 
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm mt-8">
              <div className="flex justify-between items-center mb-6">

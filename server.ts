@@ -2303,6 +2303,107 @@ async function startServer() {
     }
   });
 
+  app.post("/api/resend-lease-reminder", async (req, res) => {
+    try {
+      const { leaseId, leaseCode, tenantEmail, tenantName, propertyName, endDate, monthlyRent, invoiceNumber } = req.body;
+      if (!db) {
+        return res.status(500).json({ error: "Firebase Firestore is not initialized on the server." });
+      }
+
+      let leaseData: any = null;
+      if (leaseId) {
+        const snap = await db.collection("leases").doc(leaseId).get();
+        if (snap.exists) {
+          leaseData = snap.data();
+        }
+      }
+
+      const email = tenantEmail || leaseData?.tenantEmail;
+      const code = leaseCode || leaseData?.leaseCode || leaseId;
+      const name = tenantName || leaseData?.tenantName || "Valued Guest";
+      const prop = propertyName || leaseData?.propertyNameOrRoom || "Property";
+      const termEnd = endDate || leaseData?.endDate || "End of Term";
+      const rent = monthlyRent || leaseData?.monthlyRent || 0;
+      const invNum = invoiceNumber || leaseData?.invoiceNumber || "Manual";
+
+      if (!email) {
+        return res.status(400).json({ error: "Tenant email address is required to send reminder." });
+      }
+
+      let paymentDueDate = "Day after end of lease";
+      let reminderDate = "5 Days prior to end of lease";
+      if (termEnd && termEnd.includes("-")) {
+        const endDt = new Date(termEnd);
+        if (!isNaN(endDt.getTime())) {
+          const nextDay = new Date(endDt);
+          nextDay.setDate(nextDay.getDate() + 1);
+          paymentDueDate = nextDay.toISOString().split("T")[0];
+
+          const remDay = new Date(endDt);
+          remDay.setDate(remDay.getDate() - 5);
+          reminderDate = remDay.toISOString().split("T")[0];
+        }
+      }
+
+      const hostUrl = req.headers.origin || ("https://" + req.headers.host);
+      const validationUrl = `${hostUrl}/my-bookings`;
+
+      const htmlContent = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
+          <div style="background-color: #4f46e5; padding: 20px; border-radius: 8px 8px 0 0; text-align: center;">
+            <h2 style="color: #ffffff; margin: 0; font-size: 20px;">Month-to-Month Lease Renewal & Payment Reminder</h2>
+          </div>
+          <div style="padding: 24px; color: #1e293b; line-height: 1.6;">
+            <p>Dear <strong>${name}</strong>,</p>
+            <p>This is an official payment & renewal reminder for your Month-to-Month Lease Agreement <strong>#${code}</strong> (Invoice #${invNum}) for <strong>${prop}</strong>.</p>
+            
+            <div style="background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 16px; margin: 20px 0;">
+              <p style="margin: 4px 0;">📅 <strong>Current Lease Term End Date:</strong> ${termEnd}</p>
+              <p style="margin: 4px 0;">⏰ <strong>Reminder Schedule Date:</strong> ${reminderDate} (5 Days Before End Date)</p>
+              <p style="margin: 4px 0;">💳 <strong>Next Lease Payment Due Date:</strong> <span style="color: #4f46e5; font-weight: bold;">${paymentDueDate}</span> (Day After Term End)</p>
+              ${rent ? `<p style="margin: 4px 0;">💰 <strong>Monthly Rent Amount:</strong> $${Number(rent).toFixed(2)}</p>` : ''}
+            </div>
+
+            <p><strong>Action Required - Validation & Payment:</strong></p>
+            <p>Please log in to your REALCal Guest Portal to <strong>validate whether you wish to continue your lease for another month</strong> and remit your lease payment on or before <strong>${paymentDueDate}</strong>.</p>
+
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${validationUrl}" style="background-color: #4f46e5; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 15px; display: inline-block; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2);">
+                Validate Renewal & Pay Next Month Lease
+              </a>
+            </div>
+
+            <p style="font-size: 12px; color: #64748b;">If you do not intend to renew, please validate your move-out intention in your portal or notify property management immediately.</p>
+          </div>
+          <div style="border-top: 1px solid #e2e8f0; padding-top: 15px; text-align: center; font-size: 11px; color: #94a3b8;">
+            REALCal Property Management System
+          </div>
+        </div>
+      `;
+
+      if (process.env.SMTP_HOST) {
+        await sendSmtpEmail({
+          to: email,
+          subject: `[ACTION REQUIRED] Month-to-Month Lease Renewal & Payment Reminder #${code}`,
+          html: htmlContent,
+          text: `Reminder: Month-to-Month Lease #${code} for ${prop} ends on ${termEnd}. Next payment due on ${paymentDueDate}. Validate renewal at ${validationUrl}`
+        });
+      }
+
+      if (leaseId) {
+        await db.collection("leases").doc(leaseId).update({
+          lastReminderSentAt: new Date().toISOString(),
+          status: 'pending_renewal'
+        });
+      }
+
+      return res.json({ success: true, message: `Lease payment reminder sent successfully to ${email}` });
+    } catch (err: any) {
+      console.error("Error resending lease reminder:", err);
+      return res.status(500).json({ error: err.message || "Failed to resend lease payment reminder." });
+    }
+  });
+
   app.post("/api/notify-managers", async (req, res) => {
     try {
       const { managers, bookingDetails } = req.body;

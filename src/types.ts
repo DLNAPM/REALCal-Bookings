@@ -120,6 +120,8 @@ export interface GlobalSettings {
 export interface Lease {
   id: string;
   leaseCode: string;
+  invoiceNumber?: string;
+  bookingId?: string;
   propertyId: string;
   propertyNameOrRoom: string;
   startDate: string;
@@ -127,7 +129,12 @@ export interface Lease {
   tenantName: string;
   tenantEmail: string;
   tenantPhone: string;
-  status: 'approved' | 'revoked';
+  leaseType?: 'month_to_month' | 'fixed';
+  monthlyRent?: number;
+  status: 'approved' | 'revoked' | 'active' | 'pending_renewal' | 'renewed' | 'terminating';
+  validatedForNextMonth?: boolean;
+  validatedAt?: string;
+  lastReminderSentAt?: string;
   createdAt: any;
 }
 
