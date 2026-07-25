@@ -77,7 +77,7 @@ service cloud.firestore {
 
     // Bookings Collection
     function isValidBooking(data) {
-      return data.keys().hasAll(['userId', 'propertyId', 'checkIn', 'checkOut', 'status', 'totalPrice', 'guests', 'createdAt', 'updatedAt']) && data.keys().size() >= 9 && data.keys().size() <= 30 &&
+      return data.keys().hasAll(['userId', 'propertyId', 'checkIn', 'checkOut', 'status', 'totalPrice', 'guests', 'createdAt', 'updatedAt']) && data.keys().size() >= 9 && data.keys().size() <= 35 &&
         data.userId is string && data.userId.size() <= 128 && (data.userId == request.auth.uid || isAdmin()) &&
         data.propertyId is string && data.propertyId.size() <= 128 &&
         data.checkIn is string && data.checkIn.size() <= 32 &&
@@ -104,6 +104,9 @@ service cloud.firestore {
         (data.keys().hasAll(['sent12hReminder']) ? data.sent12hReminder is bool : true) &&
         (data.keys().hasAll(['sent2hReminder']) ? data.sent2hReminder is bool : true) &&
         (data.keys().hasAll(['sent1hReminder']) ? data.sent1hReminder is bool : true) &&
+        (data.keys().hasAll(['leaseCode']) ? data.leaseCode is string && data.leaseCode.size() <= 64 : true) &&
+        (data.keys().hasAll(['leaseType']) ? data.leaseType is string && data.leaseType.size() <= 32 : true) &&
+        (data.keys().hasAll(['invoiceDetails']) ? data.invoiceDetails is map : true) &&
         data.createdAt is timestamp &&
         data.updatedAt is timestamp;
     }
@@ -137,13 +140,20 @@ service cloud.firestore {
     function isValidLease(data) {
       return data.keys().hasAll(['leaseCode', 'propertyId', 'propertyNameOrRoom', 'startDate', 'endDate', 'tenantName', 'tenantEmail', 'status', 'createdAt']) && 
         (data.keys().hasAll(['tenantPhone']) ? data.tenantPhone is string : true) &&
+        (data.keys().hasAll(['leaseType']) ? data.leaseType in ['month_to_month', 'fixed'] : true) &&
+        (data.keys().hasAll(['monthlyRent']) ? data.monthlyRent is number : true) &&
+        (data.keys().hasAll(['invoiceNumber']) ? data.invoiceNumber is string : true) &&
+        (data.keys().hasAll(['bookingId']) ? (data.bookingId is string || data.bookingId == null) : true) &&
+        (data.keys().hasAll(['validatedForNextMonth']) ? data.validatedForNextMonth is bool : true) &&
+        (data.keys().hasAll(['validatedAt']) ? data.validatedAt is string : true) &&
+        (data.keys().hasAll(['lastReminderSentAt']) ? data.lastReminderSentAt is string : true) &&
         data.leaseCode is string && data.leaseCode.size() <= 32 &&
         data.propertyId is string && data.propertyId.size() <= 128 &&
         data.propertyNameOrRoom is string && data.propertyNameOrRoom.size() <= 256 &&
         data.tenantName is string && data.tenantName.size() <= 128 &&
         data.tenantEmail is string && data.tenantEmail.size() <= 256 &&
-        data.status in ['approved', 'revoked'] &&
-        data.createdAt is timestamp;
+        data.status in ['approved', 'revoked', 'active', 'pending_renewal', 'renewed', 'terminating'] &&
+        (data.createdAt is timestamp || data.createdAt is string);
     }
 
     // Lease Requests Collection
@@ -256,8 +266,8 @@ service cloud.firestore {
     match /leases/{leaseId} {
       allow get: if true;
       allow list: if true;
-      allow create: if isValidId(leaseId) && isValidLease(incoming()) && incoming().createdAt == request.time;
-      allow update: if isValidId(leaseId) && isValidLease(incoming()) && incoming().createdAt == existing().createdAt;
+      allow create: if isValidId(leaseId) && isValidLease(incoming());
+      allow update: if isValidId(leaseId) && isValidLease(incoming());
       allow delete: if isAdmin();
     }
 
