@@ -6,7 +6,7 @@ import { Navigate, useNavigate, Link } from 'react-router-dom';
 import { format, eachDayOfInterval, parseISO, addDays } from 'date-fns';
 import { cn } from '../lib/utils';
 import { BlackoutDate, PricingRule, Booking, Property, PropertyManager, PropertyImage, getImageUrl, getImageRoomNumber, DiscountCode } from '../types';
-import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight, RefreshCw, MessageSquare, CheckCircle, Loader2, FileText, XCircle, HelpCircle, MapPin, Upload, Database, Ticket, Send, Clock, Bell, FileCheck, RotateCw, CheckSquare, Copy, Search } from 'lucide-react';
+import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight, RefreshCw, MessageSquare, CheckCircle, Loader2, FileText, XCircle, HelpCircle, MapPin, Upload, Database, Ticket, Send, Clock, Bell, FileCheck, RotateCw, CheckSquare, Copy, Search, X } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 const formatPhoneE164 = (phone: string) => {
@@ -5758,6 +5758,137 @@ C.&S.H. Group Properties, LLC
                 </div>
              );
           })()}
+
+          {/* Modal for Duplicate Previous Invoice */}
+          {showDuplicateInvoiceModal && (
+             <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+                <div className="bg-white rounded-3xl max-w-3xl w-full max-h-[85vh] flex flex-col shadow-2xl border border-slate-100 overflow-hidden">
+                   {/* Modal Header */}
+                   <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                      <div className="flex items-center gap-3">
+                         <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+                            <Copy size={20} />
+                         </div>
+                         <div>
+                            <h3 className="text-lg font-bold text-slate-900">Duplicate Previous Invoice</h3>
+                            <p className="text-xs text-slate-500">Select a past booking or invoice to copy details into the Create Manual Booking form.</p>
+                         </div>
+                      </div>
+                      <button 
+                         onClick={() => setShowDuplicateInvoiceModal(false)}
+                         className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all cursor-pointer"
+                      >
+                         <X size={20} />
+                      </button>
+                   </div>
+
+                   {/* Search Bar */}
+                   <div className="px-6 py-3 border-b border-slate-100 bg-white flex items-center gap-3">
+                      <Search size={18} className="text-slate-400" />
+                      <input 
+                         type="text"
+                         value={duplicateSearchTerm}
+                         onChange={e => setDuplicateSearchTerm(e.target.value)}
+                         placeholder="Search by Guest Name, Email, Invoice #, or Property..."
+                         className="w-full text-sm outline-none bg-transparent placeholder:text-slate-400"
+                      />
+                      {duplicateSearchTerm && (
+                         <button 
+                            onClick={() => setDuplicateSearchTerm('')}
+                            className="text-xs text-slate-400 hover:text-slate-600 font-bold px-2 py-1 rounded bg-slate-100"
+                         >
+                            Clear
+                         </button>
+                      )}
+                   </div>
+
+                   {/* Invoices / Bookings List */}
+                   <div className="p-6 overflow-y-auto space-y-3 flex-1">
+                      {(() => {
+                         const items = bookings.filter(b => {
+                            if (!duplicateSearchTerm.trim()) return true;
+                            const term = duplicateSearchTerm.toLowerCase();
+                            const inv = b.invoiceDetails || {};
+                            const gName = (b.guestName || inv.sponsorName || '').toLowerCase();
+                            const gEmail = (b.guestEmail || inv.sponsorEmail || '').toLowerCase();
+                            const invNum = (inv.invoiceNumber || b.bookingRef || b.id || '').toLowerCase();
+                            const propName = (properties.find(p => p.id === b.propertyId)?.name || '').toLowerCase();
+                            return gName.includes(term) || gEmail.includes(term) || invNum.includes(term) || propName.includes(term);
+                         });
+
+                         if (items.length === 0) {
+                            return (
+                               <div className="text-center py-12 text-slate-400">
+                                  <FileText size={40} className="mx-auto mb-2 opacity-40" />
+                                  <p className="text-sm font-medium">No previous invoices or bookings found.</p>
+                               </div>
+                            );
+                         }
+
+                         return items.map(b => {
+                            const inv = b.invoiceDetails || {};
+                            const prop = properties.find(p => p.id === b.propertyId);
+                            const invoiceNo = inv.invoiceNumber || b.bookingRef || b.id;
+                            const name = b.guestName || inv.sponsorName || 'Unnamed Guest';
+                            const email = b.guestEmail || inv.sponsorEmail || 'No email';
+                            const price = inv.baseAmount !== undefined ? inv.baseAmount : (b.totalPrice || 0) / 100;
+
+                            return (
+                               <div 
+                                  key={b.id} 
+                                  className="p-4 rounded-2xl border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/30 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                               >
+                                  <div className="space-y-1">
+                                     <div className="flex items-center gap-2">
+                                        <span className="font-mono text-xs font-bold text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-lg border border-indigo-100">
+                                           #{invoiceNo}
+                                        </span>
+                                        <span className="font-bold text-slate-800 text-sm">{name}</span>
+                                        {inv.paid ? (
+                                           <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">Paid</span>
+                                        ) : inv.invoiceNumber ? (
+                                           <span className="text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">Invoice Sent</span>
+                                        ) : (
+                                           <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">Booking</span>
+                                        )}
+                                     </div>
+                                     <div className="text-xs text-slate-500 flex flex-wrap items-center gap-x-3 gap-y-1">
+                                        <span>📧 {email}</span>
+                                        {prop && <span>📍 {prop.name}</span>}
+                                        {b.checkIn && <span>📅 {b.checkIn} - {b.checkOut}</span>}
+                                     </div>
+                                     <div className="text-xs font-semibold text-slate-700">
+                                        Base Amount: <span className="font-mono font-bold text-slate-900">${Number(price).toFixed(2)}</span>
+                                        {inv.daysLate ? <span className="ml-2 text-amber-600 font-normal">({inv.daysLate} days late fee applied)</span> : null}
+                                     </div>
+                                  </div>
+
+                                  <button
+                                     type="button"
+                                     onClick={() => handleDuplicateInvoiceSelect(b)}
+                                     className="shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-sm hover:shadow flex items-center gap-2 cursor-pointer"
+                                  >
+                                     <Copy size={14} /> Duplicate This
+                                  </button>
+                               </div>
+                            );
+                         });
+                      })()}
+                   </div>
+
+                   {/* Footer */}
+                   <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-end">
+                      <button
+                         type="button"
+                         onClick={() => setShowDuplicateInvoiceModal(false)}
+                         className="px-5 py-2 rounded-xl border border-slate-200 hover:bg-white text-slate-700 font-bold text-xs transition-all cursor-pointer"
+                      >
+                         Close
+                      </button>
+                   </div>
+                </div>
+             </div>
+          )}
 
        </div>
     </div>
