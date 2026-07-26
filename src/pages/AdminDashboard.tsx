@@ -6,7 +6,7 @@ import { Navigate, useNavigate, Link } from 'react-router-dom';
 import { format, eachDayOfInterval, parseISO, addDays } from 'date-fns';
 import { cn } from '../lib/utils';
 import { BlackoutDate, PricingRule, Booking, Property, PropertyManager, PropertyImage, getImageUrl, getImageRoomNumber, DiscountCode } from '../types';
-import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight, RefreshCw, MessageSquare, CheckCircle, Loader2, FileText, XCircle, HelpCircle, MapPin, Upload, Database, Ticket, Send, Clock, Bell, FileCheck, RotateCw, CheckSquare } from 'lucide-react';
+import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight, RefreshCw, MessageSquare, CheckCircle, Loader2, FileText, XCircle, HelpCircle, MapPin, Upload, Database, Ticket, Send, Clock, Bell, FileCheck, RotateCw, CheckSquare, Copy, Search } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 const formatPhoneE164 = (phone: string) => {
@@ -72,9 +72,18 @@ export const AdminDashboard: React.FC = () => {
   const [manualBookingRooms, setManualBookingRooms] = useState<string[]>([]);
   const [manualBookingCheckIn, setManualBookingCheckIn] = useState<string>('');
   const [manualBookingCheckOut, setManualBookingCheckOut] = useState<string>('');
+  const [manualGuestName, setManualGuestName] = useState<string>('');
+  const [manualGuestEmail, setManualGuestEmail] = useState<string>('');
+  const [manualGuestPhone, setManualGuestPhone] = useState<string>('');
+  const [manualTotalPrice, setManualTotalPrice] = useState<string>('');
+  const [manualAccessCode, setManualAccessCode] = useState<string>('');
   const [editingAccessCodeId, setEditingAccessCodeId] = useState<string | null>(null);
   const [editHasSmartLock, setEditHasSmartLock] = useState<boolean>(false);
   const [createHasSmartLock, setCreateHasSmartLock] = useState<boolean>(false);
+
+  // Duplicate Previous Invoice states
+  const [showDuplicateInvoiceModal, setShowDuplicateInvoiceModal] = useState<boolean>(false);
+  const [duplicateSearchTerm, setDuplicateSearchTerm] = useState<string>('');
 
   // Invoice-related states for Manual Booking
   const [createInvoiceForPayment, setCreateInvoiceForPayment] = useState<boolean>(false);
@@ -88,6 +97,8 @@ export const AdminDashboard: React.FC = () => {
   const [invoiceNumber, setInvoiceNumber] = useState<string>('');
   const [invoiceDueDate, setInvoiceDueDate] = useState<string>('');
   const [invoiceCustomNotes, setInvoiceCustomNotes] = useState<string>('');
+  const [invoiceDaysLate, setInvoiceDaysLate] = useState<number>(0);
+  const [invoiceLateFeePerDay, setInvoiceLateFeePerDay] = useState<number>(25);
   const [sendingInvoice, setSendingInvoice] = useState<boolean>(false);
   const [sendingInvoiceId, setSendingInvoiceId] = useState<string | null>(null);
   const [syncingInvoiceId, setSyncingInvoiceId] = useState<string | null>(null);
@@ -1348,6 +1359,45 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
+  const handleDuplicateInvoiceSelect = (b: Booking) => {
+     const inv = b.invoiceDetails || {};
+     setManualBookingPropId(b.propertyId || '');
+     if (b.checkIn) setManualBookingCheckIn(b.checkIn);
+     if (b.checkOut) setManualBookingCheckOut(b.checkOut);
+
+     if (b.selectedBedrooms && Array.isArray(b.selectedBedrooms)) {
+        setManualBookingRooms(b.selectedBedrooms.map((r: any) => typeof r === 'string' ? r : (r.roomNumber || '')));
+     } else if (b.selectedBedroom) {
+        setManualBookingRooms([typeof b.selectedBedroom === 'object' ? b.selectedBedroom.roomNumber : b.selectedBedroom]);
+     } else {
+        setManualBookingRooms([]);
+     }
+
+     const gName = b.guestName || inv.sponsorName || '';
+     const gEmail = b.guestEmail || inv.sponsorEmail || '';
+     const gPhone = b.guestPhone || inv.sponsorPhone || '';
+     const basePrice = inv.baseAmount !== undefined ? String(inv.baseAmount) : String((b.totalPrice || 0) / 100);
+
+     setManualGuestName(gName);
+     setManualGuestEmail(gEmail);
+     setManualGuestPhone(gPhone);
+     setManualTotalPrice(basePrice);
+     setManualAccessCode(b.accessCode || '');
+
+     setCreateInvoiceForPayment(true);
+
+     setInvoiceSponsorName(inv.sponsorName || gName);
+     setInvoiceSponsorEmail(inv.sponsorEmail || gEmail);
+     setInvoiceSponsorPhone(inv.sponsorPhone || gPhone);
+     setInvoiceSponsorAddress(inv.sponsorAddress || '');
+     setInvoiceCustomNotes(inv.customNotes || `Lodging for ${gName} at REALCal Bookings.`);
+     setInvoiceDaysLate(inv.daysLate || 0);
+     setInvoiceLateFeePerDay(inv.lateFeePerDay || 25);
+
+     setShowDuplicateInvoiceModal(false);
+     alert(`Invoice data from #${inv.invoiceNumber || b.bookingRef || b.id} duplicated into Create Manual Booking form!`);
+  };
+
   const handleSendInvoiceAndCompleteBooking = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!db) return alert("Firebase not configured");
@@ -1392,8 +1442,12 @@ export const AdminDashboard: React.FC = () => {
 
       const selectedBedroomObjects = (prop?.bedrooms || []).filter(b => manualBookingRooms.includes(b.roomNumber));
       const baseAmount = Number(totalAmountStr);
-      const stripeFee = Math.round((baseAmount * 0.029 + 0.3) * 100) / 100;
-      const grandTotalAmount = baseAmount + stripeFee;
+      const daysLate = Number(invoiceDaysLate) || 0;
+      const lateFeePerDay = Number(invoiceLateFeePerDay) || 0;
+      const lateFeeAmount = daysLate > 0 ? daysLate * lateFeePerDay : 0;
+      const taxableSubtotal = baseAmount + lateFeeAmount;
+      const stripeFee = Math.round((taxableSubtotal * 0.029 + 0.3) * 100) / 100;
+      const grandTotalAmount = taxableSubtotal + stripeFee;
       const finalPriceCents = Math.round(grandTotalAmount * 100);
 
       let stripePaymentUrl = '';
@@ -1432,6 +1486,9 @@ export const AdminDashboard: React.FC = () => {
          invoiceNumber: invoiceNumber,
          dueDate: invoiceDueDate,
          customNotes: invoiceCustomNotes,
+         daysLate: daysLate,
+         lateFeePerDay: lateFeePerDay,
+         lateFeeAmount: lateFeeAmount,
          sentAt: new Date().toISOString(),
          stripePaymentUrl: `${window.location.origin}/pay-invoice/${bookingId}`,
          stripeCheckoutUrl: stripePaymentUrl || null,
@@ -1556,6 +1613,15 @@ export const AdminDashboard: React.FC = () => {
                 </td>
                 <td style="padding: 10px 0; text-align: right; color: #0f172a; font-weight: bold; font-family: Courier, monospace;">$ ${Number(totalAmountStr).toFixed(2)}</td>
             </tr>
+            ${lateFeeAmount > 0 ? `
+            <tr style="border-bottom: 1px solid #e2e8f0; background-color: #fffbeb;">
+                <td style="padding: 10px 8px; color: #b45309; font-weight: 500;">
+                    Late Payment Fee<br/>
+                    <span style="font-size: 11px; color: #d97706;">${daysLate} day(s) past due date @ $${lateFeePerDay}/day</span>
+                </td>
+                <td style="padding: 10px 8px; text-align: right; color: #b45309; font-weight: bold; font-family: Courier, monospace;">+$ ${lateFeeAmount.toFixed(2)}</td>
+            </tr>
+            ` : ''}
             <tr style="border-bottom: 1px solid #e2e8f0;">
                 <td style="padding: 10px 0; color: #0f172a; font-weight: 500;">
                     Stripe Processing Fee<br/>
@@ -3021,7 +3087,16 @@ C.&S.H. Group Properties, LLC
           </div>
 
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm mt-8">
-             <h2 className="text-xl font-bold mb-6 flex items-center gap-2"><CalendarIcon size={20}/> Create Manual Booking</h2>
+             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                <h2 className="text-xl font-bold flex items-center gap-2"><CalendarIcon size={20}/> Create Manual Booking</h2>
+                <button 
+                   type="button" 
+                   onClick={() => setShowDuplicateInvoiceModal(true)} 
+                   className="text-xs font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-3.5 py-2 rounded-xl transition-all flex items-center gap-2 shadow-sm cursor-pointer w-fit"
+                >
+                   <Copy size={15}/> Duplicate Previous Invoice
+                </button>
+             </div>
              <form onSubmit={handleAdminCreateBooking} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-8 gap-4 items-end bg-slate-50 p-6 rounded-2xl border border-slate-300 border-dashed">
                 <div className="lg:col-span-1">
                    <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Property</label>
@@ -3103,23 +3178,59 @@ C.&S.H. Group Properties, LLC
                 </div>
                 <div className="lg:col-span-1">
                    <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Guest Name</label>
-                   <input name="guestName" required placeholder="Guest Name" className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm" />
+                   <input 
+                      name="guestName" 
+                      required 
+                      value={manualGuestName} 
+                      onChange={e => setManualGuestName(e.target.value)} 
+                      placeholder="Guest Name" 
+                      className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm" 
+                   />
                 </div>
                 <div className="lg:col-span-1">
                    <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Guest Email</label>
-                   <input name="guestEmail" type="email" required placeholder="guest@example.com" className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm" />
+                   <input 
+                      name="guestEmail" 
+                      type="email" 
+                      required 
+                      value={manualGuestEmail} 
+                      onChange={e => setManualGuestEmail(e.target.value)} 
+                      placeholder="guest@example.com" 
+                      className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm" 
+                   />
                 </div>
                 <div className="lg:col-span-1">
                    <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Guest Phone</label>
-                   <input name="guestPhone" placeholder="+1..." className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm" />
+                   <input 
+                      name="guestPhone" 
+                      value={manualGuestPhone} 
+                      onChange={e => setManualGuestPhone(e.target.value)} 
+                      placeholder="+1..." 
+                      className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm" 
+                   />
                 </div>
                 <div className="lg:col-span-1">
                    <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Total Price ($)</label>
-                   <input name="totalPrice" type="number" required placeholder="0.00" className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm" />
+                   <input 
+                      name="totalPrice" 
+                      type="number" 
+                      step="0.01" 
+                      required 
+                      value={manualTotalPrice} 
+                      onChange={e => setManualTotalPrice(e.target.value)} 
+                      placeholder="0.00" 
+                      className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm" 
+                   />
                 </div>
                 <div className="lg:col-span-1">
                    <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">SmartLock Code</label>
-                   <input name="accessCode" placeholder="Auto / Custom" className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm font-mono focus:ring-2 focus:ring-indigo-200 outline-none" />
+                   <input 
+                      name="accessCode" 
+                      value={manualAccessCode} 
+                      onChange={e => setManualAccessCode(e.target.value)} 
+                      placeholder="Auto / Custom" 
+                      className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm font-mono focus:ring-2 focus:ring-indigo-200 outline-none" 
+                   />
                 </div>
                 <div className="md:col-span-2 lg:col-span-8 flex flex-col md:flex-row justify-between items-center gap-4 mt-2">
                    <div className="flex items-center gap-3">
@@ -5030,18 +5141,43 @@ C.&S.H. Group Properties, LLC
                                   <input 
                                      type="date" 
                                      required 
-                                     value={invoiceDueDate || ''} 
-                                     onChange={e => setInvoiceDueDate(e.target.value)}
-                                     className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm" 
-                                  />
-                               </div>
-                            </div>
-                            <div>
-                               <label className="text-[11px] font-bold text-slate-500 uppercase tracking-tight text-left block">Custom Notes / Letterhead Message</label>
-                               <textarea 
-                                  rows={3}
-                                  value={invoiceCustomNotes || ''} 
-                                  onChange={e => setInvoiceCustomNotes(e.target.value)}
+                                                             value={invoiceDueDate || ''} onChange={e => setInvoiceDueDate(e.target.value)}
+                                      className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm" 
+                                   />
+                                </div>
+                             </div>
+
+                             <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                   <label className="text-[11px] font-bold text-slate-500 uppercase tracking-tight text-left block">Number of Days Late</label>
+                                   <input 
+                                      type="number" 
+                                      min="0"
+                                      value={invoiceDaysLate} 
+                                      onChange={e => setInvoiceDaysLate(Math.max(0, parseInt(e.target.value) || 0))}
+                                      className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm" 
+                                      placeholder="0"
+                                   />
+                                </div>
+                                <div>
+                                   <label className="text-[11px] font-bold text-slate-500 uppercase tracking-tight text-left block">Late Fee ($ / Day)</label>
+                                   <input 
+                                      type="number" 
+                                      min="0"
+                                      step="0.01"
+                                      value={invoiceLateFeePerDay} 
+                                      onChange={e => setInvoiceLateFeePerDay(Math.max(0, parseFloat(e.target.value) || 0))}
+                                      className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm" 
+                                      placeholder="25.00" 
+                                   />
+                                </div>
+                             </div>
+                             <div>
+                                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-tight text-left block">Custom Notes / Letterhead Message</label>
+                                <textarea 
+                                   rows={3}
+                                   value={invoiceCustomNotes || ''} 
+                                   onChange={e => setInvoiceCustomNotes(e.target.value)}
                                   className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm resize-none" 
                                />
                             </div>

@@ -92,8 +92,11 @@ export const PayInvoice: React.FC = () => {
       // 2. Determine invoice total
       const inv = booking.invoiceDetails || {};
       const baseAmt = inv.baseAmount !== undefined ? inv.baseAmount : (booking.totalPrice / 100);
-      const stripeFee = inv.stripeFee !== undefined ? inv.stripeFee : Math.round((baseAmt * 0.029 + 0.3) * 100) / 100;
-      const grandTotal = inv.grandTotal !== undefined ? inv.grandTotal : (baseAmt + stripeFee);
+      const daysLate = inv.daysLate || 0;
+      const lateFeePerDay = inv.lateFeePerDay || 0;
+      const lateFeeAmount = inv.lateFeeAmount !== undefined ? inv.lateFeeAmount : (daysLate * lateFeePerDay);
+      const stripeFee = inv.stripeFee !== undefined ? inv.stripeFee : Math.round(((baseAmt + lateFeeAmount) * 0.029 + 0.3) * 100) / 100;
+      const grandTotal = inv.grandTotal !== undefined ? inv.grandTotal : (baseAmt + lateFeeAmount + stripeFee);
 
       // 3. Create Checkout Session
       const res = await fetch('/api/create-invoice-checkout-session', {
@@ -159,8 +162,11 @@ export const PayInvoice: React.FC = () => {
   const inv = booking.invoiceDetails || {};
   const isPaid = inv.paid || booking.status === 'confirmed';
   const baseAmt = inv.baseAmount !== undefined ? inv.baseAmount : (booking.totalPrice / 100);
-  const stripeFee = inv.stripeFee !== undefined ? inv.stripeFee : Math.round((baseAmt * 0.029 + 0.3) * 100) / 100;
-  const grandTotal = inv.grandTotal !== undefined ? inv.grandTotal : (baseAmt + stripeFee);
+  const daysLate = inv.daysLate || 0;
+  const lateFeePerDay = inv.lateFeePerDay || 0;
+  const lateFeeAmount = inv.lateFeeAmount !== undefined ? inv.lateFeeAmount : (daysLate * lateFeePerDay);
+  const stripeFee = inv.stripeFee !== undefined ? inv.stripeFee : Math.round(((baseAmt + lateFeeAmount) * 0.029 + 0.3) * 100) / 100;
+  const grandTotal = inv.grandTotal !== undefined ? inv.grandTotal : (baseAmt + lateFeeAmount + stripeFee);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 py-12 px-4 sm:px-6 lg:px-8 font-sans selection:bg-indigo-500 selection:text-white">
@@ -246,6 +252,12 @@ export const PayInvoice: React.FC = () => {
                 <span>Lodging Coverage Base Fee</span>
                 <span className="font-mono font-bold text-slate-100">${baseAmt.toFixed(2)}</span>
               </div>
+              {lateFeeAmount > 0 && (
+                <div className="flex justify-between items-center text-amber-400 font-medium">
+                  <span>Late Payment Fee ({daysLate} day{daysLate > 1 ? 's' : ''} late @ ${lateFeePerDay}/day)</span>
+                  <span className="font-mono font-bold">+${lateFeeAmount.toFixed(2)}</span>
+                </div>
+              )}
               <div className="flex justify-between items-center text-slate-400">
                 <span>Stripe Processing Surcharge (2.9% + $0.30)</span>
                 <span className="font-mono">${stripeFee.toFixed(2)}</span>
