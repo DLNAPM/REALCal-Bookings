@@ -26,7 +26,10 @@ export const Home: React.FC = () => {
     const [eventsList, setEventsList] = useState<EventItem[]>(() => getEventsForNext30Days(new Date(), 0));
     const navigate = useNavigate();
 
+    const isAdmin = user?.role === 'admin';
+
     const handleRefreshEvents = () => {
+        if (!isAdmin) return;
         setIsRefreshingEvents(true);
         setTimeout(() => {
             const nextSeed = refreshSeed + 1;
@@ -328,13 +331,13 @@ export const Home: React.FC = () => {
                     </div>
 
                     <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap">
-                        {activeTab === 'events' && (
+                        {activeTab === 'events' && isAdmin && (
                             <button
                                 type="button"
                                 onClick={handleRefreshEvents}
                                 disabled={isRefreshingEvents}
                                 className="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white shadow-md hover:shadow-lg transition-all duration-200 cursor-pointer flex items-center gap-2 border border-indigo-500/30 disabled:opacity-75"
-                                title="Refresh top 20 curated Atlanta events for the next 30 days"
+                                title="Refresh top 20 curated Atlanta events for the next 30 days (Admin)"
                             >
                                 <RotateCw size={15} className={cn("transition-transform", isRefreshingEvents && "animate-spin")} />
                                 <span>{isRefreshingEvents ? 'Refreshing...' : 'Refresh Events'}</span>
@@ -421,15 +424,18 @@ export const Home: React.FC = () => {
                                 </p>
                             </div>
                             <div className="flex items-center gap-3 shrink-0">
-                                <button
-                                    type="button"
-                                    onClick={handleRefreshEvents}
-                                    disabled={isRefreshingEvents}
-                                    className="bg-white hover:bg-indigo-50 active:bg-indigo-100 text-indigo-700 border border-indigo-200/80 px-4 py-2.5 rounded-2xl font-bold text-xs sm:text-sm shadow-sm hover:shadow transition-all flex items-center gap-2 cursor-pointer disabled:opacity-60"
-                                >
-                                    <RotateCw size={15} className={cn("text-indigo-600", isRefreshingEvents && "animate-spin")} />
-                                    <span>{isRefreshingEvents ? 'Updating...' : 'Refresh Top 20'}</span>
-                                </button>
+                                {isAdmin && (
+                                    <button
+                                        type="button"
+                                        onClick={handleRefreshEvents}
+                                        disabled={isRefreshingEvents}
+                                        className="bg-white hover:bg-indigo-50 active:bg-indigo-100 text-indigo-700 border border-indigo-200/80 px-4 py-2.5 rounded-2xl font-bold text-xs sm:text-sm shadow-sm hover:shadow transition-all flex items-center gap-2 cursor-pointer disabled:opacity-60"
+                                        title="Admin Refresh"
+                                    >
+                                        <RotateCw size={15} className={cn("text-indigo-600", isRefreshingEvents && "animate-spin")} />
+                                        <span>{isRefreshingEvents ? 'Updating...' : 'Refresh Top 20'}</span>
+                                    </button>
+                                )}
                                 <div className="bg-white/90 backdrop-blur px-5 py-2.5 rounded-2xl border border-indigo-100 text-center flex-shrink-0 shadow-sm">
                                     <span className="block text-xl font-extrabold text-indigo-600">{eventsList.length}</span>
                                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Highlights</span>
