@@ -6,21 +6,41 @@ import { Link, useNavigate } from 'react-router-dom';
 import { 
   Calendar as CalendarIcon, Key, LogOut, ChevronRight, Lock, BellRing, 
   ShieldCheck, MessageSquare, HelpCircle, MapPin, Ticket, Sparkles, 
-  Music, Trophy, Compass, Smile 
+  Music, Trophy, Compass, Smile, RotateCw, RefreshCw
 } from 'lucide-react';
 import { Property, getImageUrl } from '../types';
 import { PrivacyPolicyModal } from '../components/PrivacyPolicyModal';
 import { WeatherWidget } from '../components/WeatherWidget';
+import { cn } from '../lib/utils';
 
 import { LegalFooter } from '../components/LegalFooter';
-import { getEventsForCurrentMonth, EventItem } from '../data/events';
+import { getEventsForNext30Days, EventItem } from '../data/events';
 
 export const Home: React.FC = () => {
     const { user, loading } = useAuth();
     const [properties, setProperties] = useState<Property[]>([]);
     const [isPrivacyOpen, setIsPrivacyOpen] = useState(false);
     const [activeTab, setActiveTab] = useState<'properties' | 'events'>('properties');
+    const [refreshSeed, setRefreshSeed] = useState<number>(0);
+    const [isRefreshingEvents, setIsRefreshingEvents] = useState<boolean>(false);
+    const [eventsList, setEventsList] = useState<EventItem[]>(() => getEventsForNext30Days(new Date(), 0));
     const navigate = useNavigate();
+
+    const handleRefreshEvents = () => {
+        setIsRefreshingEvents(true);
+        setTimeout(() => {
+            const nextSeed = refreshSeed + 1;
+            const now = new Date();
+            setRefreshSeed(nextSeed);
+            setEventsList(getEventsForNext30Days(now, nextSeed));
+            setIsRefreshingEvents(false);
+        }, 450);
+    };
+
+    const startDateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const endDate = new Date();
+    endDate.setDate(endDate.getDate() + 30);
+    const endDateStr = endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
     const checkOptInAndNavigate = (path: string) => {
         if (loading) return;
@@ -302,33 +322,48 @@ export const Home: React.FC = () => {
                         <p className="text-base text-slate-500 mt-2">
                             {activeTab === 'properties' 
                                 ? 'Find your next perfect getaway with seamless, fully-automated access.' 
-                                : `Top 20 curated events for ${new Date().toLocaleString('default', { month: 'long' })} ${new Date().getFullYear()} within 30 miles of Zip Code 30331.`
+                                : `Top 20 curated events coming up in the next 30 days (${startDateStr} – ${endDateStr}) within 30 miles of Zip Code 30331.`
                             }
                         </p>
                     </div>
 
-                    {/* Tab Selector */}
-                    <div className="inline-flex p-1.5 bg-slate-100 rounded-2xl border border-slate-200 shadow-inner flex-shrink-0">
-                        <button
-                            onClick={() => setActiveTab('properties')}
-                            className={`px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all duration-200 cursor-pointer flex items-center gap-2 ${
-                                activeTab === 'properties' 
-                                    ? 'bg-white text-indigo-600 shadow-md' 
-                                    : 'text-slate-500 hover:text-slate-800'
-                            }`}
-                        >
-                            🏡 Properties
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('events')}
-                            className={`px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all duration-200 cursor-pointer flex items-center gap-2 ${
-                                activeTab === 'events' 
-                                    ? 'bg-white text-indigo-600 shadow-md' 
-                                    : 'text-slate-500 hover:text-slate-800'
-                            }`}
-                        >
-                            📅 Events Tab
-                        </button>
+                    <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap">
+                        {activeTab === 'events' && (
+                            <button
+                                type="button"
+                                onClick={handleRefreshEvents}
+                                disabled={isRefreshingEvents}
+                                className="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white shadow-md hover:shadow-lg transition-all duration-200 cursor-pointer flex items-center gap-2 border border-indigo-500/30 disabled:opacity-75"
+                                title="Refresh top 20 curated Atlanta events for the next 30 days"
+                            >
+                                <RotateCw size={15} className={cn("transition-transform", isRefreshingEvents && "animate-spin")} />
+                                <span>{isRefreshingEvents ? 'Refreshing...' : 'Refresh Events'}</span>
+                            </button>
+                        )}
+
+                        {/* Tab Selector */}
+                        <div className="inline-flex p-1.5 bg-slate-100 rounded-2xl border border-slate-200 shadow-inner flex-shrink-0">
+                            <button
+                                onClick={() => setActiveTab('properties')}
+                                className={`px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all duration-200 cursor-pointer flex items-center gap-2 ${
+                                    activeTab === 'properties' 
+                                        ? 'bg-white text-indigo-600 shadow-md' 
+                                        : 'text-slate-500 hover:text-slate-800'
+                                }`}
+                            >
+                                🏡 Properties
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('events')}
+                                className={`px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all duration-200 cursor-pointer flex items-center gap-2 ${
+                                    activeTab === 'events' 
+                                        ? 'bg-white text-indigo-600 shadow-md' 
+                                        : 'text-slate-500 hover:text-slate-800'
+                                }`}
+                            >
+                                📅 Events Tab
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -373,16 +408,32 @@ export const Home: React.FC = () => {
                         {/* Summary Block */}
                         <div className="bg-gradient-to-br from-indigo-50 to-blue-50/50 rounded-3xl p-6 sm:p-8 border border-indigo-100/80 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                             <div>
-                                <h3 className="text-lg font-bold text-indigo-900 flex items-center gap-2">
-                                    <Sparkles size={18} className="text-indigo-500" /> Curated Hotspots Nearby
-                                </h3>
-                                <p className="text-slate-600 text-sm mt-1 max-w-2xl leading-relaxed">
+                                <div className="flex items-center gap-3 flex-wrap">
+                                    <h3 className="text-lg font-bold text-indigo-900 flex items-center gap-2">
+                                        <Sparkles size={18} className="text-indigo-500" /> Curated Hotspots Nearby
+                                    </h3>
+                                    <span className="text-[11px] font-bold bg-indigo-100 text-indigo-800 px-3 py-1 rounded-full border border-indigo-200/80 shadow-xs">
+                                        Next 30 Days ({startDateStr} – {endDateStr})
+                                    </span>
+                                </div>
+                                <p className="text-slate-600 text-sm mt-2 max-w-2xl leading-relaxed">
                                     Make the most of your stay! All highlighted venues are chosen specifically for their stellar local ratings, proximity to your rental (under 30 miles), and seasonal relevance.
                                 </p>
                             </div>
-                            <div className="bg-white/80 backdrop-blur px-5 py-3 rounded-2xl border border-indigo-100 text-center flex-shrink-0">
-                                <span className="block text-2xl font-extrabold text-indigo-600">20</span>
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Highlights</span>
+                            <div className="flex items-center gap-3 shrink-0">
+                                <button
+                                    type="button"
+                                    onClick={handleRefreshEvents}
+                                    disabled={isRefreshingEvents}
+                                    className="bg-white hover:bg-indigo-50 active:bg-indigo-100 text-indigo-700 border border-indigo-200/80 px-4 py-2.5 rounded-2xl font-bold text-xs sm:text-sm shadow-sm hover:shadow transition-all flex items-center gap-2 cursor-pointer disabled:opacity-60"
+                                >
+                                    <RotateCw size={15} className={cn("text-indigo-600", isRefreshingEvents && "animate-spin")} />
+                                    <span>{isRefreshingEvents ? 'Updating...' : 'Refresh Top 20'}</span>
+                                </button>
+                                <div className="bg-white/90 backdrop-blur px-5 py-2.5 rounded-2xl border border-indigo-100 text-center flex-shrink-0 shadow-sm">
+                                    <span className="block text-xl font-extrabold text-indigo-600">{eventsList.length}</span>
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Highlights</span>
+                                </div>
                             </div>
                         </div>
 
@@ -397,11 +448,11 @@ export const Home: React.FC = () => {
                                     <p className="text-xs text-slate-400 mt-0.5">Top-tier athletic events, championships, and matchups</p>
                                 </div>
                                 <span className="ml-auto text-xs bg-amber-50 text-amber-700 px-3 py-1 rounded-full font-bold">
-                                    {getEventsForCurrentMonth(new Date()).filter(e => e.category === 'Sporting Events').length} Matches
+                                    {eventsList.filter(e => e.category === 'Sporting Events').length} Matches
                                 </span>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {getEventsForCurrentMonth(new Date()).filter(e => e.category === 'Sporting Events').map(event => (
+                                {eventsList.filter(e => e.category === 'Sporting Events').map(event => (
                                     <div key={event.id} className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm hover:shadow-md transition-all hover:border-indigo-150 flex flex-col justify-between h-full">
                                         <div>
                                             <div className="flex justify-between items-start gap-2 mb-3">
@@ -453,11 +504,11 @@ export const Home: React.FC = () => {
                                     <p className="text-xs text-slate-400 mt-0.5">Live music concerts, lounge sessions, and theater productions</p>
                                 </div>
                                 <span className="ml-auto text-xs bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full font-bold">
-                                    {getEventsForCurrentMonth(new Date()).filter(e => e.category === 'Night Life Entertainments').length} Shows
+                                    {eventsList.filter(e => e.category === 'Night Life Entertainments').length} Shows
                                 </span>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {getEventsForCurrentMonth(new Date()).filter(e => e.category === 'Night Life Entertainments').map(event => (
+                                {eventsList.filter(e => e.category === 'Night Life Entertainments').map(event => (
                                     <div key={event.id} className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm hover:shadow-md transition-all hover:border-indigo-150 flex flex-col justify-between h-full">
                                         <div>
                                             <div className="flex justify-between items-start gap-2 mb-3">
@@ -509,11 +560,11 @@ export const Home: React.FC = () => {
                                     <p className="text-xs text-slate-400 mt-0.5">Festivals, museum exhibitions, and sightseeing spots for all ages</p>
                                 </div>
                                 <span className="ml-auto text-xs bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full font-bold">
-                                    {getEventsForCurrentMonth(new Date()).filter(e => e.category === 'Family').length} Exhibits
+                                    {eventsList.filter(e => e.category === 'Family').length} Exhibits
                                 </span>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {getEventsForCurrentMonth(new Date()).filter(e => e.category === 'Family').map(event => (
+                                {eventsList.filter(e => e.category === 'Family').map(event => (
                                     <div key={event.id} className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm hover:shadow-md transition-all hover:border-indigo-150 flex flex-col justify-between h-full">
                                         <div>
                                             <div className="flex justify-between items-start gap-2 mb-3">
@@ -565,11 +616,11 @@ export const Home: React.FC = () => {
                                     <p className="text-xs text-slate-400 mt-0.5">Immersive aquariums, zoo safaris, and kids play centers</p>
                                 </div>
                                 <span className="ml-auto text-xs bg-pink-50 text-pink-700 px-3 py-1 rounded-full font-bold">
-                                    {getEventsForCurrentMonth(new Date()).filter(e => e.category === 'Kids').length} Spots
+                                    {eventsList.filter(e => e.category === 'Kids').length} Spots
                                 </span>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {getEventsForCurrentMonth(new Date()).filter(e => e.category === 'Kids').map(event => (
+                                {eventsList.filter(e => e.category === 'Kids').map(event => (
                                     <div key={event.id} className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm hover:shadow-md transition-all hover:border-indigo-150 flex flex-col justify-between h-full">
                                         <div>
                                             <div className="flex justify-between items-start gap-2 mb-3">
