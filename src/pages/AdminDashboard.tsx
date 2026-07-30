@@ -320,7 +320,56 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
-  const totalRevenue = bookings.filter(b => b.status === 'confirmed').reduce((sum, b) => sum + b.totalPrice, 0);
+  let totalCollected = 0;
+  let totalPending = 0;
+
+  bookings.forEach(b => {
+    if (b.status === 'cancelled') {
+      if (b.cancellationFee && b.cancellationFee > 0) {
+        totalCollected += b.cancellationFee;
+      }
+      return;
+    }
+
+    if (b.paymentSchedule && Array.isArray(b.paymentSchedule) && b.paymentSchedule.length > 0) {
+      b.paymentSchedule.forEach((sched: any) => {
+        const schedAmountCents = Math.round((sched.amount || 0) * 100);
+        if (sched.status === 'paid') {
+          totalCollected += schedAmountCents;
+        } else {
+          totalPending += schedAmountCents;
+        }
+      });
+      if (b.lateCheckoutFee && b.lateCheckoutFee > 0) {
+        totalCollected += b.lateCheckoutFee;
+      }
+      return;
+    }
+
+    if (b.invoiceDetails) {
+      const invAmountCents = Math.round((b.invoiceDetails.grandTotal !== undefined ? b.invoiceDetails.grandTotal : (b.totalPrice / 100)) * 100);
+      if (b.invoiceDetails.paid) {
+        totalCollected += invAmountCents;
+      } else {
+        totalPending += invAmountCents;
+      }
+      if (b.lateCheckoutFee && b.lateCheckoutFee > 0) {
+        totalCollected += b.lateCheckoutFee;
+      }
+      return;
+    }
+
+    if (b.status === 'confirmed') {
+      totalCollected += b.totalPrice;
+      if (b.lateCheckoutFee && b.lateCheckoutFee > 0) {
+        totalCollected += b.lateCheckoutFee;
+      }
+    } else if (b.status === 'pending' || b.status === 'pending_payment') {
+      totalPending += b.totalPrice;
+    }
+  });
+
+  const totalRevenue = totalCollected + totalPending;
   const totalCancellations = bookings.filter(b => b.status === 'cancelled').length;
 
   const exportCSV = () => {
@@ -2517,13 +2566,17 @@ C.&S.H. Group Properties, LLC
                         </button>
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div className="bg-white p-4 rounded-2xl shadow-sm border border-indigo-100">
-                       <p className="text-xs text-slate-500 font-medium uppercase tracking-tight flex items-center gap-1"><TrendingUp size={14}/> Total Revenue</p>
-                       <p className="text-xl font-bold text-slate-900 mt-1">${(totalRevenue / 100).toFixed(2)}</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="bg-white p-4 rounded-2xl shadow-sm border border-emerald-100">
+                       <p className="text-xs text-slate-500 font-medium uppercase tracking-tight flex items-center gap-1"><CheckCircle size={14} className="text-emerald-600"/> Total Collected</p>
+                       <p className="text-xl font-bold text-emerald-700 mt-1">${(totalCollected / 100).toFixed(2)}</p>
+                    </div>
+                    <div className="bg-white p-4 rounded-2xl shadow-sm border border-amber-100">
+                       <p className="text-xs text-slate-500 font-medium uppercase tracking-tight flex items-center gap-1"><Clock size={14} className="text-amber-500"/> Total Pending</p>
+                       <p className="text-xl font-bold text-amber-700 mt-1">${(totalPending / 100).toFixed(2)}</p>
                     </div>
                     <div className="bg-white p-4 rounded-2xl shadow-sm border border-indigo-100">
-                       <p className="text-xs text-slate-500 font-medium uppercase tracking-tight flex items-center gap-1"><Users size={14}/> Total Users</p>
+                       <p className="text-xs text-slate-500 font-medium uppercase tracking-tight flex items-center gap-1"><Users size={14} className="text-indigo-600"/> Total Users</p>
                        <p className="text-xl font-bold text-slate-900 mt-1">{users.length}</p>
                     </div>
                     <div className="bg-white p-4 rounded-2xl shadow-sm border border-indigo-100">
