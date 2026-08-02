@@ -110,6 +110,7 @@ export const AdminDashboard: React.FC = () => {
   const [invoiceCancelFee, setInvoiceCancelFee] = useState<number>(0);
   const [invoiceCancelNotifySponsor, setInvoiceCancelNotifySponsor] = useState<boolean>(true);
   const [invoiceCancelNotifyGuest, setInvoiceCancelNotifyGuest] = useState<boolean>(true);
+  const [invoiceCancelNotifyManagers, setInvoiceCancelNotifyManagers] = useState<boolean>(true);
   const [cancellingInvoiceLoading, setCancellingInvoiceLoading] = useState<boolean>(false);
 
   // Paid confirmation resend states
@@ -2372,14 +2373,21 @@ C.&S.H. Group Properties, LLC
     const grandTotal = inv.grandTotal !== undefined ? inv.grandTotal : (b.totalPrice ? b.totalPrice / 100 : 0);
     const calculatedLateFee = isWithinNonCancelFeeDays ? Math.round(grandTotal * (lateCancelFeePercent / 100) * 100) / 100 : 0;
 
+    const isFreeCancellation = !isWithinNonCancelFeeDays;
+    const policyDescription = isWithinNonCancelFeeDays 
+      ? `Check-in is in ${hoursUntilCheckIn} hours (within the ${freeCancelHoursBefore}-hour non-cancellation window). A ${lateCancelFeePercent}% cancellation fee ($${calculatedLateFee.toFixed(2)}) is assessed.`
+      : `Check-in is in ${hoursUntilCheckIn} hours (outside the ${freeCancelHoursBefore}-hour non-cancellation window). Free cancellation window is active ($0.00 fee).`;
+
     return {
       isWithinNonCancelFeeDays,
+      isFreeCancellation,
       freeCancelHoursBefore,
       lateCancelFeePercent,
       hoursUntilCheckIn,
       tripDays,
       calculatedLateFee,
-      grandTotal
+      grandTotal,
+      policyDescription
     };
   };
 
@@ -2388,8 +2396,9 @@ C.&S.H. Group Properties, LLC
     setCancellingInvoiceBooking(b);
     setInvoiceCancelNote('');
     setInvoiceCancelFee(policy.calculatedLateFee);
-    setInvoiceCancelNotifySponsor(!!(b.invoiceDetails?.sponsorEmail));
-    setInvoiceCancelNotifyGuest(!!(b.guestEmail));
+    setInvoiceCancelNotifySponsor(!!(b.invoiceDetails?.sponsorEmail || b.invoiceDetails?.sponsorPhone));
+    setInvoiceCancelNotifyGuest(!!(b.guestEmail || b.guestPhone));
+    setInvoiceCancelNotifyManagers(true);
   };
 
   const handleExecuteCancelInvoice = async () => {
@@ -2448,12 +2457,14 @@ C.&S.H. Group Properties, LLC
         console.warn("Failed to remove blackout dates on invoice cancel:", err);
       }
 
-      // Send Cancellation Email Notifications if requested
+      // Send Cancellation Email & SMS Notifications if requested
       const prop = properties.find(p => p.id === b.propertyId);
       const propName = prop?.name || 'REALCal Luxury Lodging';
       const invoiceNo = inv.invoiceNumber || b.bookingRef || 'Manual';
       const sponsorEmail = (inv.sponsorEmail || '').trim();
+      const sponsorPhone = (inv.sponsorPhone || b.sponsorPhone || '').trim();
       const guestEmail = (b.guestEmail || '').trim();
+      const guestPhone = (b.guestPhone || '').trim();
 
       const emailSubject = `[CANCELLED] Invoice #${invoiceNo}: Lodging Coverage for ${b.guestName || 'Guest'}`;
       const emailHtml = `
@@ -2514,38 +2525,130 @@ Thank you,
 C.&S.H. Group Properties, LLC
 `;
 
-      const sendEmailPromises: Promise<any>[] = [];
-      if (invoiceCancelNotifySponsor && sponsorEmail) {
-        sendEmailPromises.push(
-          fetch("/api/send-invoice-email", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              to: sponsorEmail,
-              subject: emailSubject,
-              html: emailHtml,
-              text: emailText
-            })
-          }).catch(err => console.error("Failed to email sponsor on cancellation:", err))
-        );
+      const smsText = `🚨 INVOICE CANCELLED ALERT 🚨\nInvoice #${invoiceNo} for ${b.guestName || 'Guest'} at ${propName} (${b.checkIn} to ${b.checkOut}) has been CANCELLED.\n${feeInDollars > 0 ? `Fee: $${feeInDollars.toFixed(2)}\n` : ''}${noteText ? `Note: ${noteText}` : ''}`;
+
+      const sendPromises: Promise<any>[] = [];
+
+      // 1. SPONSOR ALERTS (Email + SMS)
+      if (invoiceCancelNotifySponsor) {
+        if (sponsorEmail) {
+          sendPromises.push(
+            fetch("/api/send-invoice-email", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                to: sponsorEmail,
+                subject: emailSubject,
+                html: emailHtml,
+                text: emailText
+              })
+            }).catch(err => console.error("Failed to email sponsor on cancellation:", err))
+          );
+        }
+        if (sponsorPhone) {
+          sendPromises.push(
+            fetch("/api/send-sms", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                to: sponsorPhone,
+                message: smsText
+              })
+            }).catch(err => console.error("Failed to SMS sponsor on cancellation:", err))
+          );
+        }
       }
 
-      if (invoiceCancelNotifyGuest && guestEmail && guestEmail !== sponsorEmail) {
-        sendEmailPromises.push(
-          fetch("/api/send-invoice-email", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              to: guestEmail,
-              subject: emailSubject,
-              html: emailHtml,
-              text: emailText
-            })
-          }).catch(err => console.error("Failed to email guest on cancellation:", err))
-        );
+      // 2. GUEST ALERTS (Email + SMS)
+      if (invoiceCancelNotifyGuest) {
+        if (guestEmail && guestEmail !== sponsorEmail) {
+          sendPromises.push(
+            fetch("/api/send-invoice-email", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                to: guestEmail,
+                subject: emailSubject,
+                html: emailHtml,
+                text: emailText
+              })
+            }).catch(err => console.error("Failed to email guest on cancellation:", err))
+          );
+        }
+        if (guestPhone && guestPhone !== sponsorPhone) {
+          sendPromises.push(
+            fetch("/api/send-sms", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                to: guestPhone,
+                message: `🚨 RESERVATION & INVOICE CANCELLED 🚨\nYour invoice #${invoiceNo} & stay at ${propName} (${b.checkIn} to ${b.checkOut}) has been CANCELLED.\n${feeInDollars > 0 ? `Fee: $${feeInDollars.toFixed(2)}\n` : ''}${noteText ? `Note: ${noteText}` : ''}`
+              })
+            }).catch(err => console.error("Failed to SMS guest on cancellation:", err))
+          );
+        }
       }
 
-      await Promise.all(sendEmailPromises);
+      // 3. PROPERTY MANAGEMENT CONTACTS ALERTS (Email + SMS)
+      if (invoiceCancelNotifyManagers) {
+        const activeManagers = propertyManagers.filter(m => m.enabled);
+        if (activeManagers.length > 0) {
+          for (const mgr of activeManagers) {
+            if (mgr.email) {
+              sendPromises.push(
+                fetch("/api/send-invoice-email", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    to: mgr.email,
+                    subject: `[ADMIN ALERT] Invoice #${invoiceNo} CANCELLED - ${propName}`,
+                    html: emailHtml,
+                    text: emailText
+                  })
+                }).catch(err => console.error(`Failed to email manager ${mgr.name}:`, err))
+              );
+            }
+
+            if (mgr.phone) {
+              sendPromises.push(
+                fetch("/api/send-sms", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    to: mgr.phone,
+                    message: `🚨 INVOICE CANCELLED ALERT 🚨\nProp: ${propName}\nInvoice #${invoiceNo}\nGuest: ${b.guestName || 'N/A'}\nDates: ${b.checkIn} to ${b.checkOut}\nNote: ${noteText}`
+                  })
+                }).catch(err => console.error(`Failed to SMS manager ${mgr.name}:`, err))
+              );
+            }
+          }
+
+          // Backup manager endpoint call
+          sendPromises.push(
+            fetch("/api/notify-managers", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                managers: activeManagers,
+                bookingDetails: {
+                  checkIn: b.checkIn,
+                  checkOut: b.checkOut,
+                  propertyName: propName,
+                  totalAmount: feeInCents,
+                  guestName: b.guestName,
+                  guestEmail: b.guestEmail,
+                  guestPhone: b.guestPhone,
+                  isCancellation: true,
+                  cancellationFee: feeInCents,
+                  selectedBedrooms: b.selectedBedrooms || (b.selectedBedroom ? [b.selectedBedroom] : [])
+                }
+              })
+            }).catch(err => console.error("Failed /api/notify-managers backup:", err))
+          );
+        }
+      }
+
+      await Promise.all(sendPromises);
 
       // Update local state in AdminDashboard
       setBookings(prev => prev.map(item => {
@@ -2561,7 +2664,7 @@ C.&S.H. Group Properties, LLC
         return item;
       }));
 
-      alert(`Invoice #${invoiceNo} has been successfully cancelled.`);
+      alert(`Invoice #${invoiceNo} has been successfully cancelled. Cancellation alerts (Emails & SMS) have been sent.`);
       setCancellingInvoiceBooking(null);
     } catch (err: any) {
       alert(`Failed to cancel invoice: ${err.message}`);
@@ -6087,6 +6190,209 @@ C.&S.H. Group Properties, LLC
                             ) : (
                                <>
                                   <Mail size={14}/> Send Notification(s)
+                               </>
+                            )}
+                         </button>
+                      </div>
+                   </div>
+                </div>
+             );
+          })()}
+
+          {/* Cancel Invoice & Booking Modal */}
+          {cancellingInvoiceBooking && (() => {
+             const b = cancellingInvoiceBooking;
+             const inv = b.invoiceDetails || {};
+             const policy = getInvoiceCancellationPolicyInfo(b);
+             const prop = properties.find(p => p.id === b.propertyId);
+             const propName = prop?.name || 'REALCal Luxury Lodging';
+             const invoiceNo = inv.invoiceNumber || b.bookingRef || 'Manual';
+             const activeManagers = propertyManagers.filter(m => m.enabled);
+
+             return (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+                   <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 text-left">
+                      {/* Header */}
+                      <div className="px-6 py-5 border-b border-rose-100 flex justify-between items-center bg-rose-50/70">
+                         <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-2xl bg-rose-100 border border-rose-200 flex items-center justify-center text-rose-600">
+                               <AlertTriangle size={20} />
+                            </div>
+                            <div>
+                               <h3 className="text-lg font-bold text-rose-950 flex items-center gap-2">
+                                  Cancel Invoice #{invoiceNo}
+                               </h3>
+                               <p className="text-xs text-rose-700 font-medium">
+                                  {propName} &bull; Guest: <span className="font-bold">{b.guestName || 'N/A'}</span>
+                               </p>
+                            </div>
+                         </div>
+                         <button 
+                            onClick={() => setCancellingInvoiceBooking(null)} 
+                            className="text-slate-400 hover:text-slate-600 transition-colors bg-white border border-slate-200 hover:border-slate-300 p-2 rounded-full cursor-pointer flex items-center justify-center"
+                            title="Close modal"
+                         >
+                            <X size={18} />
+                         </button>
+                      </div>
+
+                      {/* Modal Body */}
+                      <div className="p-6 overflow-y-auto space-y-5 text-sm">
+                         {/* Booking & Invoice Overview Summary */}
+                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4 bg-slate-50 border border-slate-200/80 rounded-2xl text-xs">
+                            <div>
+                               <span className="text-slate-400 block font-bold uppercase text-[10px]">Stay Dates</span>
+                               <span className="font-semibold text-slate-800">{b.checkIn} &rarr; {b.checkOut}</span>
+                            </div>
+                            <div>
+                               <span className="text-slate-400 block font-bold uppercase text-[10px]">Invoice Total</span>
+                               <span className="font-bold text-indigo-700">${(inv.amount || 0).toFixed(2)}</span>
+                            </div>
+                            <div>
+                               <span className="text-slate-400 block font-bold uppercase text-[10px]">Sponsor</span>
+                               <span className="font-semibold text-slate-800 truncate block">{inv.sponsorName || b.guestName || 'N/A'}</span>
+                            </div>
+                         </div>
+
+                         {/* Policy & Fee Calculation Card */}
+                         <div className="bg-amber-50/80 border border-amber-200/80 p-4 rounded-2xl space-y-3">
+                            <div className="flex items-center justify-between">
+                               <span className="text-xs font-bold text-amber-900 uppercase tracking-wide flex items-center gap-1.5">
+                                  <Clock size={14} className="text-amber-600" /> Cancellation Policy Status
+                               </span>
+                               <span className={cn(
+                                  "px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase",
+                                  policy.isFreeCancellation ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"
+                               )}>
+                                  {policy.isFreeCancellation ? "Free Cancel Window Active" : "Outside Free Cancel Window"}
+                               </span>
+                            </div>
+                            <p className="text-xs text-amber-900/80 leading-relaxed">
+                               {policy.policyDescription}
+                            </p>
+                            <div className="pt-2 border-t border-amber-200/60 flex items-center justify-between gap-4">
+                               <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                                  Assessed Cancellation Fee ($):
+                               </label>
+                               <div className="relative w-36">
+                                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
+                                  <input 
+                                     type="number" 
+                                     min="0"
+                                     step="0.01"
+                                     value={invoiceCancelFee} 
+                                     onChange={(e) => setInvoiceCancelFee(parseFloat(e.target.value) || 0)} 
+                                     className="w-full pl-7 pr-3 py-1.5 bg-white border border-slate-300 rounded-xl text-slate-900 font-bold text-sm text-right focus:outline-none focus:ring-2 focus:ring-rose-500"
+                                  />
+                               </div>
+                            </div>
+                         </div>
+
+                         {/* Mandatory Cancellation Note */}
+                         <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-slate-800 uppercase tracking-wide flex items-center gap-1">
+                               Reason / Cancellation Note <span className="text-rose-500">*</span>
+                            </label>
+                            <textarea 
+                               rows={3}
+                               value={invoiceCancelNote}
+                               onChange={(e) => setInvoiceCancelNote(e.target.value)}
+                               placeholder="Specify the reason for cancelling this invoice (e.g., Requested by sponsor, billing error, event postponed). This note will be included in all cancellation alerts..."
+                               className="w-full bg-slate-50 border border-slate-300 rounded-2xl p-3 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500/50"
+                            />
+                         </div>
+
+                         {/* Multi-Party Broadcast Section */}
+                         <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl space-y-3">
+                            <span className="text-xs font-bold text-slate-900 uppercase tracking-wide block">
+                               Cancellation Notifications Broadcast (Email & SMS Alerts)
+                            </span>
+
+                            <div className="space-y-2 text-xs">
+                               {/* Sponsor Alert Option */}
+                               <label className="flex items-start gap-2.5 p-2.5 rounded-xl border bg-white border-slate-200 hover:border-slate-300 cursor-pointer transition-all">
+                                  <input 
+                                     type="checkbox"
+                                     checked={invoiceCancelNotifySponsor}
+                                     onChange={(e) => setInvoiceCancelNotifySponsor(e.target.checked)}
+                                     className="mt-0.5 rounded text-rose-600 focus:ring-rose-500"
+                                  />
+                                  <div className="flex-1">
+                                     <div className="font-bold text-slate-800 flex items-center justify-between">
+                                        <span>Notify Sponsor</span>
+                                        <span className="text-[10px] text-slate-400 font-normal">Email & SMS</span>
+                                     </div>
+                                     <div className="text-[11px] text-slate-500">
+                                        {inv.sponsorEmail || 'No Email'} &bull; {inv.sponsorPhone || b.sponsorPhone || 'No Phone'}
+                                     </div>
+                                  </div>
+                               </label>
+
+                               {/* Guest Alert Option */}
+                               <label className="flex items-start gap-2.5 p-2.5 rounded-xl border bg-white border-slate-200 hover:border-slate-300 cursor-pointer transition-all">
+                                  <input 
+                                     type="checkbox"
+                                     checked={invoiceCancelNotifyGuest}
+                                     onChange={(e) => setInvoiceCancelNotifyGuest(e.target.checked)}
+                                     className="mt-0.5 rounded text-rose-600 focus:ring-rose-500"
+                                  />
+                                  <div className="flex-1">
+                                     <div className="font-bold text-slate-800 flex items-center justify-between">
+                                        <span>Notify Guest</span>
+                                        <span className="text-[10px] text-slate-400 font-normal">Email & SMS</span>
+                                     </div>
+                                     <div className="text-[11px] text-slate-500">
+                                        {b.guestEmail || 'No Email'} &bull; {b.guestPhone || 'No Phone'}
+                                     </div>
+                                  </div>
+                               </label>
+
+                               {/* Property Managers Option */}
+                               <label className="flex items-start gap-2.5 p-2.5 rounded-xl border bg-white border-slate-200 hover:border-slate-300 cursor-pointer transition-all">
+                                  <input 
+                                     type="checkbox"
+                                     checked={invoiceCancelNotifyManagers}
+                                     onChange={(e) => setInvoiceCancelNotifyManagers(e.target.checked)}
+                                     className="mt-0.5 rounded text-rose-600 focus:ring-rose-500"
+                                  />
+                                  <div className="flex-1">
+                                     <div className="font-bold text-slate-800 flex items-center justify-between">
+                                        <span>Notify Property Management Contacts ({activeManagers.length})</span>
+                                        <span className="text-[10px] text-slate-400 font-normal">Email & SMS</span>
+                                     </div>
+                                     <div className="text-[11px] text-slate-500">
+                                        {activeManagers.length > 0 
+                                           ? activeManagers.map(m => `${m.name} (${m.email || 'No email'}, ${m.phone || 'No phone'})`).join(', ')
+                                           : 'No active property managers configured'}
+                                     </div>
+                                  </div>
+                               </label>
+                            </div>
+                         </div>
+                      </div>
+
+                      {/* Footer Actions */}
+                      <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3 bg-slate-50">
+                         <button 
+                            type="button"
+                            onClick={() => setCancellingInvoiceBooking(null)} 
+                            className="px-5 py-2.5 rounded-xl border border-slate-200 hover:bg-white text-slate-700 font-bold text-xs transition-all cursor-pointer"
+                         >
+                            Keep Invoice Active
+                         </button>
+                         <button 
+                            type="button"
+                            disabled={cancellingInvoiceLoading}
+                            onClick={handleExecuteCancelInvoice} 
+                            className="bg-rose-600 hover:bg-rose-700 disabled:bg-rose-400 text-white px-6 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition-all shadow-md shadow-rose-100 cursor-pointer"
+                         >
+                            {cancellingInvoiceLoading ? (
+                               <>
+                                  <Loader2 className="animate-spin" size={14}/> Cancelling & Sending Alerts...
+                               </>
+                            ) : (
+                               <>
+                                  <XCircle size={14}/> Confirm Invoice Cancellation & Alert All Parties
                                </>
                             )}
                          </button>

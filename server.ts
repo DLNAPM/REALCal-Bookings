@@ -815,6 +815,45 @@ async function startServer() {
     }
   });
 
+  app.post("/api/send-sms", async (req, res) => {
+    console.log("[API] Send SMS hit");
+    try {
+      const { to, message } = req.body;
+      const twilioSid = process.env.TWILIO_ACCOUNT_SID;
+      const twilioToken = process.env.TWILIO_AUTH_TOKEN;
+      const from = process.env.TWILIO_PHONE_NUMBER;
+
+      if (!twilioSid || !twilioToken || !from) {
+        return res.status(400).json({ error: "Twilio credentials not configured in secrets." });
+      }
+
+      if (twilioSid.includes('PROVIDE_REAL')) {
+         return res.status(400).json({ error: "Please update the Twilio SID in your Settings -> Secrets." });
+      }
+
+      if (!to) {
+        return res.status(400).json({ error: "Recipient phone number is required." });
+      }
+
+      const twilioPkg = await import('twilio');
+      const twilio = twilioPkg.default || twilioPkg;
+      const client = (twilio as any)(twilioSid, twilioToken);
+      
+      const formattedTo = formatPhoneToE164(to);
+      const result = await client.messages.create({
+        body: message,
+        from: from,
+        to: formattedTo
+      });
+      
+      console.log("[API] SMS Success to", formattedTo, ":", result.sid);
+      res.json({ success: true, sid: result.sid });
+    } catch (err: any) {
+      console.error("[API] SMS Error:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.post("/api/test-sms", async (req, res) => {
     console.log("[API] Test SMS hit");
     try {
