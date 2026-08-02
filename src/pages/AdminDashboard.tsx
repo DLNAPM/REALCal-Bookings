@@ -6,7 +6,7 @@ import { Navigate, useNavigate, Link } from 'react-router-dom';
 import { format, eachDayOfInterval, parseISO, addDays } from 'date-fns';
 import { cn } from '../lib/utils';
 import { BlackoutDate, PricingRule, Booking, Property, PropertyManager, PropertyImage, getImageUrl, getImageRoomNumber, DiscountCode } from '../types';
-import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight, RefreshCw, MessageSquare, CheckCircle, Loader2, FileText, XCircle, HelpCircle, MapPin, Upload, Database, Ticket, Send, Clock, Bell, FileCheck, RotateCw, CheckSquare, Copy, Search, X } from 'lucide-react';
+import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight, RefreshCw, MessageSquare, CheckCircle, Loader2, FileText, XCircle, HelpCircle, MapPin, Upload, Database, Ticket, Send, Clock, Bell, FileCheck, RotateCw, CheckSquare, Copy, Search, X, AlertTriangle } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 const formatPhoneE164 = (phone: string) => {
@@ -103,6 +103,14 @@ export const AdminDashboard: React.FC = () => {
   const [sendingInvoiceId, setSendingInvoiceId] = useState<string | null>(null);
   const [syncingInvoiceId, setSyncingInvoiceId] = useState<string | null>(null);
   const [viewingInvoiceBooking, setViewingInvoiceBooking] = useState<any | null>(null);
+
+  // Invoice Cancellation States
+  const [cancellingInvoiceBooking, setCancellingInvoiceBooking] = useState<any | null>(null);
+  const [invoiceCancelNote, setInvoiceCancelNote] = useState<string>('');
+  const [invoiceCancelFee, setInvoiceCancelFee] = useState<number>(0);
+  const [invoiceCancelNotifySponsor, setInvoiceCancelNotifySponsor] = useState<boolean>(true);
+  const [invoiceCancelNotifyGuest, setInvoiceCancelNotifyGuest] = useState<boolean>(true);
+  const [cancellingInvoiceLoading, setCancellingInvoiceLoading] = useState<boolean>(false);
 
   // Paid confirmation resend states
   const [resendingConfirmationBooking, setResendingConfirmationBooking] = useState<Booking | null>(null);
@@ -2327,14 +2335,260 @@ C.&S.H. Group Properties, LLC
     }
   };
 
-  const handleAdminCancelBooking = async (bookingId: string) => {
-    if (!db || !window.confirm("Are you sure you want to cancel this booking?")) return;
-    try {
-      const booking = bookings.find(b => b.id === bookingId);
-      if (!booking) return;
+  const getInvoiceCancellationPolicyInfo = (b: any) => {
+    if (!b || !b.checkIn) {
+      return {
+        isWithinNonCancelFeeDays: false,
+        freeCancelHoursBefore: 48,
+        lateCancelFeePercent: 100,
+        hoursUntilCheckIn: 0,
+        tripDays: 1,
+        calculatedLateFee: 0,
+        grandTotal: 0
+      };
+    }
 
+    const checkInDate = new Date(b.checkIn);
+    const checkOutDate = new Date(b.checkOut || b.checkIn);
+    const now = new Date();
+    const hoursUntilCheckIn = Math.round((checkInDate.getTime() - now.getTime()) / (1000 * 60 * 60));
+    const tripDays = Math.max(1, Math.round((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24)));
+
+    let freeCancelHoursBefore = 48;
+    let lateCancelFeePercent = 100;
+
+    if (globalSettings?.cancellationRules && globalSettings.cancellationRules.length > 0) {
+      const sortedRules = [...globalSettings.cancellationRules].sort((a: any, b: any) => b.minBookingDays - a.minBookingDays);
+      const appliedRule = sortedRules.find((r: any) => tripDays >= r.minBookingDays);
+      if (appliedRule) {
+        freeCancelHoursBefore = appliedRule.freeCancelHoursBefore;
+        lateCancelFeePercent = appliedRule.lateCancelFeePercent;
+      }
+    }
+
+    const isWithinNonCancelFeeDays = hoursUntilCheckIn < freeCancelHoursBefore;
+    
+    const inv = b.invoiceDetails || {};
+    const grandTotal = inv.grandTotal !== undefined ? inv.grandTotal : (b.totalPrice ? b.totalPrice / 100 : 0);
+    const calculatedLateFee = isWithinNonCancelFeeDays ? Math.round(grandTotal * (lateCancelFeePercent / 100) * 100) / 100 : 0;
+
+    return {
+      isWithinNonCancelFeeDays,
+      freeCancelHoursBefore,
+      lateCancelFeePercent,
+      hoursUntilCheckIn,
+      tripDays,
+      calculatedLateFee,
+      grandTotal
+    };
+  };
+
+  const handleOpenCancelInvoiceModal = (b: any) => {
+    const policy = getInvoiceCancellationPolicyInfo(b);
+    setCancellingInvoiceBooking(b);
+    setInvoiceCancelNote('');
+    setInvoiceCancelFee(policy.calculatedLateFee);
+    setInvoiceCancelNotifySponsor(!!(b.invoiceDetails?.sponsorEmail));
+    setInvoiceCancelNotifyGuest(!!(b.guestEmail));
+  };
+
+  const handleExecuteCancelInvoice = async () => {
+    if (!cancellingInvoiceBooking) return;
+    const b = cancellingInvoiceBooking;
+    const inv = b.invoiceDetails || {};
+
+    if (!invoiceCancelNote.trim()) {
+      alert("Please enter a cancellation note / reason before proceeding.");
+      return;
+    }
+
+    setCancellingInvoiceLoading(true);
+    try {
+      const cancelledAtIso = new Date().toISOString();
+      const feeInDollars = Number(invoiceCancelFee) || 0;
+      const feeInCents = Math.round(feeInDollars * 100);
+      const noteText = invoiceCancelNote.trim();
+
+      const updatedInvoiceDetails = {
+        ...inv,
+        cancelled: true,
+        status: 'cancelled',
+        paid: false,
+        cancelledAt: cancelledAtIso,
+        cancellationNote: noteText,
+        cancellationFee: feeInDollars
+      };
+
+      const updatePayload: any = {
+        status: 'cancelled',
+        invoiceDetails: updatedInvoiceDetails,
+        cancellationFee: feeInCents,
+        cancellationNote: noteText,
+        cancelledBy: 'admin',
+        cancelledAt: cancelledAtIso,
+        updatedAt: serverTimestamp()
+      };
+
+      if (db) {
+        await updateDoc(doc(db, 'bookings', b.id), updatePayload);
+      }
+
+      // Remove maintenance blackout dates
+      try {
+        const rooms = b.selectedBedrooms || (b.selectedBedroom ? [b.selectedBedroom] : []);
+        if (rooms.length > 0) {
+          for (const room of rooms) {
+            const rNum = typeof room === 'object' ? room.roomNumber : room;
+            await deleteDoc(doc(db, 'blackout_dates', `maint-${b.id}-${rNum}`)).catch(() => {});
+          }
+        } else {
+          await deleteDoc(doc(db, 'blackout_dates', `maint-${b.id}`)).catch(() => {});
+        }
+      } catch (err) {
+        console.warn("Failed to remove blackout dates on invoice cancel:", err);
+      }
+
+      // Send Cancellation Email Notifications if requested
+      const prop = properties.find(p => p.id === b.propertyId);
+      const propName = prop?.name || 'REALCal Luxury Lodging';
+      const invoiceNo = inv.invoiceNumber || b.bookingRef || 'Manual';
+      const sponsorEmail = (inv.sponsorEmail || '').trim();
+      const guestEmail = (b.guestEmail || '').trim();
+
+      const emailSubject = `[CANCELLED] Invoice #${invoiceNo}: Lodging Coverage for ${b.guestName || 'Guest'}`;
+      const emailHtml = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #1e293b; line-height: 1.6;">
+          <div style="background-color: #fef2f2; border: 1.5px solid #fecaca; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 24px;">
+            <h2 style="margin: 0 0 8px 0; color: #991b1b; font-size: 20px;">INVOICE & RESERVATION CANCELLED</h2>
+            <p style="margin: 0; font-size: 14px; color: #7f1d1d;">Invoice <strong>#${invoiceNo}</strong> has been officially cancelled by the Administrator.</p>
+          </div>
+
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px;">
+            <tr>
+              <td style="padding: 6px 0; color: #64748b;">Invoice Reference:</td>
+              <td style="padding: 6px 0; font-weight: bold; text-align: right;">#${invoiceNo}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color: #64748b;">Property:</td>
+              <td style="padding: 6px 0; font-weight: bold; text-align: right;">${propName}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color: #64748b;">Guest Name:</td>
+              <td style="padding: 6px 0; font-weight: bold; text-align: right;">${b.guestName || 'N/A'}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color: #64748b;">Stay Dates:</td>
+              <td style="padding: 6px 0; font-weight: bold; text-align: right;">${b.checkIn} to ${b.checkOut}</td>
+            </tr>
+            ${feeInDollars > 0 ? `
+            <tr>
+              <td style="padding: 6px 0; color: #991b1b; font-weight: bold;">Cancellation Fee Assessed:</td>
+              <td style="padding: 6px 0; font-weight: bold; color: #991b1b; text-align: right;">$${feeInDollars.toFixed(2)}</td>
+            </tr>
+            ` : ''}
+          </table>
+
+          ${noteText ? `
+          <div style="background-color: #f8fafc; border-left: 4px solid #ef4444; padding: 14px; border-radius: 6px; margin-bottom: 24px;">
+            <strong style="color: #0f172a; font-size: 12px; text-transform: uppercase; display: block; margin-bottom: 4px;">Administrator Cancellation Note:</strong>
+            <span style="font-size: 13px; color: #334155; white-space: pre-wrap;">${noteText}</span>
+          </div>
+          ` : ''}
+
+          <p style="font-size: 12px; color: #64748b; text-align: center; margin-top: 30px;">
+            C.&S.H. Group Properties, LLC &bull; REALCal Bookings Admin
+          </p>
+        </div>
+      `;
+
+      const emailText = `
+INVOICE CANCELLED
+-----------------
+Invoice #${invoiceNo} for ${propName} (${b.checkIn} to ${b.checkOut}) has been cancelled by the Administrator.
+
+Guest Name: ${b.guestName || 'N/A'}
+${feeInDollars > 0 ? `Cancellation Fee Assessed: $${feeInDollars.toFixed(2)}\n` : ''}
+${noteText ? `Administrator Cancellation Note:\n${noteText}\n` : ''}
+
+Thank you,
+C.&S.H. Group Properties, LLC
+`;
+
+      const sendEmailPromises: Promise<any>[] = [];
+      if (invoiceCancelNotifySponsor && sponsorEmail) {
+        sendEmailPromises.push(
+          fetch("/api/send-invoice-email", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              to: sponsorEmail,
+              subject: emailSubject,
+              html: emailHtml,
+              text: emailText
+            })
+          }).catch(err => console.error("Failed to email sponsor on cancellation:", err))
+        );
+      }
+
+      if (invoiceCancelNotifyGuest && guestEmail && guestEmail !== sponsorEmail) {
+        sendEmailPromises.push(
+          fetch("/api/send-invoice-email", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              to: guestEmail,
+              subject: emailSubject,
+              html: emailHtml,
+              text: emailText
+            })
+          }).catch(err => console.error("Failed to email guest on cancellation:", err))
+        );
+      }
+
+      await Promise.all(sendEmailPromises);
+
+      // Update local state in AdminDashboard
+      setBookings(prev => prev.map(item => {
+        if (item.id === b.id) {
+          return {
+            ...item,
+            status: 'cancelled',
+            cancellationFee: feeInCents,
+            cancellationNote: noteText,
+            invoiceDetails: updatedInvoiceDetails
+          };
+        }
+        return item;
+      }));
+
+      alert(`Invoice #${invoiceNo} has been successfully cancelled.`);
+      setCancellingInvoiceBooking(null);
+    } catch (err: any) {
+      alert(`Failed to cancel invoice: ${err.message}`);
+    } finally {
+      setCancellingInvoiceLoading(false);
+    }
+  };
+
+  const handleAdminCancelBooking = async (bookingId: string) => {
+    const booking = bookings.find(b => b.id === bookingId);
+    if (!booking) return;
+
+    if (booking.invoiceDetails) {
+      handleOpenCancelInvoiceModal(booking);
+      return;
+    }
+
+    const cancelNote = window.prompt("Enter cancellation note / reason for guest (optional):", "");
+    if (cancelNote === null) return;
+
+    if (!db) return;
+    try {
       await updateDoc(doc(db, 'bookings', bookingId), {
         status: 'cancelled',
+        cancellationNote: cancelNote.trim(),
+        cancelledBy: 'admin',
+        cancelledAt: new Date().toISOString(),
         updatedAt: serverTimestamp()
       });
 
@@ -2343,16 +2597,18 @@ C.&S.H. Group Properties, LLC
         const rooms = booking.selectedBedrooms || (booking.selectedBedroom ? [booking.selectedBedroom] : []);
         if (rooms.length > 0) {
           for (const room of rooms) {
-            await deleteDoc(doc(db, 'blackout_dates', `maint-${bookingId}-${room.roomNumber}`));
+            const rNum = typeof room === 'object' ? room.roomNumber : room;
+            await deleteDoc(doc(db, 'blackout_dates', `maint-${bookingId}-${rNum}`)).catch(() => {});
           }
         } else {
-          await deleteDoc(doc(db, 'blackout_dates', `maint-${bookingId}`));
+          await deleteDoc(doc(db, 'blackout_dates', `maint-${bookingId}`)).catch(() => {});
         }
       } catch (err) {
         console.warn("Failed to remove blackout", err);
       }
 
-      alert("Booking cancelled.");
+      setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: 'cancelled', cancellationNote: cancelNote.trim() } : b));
+      alert("Booking cancelled successfully.");
     } catch (err: any) {
       alert(err.message);
     }
@@ -4082,8 +4338,9 @@ C.&S.H. Group Properties, LLC
                          <p className="text-xs text-slate-500 mt-1">Real-time status tracking of all created booking invoices. Sync with Stripe directly to verify transaction success.</p>
                       </div>
                       <div className="flex gap-2 text-xs font-semibold">
-                         <span className="bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-md font-bold uppercase">{bookings.filter(b => b.invoiceDetails?.paid).length} Paid</span>
-                         <span className="bg-amber-100 text-amber-800 px-2.5 py-1 rounded-md font-bold uppercase">{bookings.filter(b => b.invoiceDetails && !b.invoiceDetails.paid).length} Unpaid</span>
+                         <span className="bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-md font-bold uppercase">{bookings.filter(b => b.invoiceDetails?.paid && !b.invoiceDetails?.cancelled && b.status !== 'cancelled').length} Paid</span>
+                         <span className="bg-amber-100 text-amber-800 px-2.5 py-1 rounded-md font-bold uppercase">{bookings.filter(b => b.invoiceDetails && !b.invoiceDetails.paid && !b.invoiceDetails.cancelled && b.status !== 'cancelled').length} Unpaid</span>
+                         <span className="bg-rose-100 text-rose-800 px-2.5 py-1 rounded-md font-bold uppercase">{bookings.filter(b => b.invoiceDetails && (b.invoiceDetails.cancelled || b.status === 'cancelled')).length} Cancelled</span>
                       </div>
                    </div>
                    
@@ -4105,6 +4362,7 @@ C.&S.H. Group Properties, LLC
                                const prop = properties.find(p => p.id === b.propertyId);
                                const formattedSentDate = inv.sentAt ? new Date(inv.sentAt).toLocaleString() : 'N/A';
                                const formattedPaidDate = inv.paidAt ? new Date(inv.paidAt).toLocaleString() : '';
+                               const isInvoiceCancelled = inv.cancelled || b.status === 'cancelled';
                                
                                return (
                                   <tr key={b.id} className="hover:bg-slate-50 transition-colors">
@@ -4145,7 +4403,12 @@ C.&S.H. Group Properties, LLC
                                      </td>
                                      <td className="px-4 py-4 space-y-1">
                                         <div>
-                                           {inv.paid ? (
+                                           {isInvoiceCancelled ? (
+                                              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase bg-rose-100 text-rose-800 inline-flex items-center gap-1" title={inv.cancellationNote ? `Note: ${inv.cancellationNote}` : undefined}>
+                                                 <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                                                 Cancelled
+                                              </span>
+                                           ) : inv.paid ? (
                                               <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800 inline-flex items-center gap-1">
                                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                                                  Paid
@@ -4157,76 +4420,97 @@ C.&S.H. Group Properties, LLC
                                               </span>
                                            )}
                                         </div>
-                                        {inv.paid && formattedPaidDate && (
+                                        {isInvoiceCancelled && inv.cancellationNote && (
+                                           <div className="text-[10px] text-rose-600 font-medium italic truncate max-w-[150px]" title={inv.cancellationNote}>
+                                              Note: {inv.cancellationNote}
+                                           </div>
+                                        )}
+                                        {!isInvoiceCancelled && inv.paid && formattedPaidDate && (
                                            <div className="text-[9px] text-slate-400 font-mono">
                                               At: {formattedPaidDate}
                                            </div>
                                         )}
                                      </td>
                                      <td className="px-4 py-4 text-right">
-                                        <div className="flex justify-end gap-2 flex-wrap">
-                                           {inv.stripePaymentUrl && !inv.paid && (
-                                              <a
-                                                 href={inv.stripePaymentUrl}
-                                                 target="_blank"
-                                                 rel="noopener noreferrer"
-                                                 className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1 rounded-lg transition-all inline-flex items-center gap-1 cursor-pointer"
-                                                 title="View Stripe Checkout URL"
-                                              >
-                                                 Checkout Link
-                                              </a>
-                                           )}
-                                           
-                                           {inv.stripeSessionId && !inv.paid && (
-                                              <button
-                                                 onClick={() => handleSyncStripeStatus(b.id)}
-                                                 disabled={syncingInvoiceId === b.id}
-                                                 className="text-[10px] font-bold text-slate-700 hover:text-indigo-600 bg-slate-100 hover:bg-indigo-50 border border-slate-300 hover:border-indigo-200 px-2.5 py-1 rounded-lg transition-all inline-flex items-center gap-1 disabled:opacity-50 cursor-pointer"
-                                                 title="Sync live status directly from Stripe.com"
-                                              >
-                                                 {syncingInvoiceId === b.id ? (
-                                                    <>
-                                                       <Loader2 size={12} className="animate-spin" /> Syncing...
-                                                    </>
-                                                 ) : (
-                                                    <>
-                                                       <RefreshCw size={12} /> Sync Stripe
-                                                    </>
+                                        <div className="flex justify-end gap-2 flex-wrap items-center">
+                                           {isInvoiceCancelled ? (
+                                              <span className="text-[11px] text-slate-400 font-medium italic">Invoice Cancelled</span>
+                                           ) : (
+                                              <>
+                                                 {inv.stripePaymentUrl && !inv.paid && (
+                                                    <a
+                                                       href={inv.stripePaymentUrl}
+                                                       target="_blank"
+                                                       rel="noopener noreferrer"
+                                                       className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1 rounded-lg transition-all inline-flex items-center gap-1 cursor-pointer"
+                                                       title="View Stripe Checkout URL"
+                                                    >
+                                                       Checkout Link
+                                                    </a>
                                                  )}
-                                              </button>
-                                           )}
+                                                 
+                                                 {inv.stripeSessionId && !inv.paid && (
+                                                    <button
+                                                       onClick={() => handleSyncStripeStatus(b.id)}
+                                                       disabled={syncingInvoiceId === b.id}
+                                                       className="text-[10px] font-bold text-slate-700 hover:text-indigo-600 bg-slate-100 hover:bg-indigo-50 border border-slate-300 hover:border-indigo-200 px-2.5 py-1 rounded-lg transition-all inline-flex items-center gap-1 disabled:opacity-50 cursor-pointer"
+                                                       title="Sync live status directly from Stripe.com"
+                                                    >
+                                                       {syncingInvoiceId === b.id ? (
+                                                          <>
+                                                             <Loader2 size={12} className="animate-spin" /> Syncing...
+                                                          </>
+                                                       ) : (
+                                                          <>
+                                                             <RefreshCw size={12} /> Sync Stripe
+                                                          </>
+                                                       )}
+                                                    </button>
+                                                 )}
 
-                                           {!inv.paid && (
-                                              <button
-                                                 onClick={() => handleMarkInvoicePaidManual(b.id)}
-                                                 className="text-[10px] font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2.5 py-1 rounded-lg transition-all inline-flex items-center gap-1 cursor-pointer"
-                                                 title="Manually mark paid (e.g. offline pay)"
-                                              >
-                                                 <CheckCircle size={12} /> Mark Paid
-                                              </button>
+                                                 {!inv.paid && (
+                                                    <button
+                                                       onClick={() => handleMarkInvoicePaidManual(b.id)}
+                                                       className="text-[10px] font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2.5 py-1 rounded-lg transition-all inline-flex items-center gap-1 cursor-pointer"
+                                                       title="Manually mark paid (e.g. offline pay)"
+                                                    >
+                                                       <CheckCircle size={12} /> Mark Paid
+                                                    </button>
+                                                 )}
+
+                                                 {!inv.paid && (
+                                                    <button
+                                                       onClick={() => handleOpenCancelInvoiceModal(b)}
+                                                       className="text-[10px] font-bold text-rose-600 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2.5 py-1 rounded-lg transition-all inline-flex items-center gap-1 cursor-pointer"
+                                                       title="Cancel this unpaid / pending invoice"
+                                                    >
+                                                       <XCircle size={12} /> Cancel Invoice
+                                                    </button>
+                                                 )}
+                                                 
+                                                 {inv.paid ? (
+                                                    <button
+                                                       onClick={() => {
+                                                          setResendingConfirmationBooking(b);
+                                                          setResendNotifyAdmins(true);
+                                                          setResendNotifyGuest(true);
+                                                       }}
+                                                       className="text-[10px] font-bold text-teal-600 hover:text-teal-800 bg-teal-50 hover:bg-teal-100 border border-teal-200 px-2.5 py-1 rounded-lg transition-all inline-flex items-center gap-1 cursor-pointer"
+                                                    >
+                                                       <Mail size={12} /> Resend Paid Receipt
+                                                    </button>
+                                                 ) : (
+                                                    <button
+                                                       onClick={() => handleResendInvoice(b)}
+                                                       disabled={sendingInvoiceId === b.id}
+                                                       className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1 rounded-lg transition-all inline-flex items-center gap-1 disabled:opacity-50 cursor-pointer"
+                                                    >
+                                                       {sendingInvoiceId === b.id ? "Sending..." : "Resend Email"}
+                                                    </button>
+                                                 )}
+                                              </>
                                            )}
-                                           
-                                            {inv.paid ? (
-                                               <button
-                                                  onClick={() => {
-                                                     setResendingConfirmationBooking(b);
-                                                     setResendNotifyAdmins(true);
-                                                     setResendNotifyGuest(true);
-                                                  }}
-                                                  className="text-[10px] font-bold text-teal-600 hover:text-teal-800 bg-teal-50 hover:bg-teal-100 border border-teal-200 px-2.5 py-1 rounded-lg transition-all inline-flex items-center gap-1 cursor-pointer"
-                                               >
-                                                  <Mail size={12} /> Resend Paid Receipt
-                                               </button>
-                                            ) : (
-                                               <button
-                                                  onClick={() => handleResendInvoice(b)}
-                                                  disabled={sendingInvoiceId === b.id}
-                                                  className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1 rounded-lg transition-all inline-flex items-center gap-1 disabled:opacity-50 cursor-pointer"
-                                               >
-                                                  {sendingInvoiceId === b.id ? "Sending..." : "Resend Email"}
-                                               </button>
-                                            )}
-                                         </div>
+                                        </div>
                                      </td>
                                   </tr>
                                );
