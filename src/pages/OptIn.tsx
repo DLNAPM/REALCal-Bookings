@@ -66,6 +66,15 @@ export const OptIn: React.FC = () => {
   const [isPreviewAction, setIsPreviewAction] = React.useState(false);
   const [smsConsent, setSmsConsent] = React.useState(false);
 
+  // Automatically check the box if user is logged in and has already opted in
+  React.useEffect(() => {
+    if (user && user.tollFreeAccept === true) {
+      setSmsConsent(true);
+    } else if (user && user.tollFreeAccept === false) {
+      setSmsConsent(false);
+    }
+  }, [user?.tollFreeAccept, user?.uid]);
+
   const handleSignIn = async () => {
     try {
       await signIn();
@@ -74,11 +83,13 @@ export const OptIn: React.FC = () => {
     }
   };
 
-  const handleConsent = async (accepted: boolean) => {
+  const handleConsent = async (acceptedPreference?: boolean) => {
+    const targetConsent = acceptedPreference !== undefined ? acceptedPreference : smsConsent;
+
     if (!user) {
       // Preview mode behavior
       setIsPreviewAction(true);
-      if (accepted) {
+      if (targetConsent) {
         setShowSuccess(true);
       } else {
         setShowDeclineMessage(true);
@@ -88,16 +99,13 @@ export const OptIn: React.FC = () => {
 
     if (!db) return;
     const userPath = `users/${user.uid}`;
-    
-    // tollFreeAccept will store the SMS preference (true = opt-in, false = opt-out)
-    const finalPreference = accepted ? smsConsent : false;
 
     try {
       await setDoc(doc(db, 'users', user.uid), {
-        tollFreeAccept: finalPreference
+        tollFreeAccept: targetConsent
       }, { merge: true });
       
-      if (finalPreference) {
+      if (targetConsent) {
         setShowSuccess(true);
       } else {
         setShowDeclineMessage(true);
@@ -163,7 +171,7 @@ export const OptIn: React.FC = () => {
                           transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
                           className="bg-indigo-600 text-white text-[10px] sm:text-[11px] font-black uppercase tracking-wider px-2 sm:px-2.5 py-1.5 rounded-lg shadow-md flex items-center gap-1.5 shadow-indigo-200 border border-indigo-500 whitespace-nowrap"
                         >
-                          Click here to Accept
+                          Click to Check Box
                           <Pointer size={11} style={{ transform: 'rotate(135deg)' }} className="text-white fill-white shrink-0" />
                         </motion.span>
                       </motion.div>
@@ -171,9 +179,9 @@ export const OptIn: React.FC = () => {
                   </AnimatePresence>
                   <div className={cn(
                     "w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center shrink-0",
-                    smsConsent ? "bg-indigo-600 border-indigo-600" : "bg-white border-slate-300"
+                    smsConsent ? "bg-indigo-600 border-indigo-600 shadow-md shadow-indigo-200" : "bg-white border-slate-300 hover:border-indigo-400"
                   )}>
-                    {smsConsent && <Check size={20} className="text-white" />}
+                    {smsConsent && <Check size={20} className="text-white stroke-[3]" />}
                   </div>
                 </div>
                 <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mb-6 shadow-sm text-indigo-600 group-hover:scale-110 transition-transform">
@@ -183,11 +191,18 @@ export const OptIn: React.FC = () => {
                 <p className="text-sm text-slate-500 leading-relaxed italic">
                   Receive reservation confirmations, reminders, and YAMIRY smart lock access code updates via automated text messaging (SMS).
                 </p>
-                {smsConsent && (
+                {smsConsent ? (
                   <div className="mt-6 flex items-center gap-2">
-                    <div className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
-                      Consent Selected
+                    <div className="px-3.5 py-1.5 bg-green-100 text-green-700 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 border border-green-200">
+                      <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                      {user?.tollFreeAccept === true ? "Opted-In (Checked)" : "Consent Selected"}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-6 flex items-center gap-2">
+                    <div className="px-3.5 py-1.5 bg-amber-100 text-amber-800 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 border border-amber-200">
+                      <span className="w-2 h-2 bg-amber-500 rounded-full"></span>
+                      Unchecked (Opted-Out)
                     </div>
                   </div>
                 )}
@@ -213,26 +228,40 @@ export const OptIn: React.FC = () => {
                 <div className="flex-1 bg-slate-100 animate-pulse h-14 rounded-2xl"></div>
               ) : (
                 <>
-                  <div className="flex-1 flex flex-col sm:flex-row gap-4">
-                    <button 
-                      onClick={() => handleConsent(true)}
-                      className="flex-1 bg-indigo-600 text-white font-bold py-4 rounded-2xl shadow-lg shadow-indigo-200 hover:bg-indigo-500 transition-all transform hover:-translate-y-0.5"
-                    >
-                      Accept and Continue
-                    </button>
-                    <button 
-                      onClick={() => handleConsent(false)}
-                      disabled={smsConsent}
-                      className={cn(
-                        "px-8 py-4 font-bold transition-all",
-                        smsConsent 
-                          ? "text-slate-200 cursor-not-allowed opacity-50" 
-                          : "text-slate-400 hover:text-slate-600 cursor-pointer"
-                      )}
-                    >
-                      Decline
-                    </button>
-                  </div>
+                  {smsConsent ? (
+                    <div className="flex-1 flex flex-col sm:flex-row gap-4">
+                      <button 
+                        onClick={() => handleConsent(true)}
+                        className="flex-1 bg-indigo-600 text-white font-bold py-4 rounded-2xl shadow-lg shadow-indigo-200 hover:bg-indigo-500 transition-all transform hover:-translate-y-0.5 cursor-pointer"
+                      >
+                        {user?.tollFreeAccept === true ? 'Save Preferences (Stay Opted-In)' : 'Accept and Continue'}
+                      </button>
+                      <button 
+                        onClick={() => {
+                          setSmsConsent(false);
+                          handleConsent(false);
+                        }}
+                        className="px-6 py-4 font-bold text-slate-500 hover:text-rose-600 transition-colors cursor-pointer"
+                      >
+                        Opt-Out
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex-1 flex flex-col sm:flex-row gap-4">
+                      <button 
+                        onClick={() => handleConsent(false)}
+                        className="flex-1 bg-amber-600 text-white font-bold py-4 rounded-2xl shadow-lg shadow-amber-200 hover:bg-amber-500 transition-all transform hover:-translate-y-0.5 cursor-pointer"
+                      >
+                        Save Opt-Out Preference
+                      </button>
+                      <button 
+                        onClick={() => setSmsConsent(true)}
+                        className="px-6 py-4 font-bold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
+                      >
+                        Check Box to Opt-In
+                      </button>
+                    </div>
+                  )}
                 </>
               )}
             </div>

@@ -2986,7 +2986,7 @@ async function startServer() {
         const diffDaysToEnd = Math.ceil((new Date(b.checkOut + 'T12:00:00').getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
         if (diffDaysToEnd <= 5 && diffDaysToEnd >= 0 && !b.sentRenewalNotification && !b.checkedOut) {
           const stayDays = Math.max(1, Math.round((new Date(b.checkOut).getTime() - new Date(b.checkIn).getTime()) / (1000 * 60 * 60 * 24)));
-          const hostUrl = req?.headers?.origin || "https://realcal.app/";
+          const hostUrl = "https://realcal.app/";
           const msgText = `Invoice Renewal Notice: Hi ${guestName}, your stay at ${propertyName} is scheduled to end on ${b.checkOut} (${stayDays} days). Do you plan to renew your stay for another ${stayDays} days? Log in to your portal at ${hostUrl}my-bookings to select Yes or No and secure your renewal.`;
 
           console.log(`[Reminders] Sending 5-day invoice renewal alert to ${guestName} for booking ${doc.id}`);

@@ -6,7 +6,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { 
   Calendar as CalendarIcon, Key, LogOut, ChevronRight, Lock, BellRing, 
   ShieldCheck, MessageSquare, HelpCircle, MapPin, Ticket, Sparkles, 
-  Music, Trophy, Compass, Smile, RotateCw, RefreshCw
+  Music, Trophy, Compass, Smile, RotateCw, RefreshCw, CheckCircle2
 } from 'lucide-react';
 import { Property, getImageUrl } from '../types';
 import { PrivacyPolicyModal } from '../components/PrivacyPolicyModal';
@@ -169,11 +169,19 @@ export const Home: React.FC = () => {
                                 </Link>
                                 <Link 
                                   to="/opt-in" 
-                                  className="text-slate-600 hover:text-indigo-600 font-bold flex items-center gap-1 text-xs sm:text-sm transition-colors rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 hover:bg-slate-50"
-                                  title="Opt-in Preferences"
+                                  className={cn(
+                                    "font-bold flex items-center gap-1.5 text-xs sm:text-sm transition-all rounded-lg px-2 sm:px-3 py-1.5 sm:py-2",
+                                    user?.tollFreeAccept 
+                                      ? "text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-200/60 shadow-2xs" 
+                                      : "text-slate-600 hover:text-indigo-600 hover:bg-slate-50"
+                                  )}
+                                  title={user?.tollFreeAccept ? "SMS Notifications Opted-In" : "Opt-in Preferences"}
                                 >
-                                    <MessageSquare size={15}/>
-                                    <span className="hidden md:inline">Opt-in</span>
+                                    <MessageSquare size={15} className={user?.tollFreeAccept ? "text-emerald-600" : ""} />
+                                    <span className="hidden md:inline">{user?.tollFreeAccept ? "Opted-in" : "Opt-in"}</span>
+                                    {user?.tollFreeAccept && (
+                                      <CheckCircle2 size={13} className="text-emerald-600 inline shrink-0" />
+                                    )}
                                 </Link>
                                 <div className="flex items-center gap-2 bg-white py-1 pl-1 pr-2 sm:pr-4 rounded-full border border-slate-200 shadow-sm">
                                   {user.photoURL && <img src={user.photoURL} alt="Avatar" className="w-6 h-6 sm:w-8 sm:h-8 rounded-full" referrerPolicy="no-referrer" />}

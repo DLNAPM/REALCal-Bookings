@@ -1,7 +1,9 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 
 export const LegalFooter: React.FC = () => {
+    const { user } = useAuth();
     return (
         <footer className="w-full max-w-7xl mx-auto px-6 py-12 border-t border-slate-100 text-center flex flex-col items-center gap-4">
             <div className="flex flex-col items-center gap-1">
@@ -24,7 +26,7 @@ export const LegalFooter: React.FC = () => {
                     Terms of Service
                 </Link>
                 <Link to="/opt-in" className="text-xs text-slate-500 hover:text-indigo-600 font-bold uppercase tracking-widest transition-colors">
-                    Opt-In & Consent
+                    {user?.tollFreeAccept ? "Opted-In & Consent" : "Opt-In & Consent"}
                 </Link>
             </div>
             
