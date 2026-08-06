@@ -103,6 +103,9 @@ export interface Booking {
   agreedToHouseRules?: boolean;
   agreedToBookingAgreement?: boolean;
   agreementsAcceptedAt?: string;
+  renewalDecision?: 'yes' | 'no' | 'pending' | 'renewed';
+  sentRenewalNotification?: boolean;
+  sentRenewalNotificationAt?: string;
 }
 
 export interface GlobalSettings {

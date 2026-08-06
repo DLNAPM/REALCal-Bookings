@@ -1618,6 +1618,104 @@ async function startServer() {
     }
   });
 
+  app.post("/api/create-renewal-checkout-session", async (req, res) => {
+    try {
+      const { bookingId, newCheckIn, newCheckOut, stayDays, renewalGrandTotal } = req.body;
+      if (!bookingId || !newCheckIn || !newCheckOut || !renewalGrandTotal) {
+        return res.status(400).json({ error: "Missing required renewal details." });
+      }
+
+      const key = process.env.STRIPE_SECRET_KEY;
+      const isStripeMissing = !key || key === "sk_test_..." || key.trim() === "";
+
+      let activeDb = db;
+      if (!activeDb) {
+        const configPath = path.resolve(process.cwd(), "firebase-applet-config.json");
+        if (fs.existsSync(configPath)) {
+          const firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+          if (admin.apps.length === 0) {
+            admin.initializeApp({ projectId: firebaseConfig.projectId });
+          }
+          activeDb = getFirestore(admin.app(), firebaseConfig.firestoreDatabaseId || "(default)");
+        }
+      }
+
+      if (!activeDb) {
+        return res.status(500).json({ error: "Database not initialized" });
+      }
+
+      const bookingRef = activeDb.collection('bookings').doc(bookingId);
+      const bookingDoc = await bookingRef.get();
+      if (!bookingDoc.exists) {
+        return res.status(404).json({ error: `Booking with ID ${bookingId} not found` });
+      }
+
+      const bookingData = bookingDoc.data() || {};
+      const propertyId = bookingData.propertyId;
+      const propSnap = await activeDb.collection('properties').doc(propertyId).get();
+      const propertyName = propSnap.exists ? propSnap.data().name : "Lodging Property";
+
+      const referer = req.headers.referer || "";
+      let hostUrl = referer;
+      if (referer) {
+         try {
+           const parsed = new URL(referer);
+           hostUrl = parsed.origin;
+         } catch {
+           hostUrl = `${req.protocol}://${req.get('host')}`;
+         }
+      } else {
+        hostUrl = `${req.protocol}://${req.get('host')}`;
+      }
+      
+      if (!hostUrl.endsWith('/')) {
+         hostUrl = hostUrl + '/';
+      }
+
+      const successUrl = `${hostUrl}my-bookings?checkout=renewal_success&bookingId=${bookingId}&newCheckIn=${newCheckIn}&newCheckOut=${newCheckOut}&amount=${renewalGrandTotal}&stayDays=${stayDays}`;
+
+      if (isStripeMissing) {
+        console.log(`[Server] Stripe keys are not configured. Returning mock checkout URL for renewal booking ID ${bookingId}`);
+        return res.json({ url: successUrl, isMock: true });
+      }
+
+      const stripe = new Stripe(key);
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        line_items: [
+          {
+            price_data: {
+              currency: 'usd',
+              product_data: {
+                name: `${stayDays}-Day Stay Renewal at ${propertyName}`,
+                description: `Stay extension from ${newCheckIn} to ${newCheckOut}`,
+              },
+              unit_amount: Math.round(Number(renewalGrandTotal) * 100),
+            },
+            quantity: 1,
+          },
+        ],
+        mode: 'payment',
+        success_url: successUrl,
+        cancel_url: `${hostUrl}my-bookings`,
+        customer_email: bookingData.guestEmail || undefined,
+        metadata: {
+          bookingId: bookingId,
+          type: 'renewal_charge',
+          newCheckIn,
+          newCheckOut,
+          stayDays: String(stayDays),
+          amount: String(renewalGrandTotal)
+        }
+      });
+
+      res.json({ url: session.url });
+    } catch (e: any) {
+      console.error("Error creating renewal checkout session:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   app.post("/api/complete-booking-checkout", async (req, res) => {
     try {
       const { bookingId } = req.body;
@@ -2882,6 +2980,34 @@ async function startServer() {
           updateFields.updatedAt = admin.firestore.FieldValue.serverTimestamp();
           await db.collection("bookings").doc(doc.id).update(updateFields);
           console.log(`[Reminders] Updated booking ${doc.id} flags:`, updateFields);
+        }
+
+        // 5-Day Invoice Renewal Notification Check
+        const diffDaysToEnd = Math.ceil((new Date(b.checkOut + 'T12:00:00').getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        if (diffDaysToEnd <= 5 && diffDaysToEnd >= 0 && !b.sentRenewalNotification && !b.checkedOut) {
+          const stayDays = Math.max(1, Math.round((new Date(b.checkOut).getTime() - new Date(b.checkIn).getTime()) / (1000 * 60 * 60 * 24)));
+          const hostUrl = req?.headers?.origin || "https://realcal.app/";
+          const msgText = `Invoice Renewal Notice: Hi ${guestName}, your stay at ${propertyName} is scheduled to end on ${b.checkOut} (${stayDays} days). Do you plan to renew your stay for another ${stayDays} days? Log in to your portal at ${hostUrl}my-bookings to select Yes or No and secure your renewal.`;
+
+          console.log(`[Reminders] Sending 5-day invoice renewal alert to ${guestName} for booking ${doc.id}`);
+          if (useSmtpEmail && guestEmail) {
+            try {
+              await sendSmtpEmail({
+                to: guestEmail,
+                subject: `[ACTION REQUIRED] Invoice Renewal Notice: Extend your stay at ${propertyName}`,
+                text: msgText
+              });
+            } catch (e: any) { console.error(`[Reminders] Failed to send renewal email:`, e.message); }
+          }
+          if (twilioClient && guestPhone && tFrom) {
+            try {
+              await twilioClient.messages.create({ body: msgText, from: tFrom, to: guestPhone });
+            } catch (e: any) { console.error(`[Reminders] Failed to send renewal SMS:`, e.message); }
+          }
+          await db.collection("bookings").doc(doc.id).update({
+            sentRenewalNotification: true,
+            sentRenewalNotificationAt: admin.firestore.FieldValue.serverTimestamp()
+          });
         }
       }
     } catch (err: any) {
