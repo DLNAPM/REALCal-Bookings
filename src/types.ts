@@ -11,6 +11,7 @@ export interface Property {
   location?: string;
   description: string;
   images: (string | PropertyImage)[];
+  promoVideoUrl?: string;
   isTestProperty?: boolean;
   hasSmartLock?: boolean;
   frontDoorCode?: string;

@@ -6,7 +6,7 @@ import { Navigate, useNavigate, Link } from 'react-router-dom';
 import { format, eachDayOfInterval, parseISO, addDays } from 'date-fns';
 import { cn } from '../lib/utils';
 import { BlackoutDate, PricingRule, Booking, Property, PropertyManager, PropertyImage, getImageUrl, getImageRoomNumber, DiscountCode } from '../types';
-import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight, RefreshCw, MessageSquare, CheckCircle, Loader2, FileText, XCircle, HelpCircle, MapPin, Upload, Database, Ticket, Send, Clock, Bell, FileCheck, RotateCw, CheckSquare, Copy, Search, X, AlertTriangle } from 'lucide-react';
+import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight, RefreshCw, MessageSquare, CheckCircle, Loader2, FileText, XCircle, HelpCircle, MapPin, Upload, Database, Ticket, Send, Clock, Bell, FileCheck, RotateCw, CheckSquare, Copy, Search, X, AlertTriangle, Video } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 const formatPhoneE164 = (phone: string) => {
@@ -66,6 +66,56 @@ export const AdminDashboard: React.FC = () => {
   const [propertyManagers, setPropertyManagers] = useState<PropertyManager[]>([]);
   const [editingManagerId, setEditingManagerId] = useState<string | null>(null);
   const [editingBedrooms, setEditingBedrooms] = useState<{ roomNumber: string; roomLockNumber: string; type: 'Master Bed' | 'Guest Bedroom'; sqFt: number; fee: number; maxCapacity?: number }[]>([]);
+  const [createPromoVideoUrl, setCreatePromoVideoUrl] = useState<string>('');
+  const [editPromoVideoUrl, setEditPromoVideoUrl] = useState<string>('');
+
+  const handleVideoFileUpload = (e: React.ChangeEvent<HTMLInputElement>, isEdit: boolean) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      if (file.size > 50 * 1024 * 1024) {
+          alert("Video file size is too large (max 50MB). Please enter a YouTube, Vimeo, or Hosted Video URL instead, or upload a smaller clip.");
+          return;
+      }
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+          const result = evt.target?.result as string;
+          if (result) {
+              if (isEdit) {
+                  setEditPromoVideoUrl(result);
+              } else {
+                  setCreatePromoVideoUrl(result);
+              }
+          }
+      };
+      reader.readAsDataURL(file);
+  };
+
+  const renderAdminVideoPreview = (url: string) => {
+      if (!url) return null;
+      const ytMatch = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+      if (ytMatch && ytMatch[1]) {
+          return (
+              <iframe
+                  src={`https://www.youtube.com/embed/${ytMatch[1]}`}
+                  title="Video Preview"
+                  className="w-full h-40 rounded-xl border-0"
+              />
+          );
+      }
+      const vimeoMatch = url.match(/vimeo\.com\/(?:channels\/(?:\w+\/)?|groups\/(?:[^\/]*)\/videos\/|album\/(?:\d+)\/video\/|video\/|)(\d+)/);
+      if (vimeoMatch && vimeoMatch[1]) {
+          return (
+              <iframe
+                  src={`https://player.vimeo.com/video/${vimeoMatch[1]}`}
+                  title="Video Preview"
+                  className="w-full h-40 rounded-xl border-0"
+              />
+          );
+      }
+      return (
+          <video src={url} controls className="w-full h-40 rounded-xl object-cover bg-black" />
+      );
+  };
   
   // Manual booking states
   const [manualBookingPropId, setManualBookingPropId] = useState<string>('');
@@ -278,13 +328,16 @@ export const AdminDashboard: React.FC = () => {
         if (prop) {
             setEditingBedrooms(prop.bedrooms || []);
             setEditHasSmartLock(prop.hasSmartLock || false);
+            setEditPromoVideoUrl(prop.promoVideoUrl || '');
         } else {
             setEditingBedrooms([]);
             setEditHasSmartLock(false);
+            setEditPromoVideoUrl('');
         }
     } else {
         setEditingBedrooms([]);
         setEditHasSmartLock(false);
+        setEditPromoVideoUrl('');
     }
   }, [activePropertyId, properties]);
 
@@ -521,10 +574,12 @@ export const AdminDashboard: React.FC = () => {
       const fd = new FormData(e.target as HTMLFormElement);
       try {
           const hasSmartLock = fd.get('hasSmartLock') === 'on';
+          const promoVideoUrl = (fd.get('promoVideoUrl') as string) || createPromoVideoUrl || '';
           const docRef = await addDoc(collection(db, 'properties'), {
               name: fd.get('name') as string,
               location: fd.get('location') as string,
               description: fd.get('description') as string,
+              promoVideoUrl,
               images: previewImages,
               hasSmartLock,
               frontDoorCode: hasSmartLock ? (fd.get('frontDoorCode') as string || '') : '',
@@ -534,6 +589,7 @@ export const AdminDashboard: React.FC = () => {
           });
           (e.target as HTMLFormElement).reset();
           setPreviewImages([]);
+          setCreatePromoVideoUrl('');
           setCreateHasSmartLock(false);
           setActivePropertyId(docRef.id);
           alert("Property created and selected for editing!");
@@ -1011,6 +1067,7 @@ export const AdminDashboard: React.FC = () => {
               name: fd.get('name') as string,
               location: fd.get('location') as string,
               description: fd.get('description') as string,
+              promoVideoUrl: (fd.get('promoVideoUrl') as string) || editPromoVideoUrl || '',
               hasSmartLock,
               frontDoorCode: hasSmartLock ? (fd.get('frontDoorCode') as string || '') : '',
               allowIndividualRoomRental: fd.get('allowIndividualRoomRental') === 'on',
@@ -4797,6 +4854,58 @@ C.&S.H. Group Properties, LLC
                       <input name="location" required placeholder="Location (City, State)" className="w-full border border-slate-200 rounded-xl p-3 bg-white shadow-sm" />
                      <textarea name="description" required placeholder="Description..." rows={3} className="w-full border border-slate-200 rounded-xl p-3 bg-white shadow-sm" />
                      
+                     {/* Promotional Video Section */}
+                     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+                         <div className="flex justify-between items-center">
+                             <label className="font-bold text-xs uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                                 <Video size={16} className="text-indigo-600" /> Promotional Video (Optional)
+                             </label>
+                             {createPromoVideoUrl && (
+                                 <button
+                                     type="button"
+                                     onClick={() => setCreatePromoVideoUrl('')}
+                                     className="text-xs text-rose-600 hover:text-rose-700 font-bold flex items-center gap-1 cursor-pointer"
+                                 >
+                                     <X size={14} /> Clear Video
+                                 </button>
+                             )}
+                         </div>
+
+                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                             <div>
+                                 <label className="text-[11px] font-semibold text-slate-500 block mb-1">Enter Video URL (YouTube, Vimeo, MP4 link)</label>
+                                 <input
+                                     type="text"
+                                     name="promoVideoUrl"
+                                     value={createPromoVideoUrl}
+                                     onChange={(e) => setCreatePromoVideoUrl(e.target.value)}
+                                     placeholder="e.g. https://www.youtube.com/watch?v=... or MP4 URL"
+                                     className="w-full border border-slate-200 rounded-xl p-2.5 text-xs bg-white shadow-xs focus:ring-2 focus:ring-indigo-100 outline-none"
+                                 />
+                             </div>
+
+                             <div>
+                                 <label className="text-[11px] font-semibold text-slate-500 block mb-1">OR Upload Video File (MP4/WebM)</label>
+                                 <label className="w-full border border-dashed border-indigo-200 hover:border-indigo-400 bg-indigo-50/50 hover:bg-indigo-50 rounded-xl p-2 text-xs font-bold text-indigo-700 flex items-center justify-center gap-2 cursor-pointer transition-colors h-[38px]">
+                                     <Upload size={14} /> {createPromoVideoUrl ? 'Replace Video File' : 'Choose Video File'}
+                                     <input
+                                         type="file"
+                                         accept="video/*"
+                                         className="hidden"
+                                         onChange={(e) => handleVideoFileUpload(e, false)}
+                                     />
+                                 </label>
+                             </div>
+                         </div>
+
+                         {createPromoVideoUrl && (
+                             <div className="mt-2 p-2 bg-slate-900 rounded-xl border border-slate-800">
+                                 <div className="text-[10px] font-bold uppercase tracking-wider text-indigo-400 mb-1">Video Preview</div>
+                                 {renderAdminVideoPreview(createPromoVideoUrl)}
+                             </div>
+                         )}
+                     </div>
+                     
                      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                          <div className="flex justify-between items-center mb-2">
                              <span className="font-medium text-slate-700">Images ({previewImages.length}/35)</span>
@@ -4890,6 +4999,60 @@ C.&S.H. Group Properties, LLC
                              <input name="name" defaultValue={p.name} required placeholder="Property Name" className="w-full border border-slate-200 rounded-xl p-3 bg-white shadow-sm" />
                               <input name="location" defaultValue={p.location} required placeholder="Location (City, State)" className="w-full border border-slate-200 rounded-xl p-3 bg-white shadow-sm" />
                              <textarea name="description" defaultValue={p.description} required placeholder="Description..." rows={5} className="w-full border border-slate-200 rounded-xl p-3 bg-white shadow-sm" />
+                             
+                             {/* Promotional Video Section */}
+                             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+                                 <div className="flex justify-between items-center">
+                                     <label className="font-bold text-xs uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                                         <Video size={16} className="text-indigo-600" /> Promotional Video
+                                     </label>
+                                     {editPromoVideoUrl && (
+                                         <button
+                                             type="button"
+                                             onClick={() => setEditPromoVideoUrl('')}
+                                             className="text-xs text-rose-600 hover:text-rose-700 font-bold flex items-center gap-1 cursor-pointer"
+                                         >
+                                             <X size={14} /> Remove Video
+                                         </button>
+                                     )}
+                                 </div>
+
+                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                     <div>
+                                         <label className="text-[11px] font-semibold text-slate-500 block mb-1">Video URL (YouTube, Vimeo, MP4 link)</label>
+                                         <input
+                                             type="text"
+                                             name="promoVideoUrl"
+                                             value={editPromoVideoUrl}
+                                             onChange={(e) => setEditPromoVideoUrl(e.target.value)}
+                                             placeholder="e.g. https://www.youtube.com/watch?v=... or MP4 URL"
+                                             className="w-full border border-slate-200 rounded-xl p-2.5 text-xs bg-white shadow-xs focus:ring-2 focus:ring-indigo-100 outline-none"
+                                         />
+                                     </div>
+
+                                     <div>
+                                         <label className="text-[11px] font-semibold text-slate-500 block mb-1">OR Upload Video File (MP4/WebM)</label>
+                                         <label className="w-full border border-dashed border-indigo-200 hover:border-indigo-400 bg-indigo-50/50 hover:bg-indigo-50 rounded-xl p-2 text-xs font-bold text-indigo-700 flex items-center justify-center gap-2 cursor-pointer transition-colors h-[38px]">
+                                             <Upload size={14} /> {editPromoVideoUrl ? 'Replace Video File' : 'Upload Video File'}
+                                             <input
+                                                 type="file"
+                                                 accept="video/*"
+                                                 className="hidden"
+                                                 onChange={(e) => handleVideoFileUpload(e, true)}
+                                             />
+                                         </label>
+                                     </div>
+                                 </div>
+
+                                 {editPromoVideoUrl ? (
+                                     <div className="mt-2 p-2 bg-slate-900 rounded-xl border border-slate-800">
+                                         <div className="text-[10px] font-bold uppercase tracking-wider text-indigo-400 mb-1">Current Video Preview</div>
+                                         {renderAdminVideoPreview(editPromoVideoUrl)}
+                                     </div>
+                                 ) : (
+                                     <p className="text-[11px] text-slate-400 italic">No promotional video set for this property.</p>
+                                 )}
+                             </div>
                              
                              <div className="flex flex-wrap gap-6 items-center">
                                  <label className="flex items-center gap-2 font-medium cursor-pointer text-slate-600">
