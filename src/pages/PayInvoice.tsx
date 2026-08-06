@@ -95,8 +95,11 @@ export const PayInvoice: React.FC = () => {
       const daysLate = inv.daysLate || 0;
       const lateFeePerDay = inv.lateFeePerDay || 0;
       const lateFeeAmount = inv.lateFeeAmount !== undefined ? inv.lateFeeAmount : (daysLate * lateFeePerDay);
-      const stripeFee = inv.stripeFee !== undefined ? inv.stripeFee : Math.round(((baseAmt + lateFeeAmount) * 0.029 + 0.3) * 100) / 100;
-      const grandTotal = inv.grandTotal !== undefined ? inv.grandTotal : (baseAmt + lateFeeAmount + stripeFee);
+      const subtotal = baseAmt + lateFeeAmount;
+      const calculatedGrandTotal = subtotal > 0 ? Math.round((((subtotal + 0.30) / (1 - 0.029)) * (1 + 0.004)) * 100) / 100 : 0;
+      const calculatedStripeFee = subtotal > 0 ? Math.round((calculatedGrandTotal - subtotal) * 100) / 100 : 0;
+      const stripeFee = inv.stripeFee !== undefined ? inv.stripeFee : calculatedStripeFee;
+      const grandTotal = inv.grandTotal !== undefined ? inv.grandTotal : (inv.stripeFee !== undefined ? baseAmt + lateFeeAmount + inv.stripeFee : calculatedGrandTotal);
 
       // 3. Create Checkout Session
       const res = await fetch('/api/create-invoice-checkout-session', {
@@ -165,8 +168,11 @@ export const PayInvoice: React.FC = () => {
   const daysLate = inv.daysLate || 0;
   const lateFeePerDay = inv.lateFeePerDay || 0;
   const lateFeeAmount = inv.lateFeeAmount !== undefined ? inv.lateFeeAmount : (daysLate * lateFeePerDay);
-  const stripeFee = inv.stripeFee !== undefined ? inv.stripeFee : Math.round(((baseAmt + lateFeeAmount) * 0.029 + 0.3) * 100) / 100;
-  const grandTotal = inv.grandTotal !== undefined ? inv.grandTotal : (baseAmt + lateFeeAmount + stripeFee);
+  const subtotal = baseAmt + lateFeeAmount;
+  const calculatedGrandTotal = subtotal > 0 ? Math.round((((subtotal + 0.30) / (1 - 0.029)) * (1 + 0.004)) * 100) / 100 : 0;
+  const calculatedStripeFee = subtotal > 0 ? Math.round((calculatedGrandTotal - subtotal) * 100) / 100 : 0;
+  const stripeFee = inv.stripeFee !== undefined ? inv.stripeFee : calculatedStripeFee;
+  const grandTotal = inv.grandTotal !== undefined ? inv.grandTotal : (inv.stripeFee !== undefined ? baseAmt + lateFeeAmount + inv.stripeFee : calculatedGrandTotal);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 py-12 px-4 sm:px-6 lg:px-8 font-sans selection:bg-indigo-500 selection:text-white">
