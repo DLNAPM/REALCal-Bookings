@@ -6,7 +6,7 @@ import { Navigate, useNavigate, Link } from 'react-router-dom';
 import { format, eachDayOfInterval, parseISO, addDays } from 'date-fns';
 import { cn } from '../lib/utils';
 import { BlackoutDate, PricingRule, Booking, Property, PropertyManager, PropertyImage, getImageUrl, getImageRoomNumber, DiscountCode } from '../types';
-import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight, RefreshCw, MessageSquare, CheckCircle, Loader2, FileText, XCircle, HelpCircle, MapPin, Upload, Database, Ticket, Send, Clock, Bell, FileCheck, RotateCw, CheckSquare, Copy, Search, X, AlertTriangle, Video } from 'lucide-react';
+import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight, RefreshCw, MessageSquare, CheckCircle, Loader2, FileText, XCircle, HelpCircle, MapPin, Upload, Database, Ticket, Send, Clock, Bell, FileCheck, RotateCw, CheckSquare, Copy, Search, X, AlertTriangle, Video, Eraser } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 const formatPhoneE164 = (phone: string) => {
@@ -1581,6 +1581,32 @@ export const AdminDashboard: React.FC = () => {
      }, 100);
 
      alert(`Invoice Renewal Initialized!\n\nOriginal Invoice: #${inv.invoiceNumber || b.bookingRef || b.id}\nStay Duration: ${stayDays} day(s)\n\n• New Check-In: ${newCheckInDateStr}\n• New Check-Out: ${newCheckOutDateStr}\n\nAll details loaded into Create Manual Booking form below. Review and click "Create Booking" or "Email Invoice & Complete Booking" to issue.`);
+  };
+
+  const handleClearManualBookingAndInvoice = () => {
+     setManualBookingPropId('');
+     setManualBookingRooms([]);
+     setManualBookingCheckIn('');
+     setManualBookingCheckOut('');
+     setManualGuestName('');
+     setManualGuestEmail('');
+     setManualGuestPhone('');
+     setManualTotalPrice('');
+     setManualAccessCode('');
+
+     setCreateInvoiceForPayment(false);
+     setShowInvoiceTemplate(false);
+     setPendingBookingData(null);
+
+     setInvoiceSponsorName('');
+     setInvoiceSponsorEmail('');
+     setInvoiceSponsorPhone('');
+     setInvoiceSponsorAddress('');
+     setInvoiceNumber('');
+     setInvoiceDueDate('');
+     setInvoiceCustomNotes('');
+     setInvoiceDaysLate(0);
+     setInvoiceLateFeePerDay(25);
   };
 
   const handleSendInvoiceAndCompleteBooking = async (e: React.FormEvent) => {
@@ -3632,13 +3658,23 @@ C.&S.H. Group Properties, LLC
           <div id="create-manual-booking-form" className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm mt-8">
              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                 <h2 className="text-xl font-bold flex items-center gap-2"><CalendarIcon size={20}/> Create Manual Booking</h2>
-                <button 
-                   type="button" 
-                   onClick={() => setShowDuplicateInvoiceModal(true)} 
-                   className="text-xs font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-3.5 py-2 rounded-xl transition-all flex items-center gap-2 shadow-sm cursor-pointer w-fit"
-                >
-                   <Copy size={15}/> Duplicate Previous Invoice
-                </button>
+                <div className="flex items-center gap-2">
+                   <button 
+                      type="button" 
+                      onClick={handleClearManualBookingAndInvoice} 
+                      className="text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-3.5 py-2 rounded-xl transition-all flex items-center gap-1.5 shadow-sm cursor-pointer w-fit"
+                      title="Clear all form fields and reset New Invoice back to Null/Blank"
+                   >
+                      <Eraser size={15}/> Clear
+                   </button>
+                   <button 
+                      type="button" 
+                      onClick={() => setShowDuplicateInvoiceModal(true)} 
+                      className="text-xs font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-3.5 py-2 rounded-xl transition-all flex items-center gap-2 shadow-sm cursor-pointer w-fit"
+                   >
+                      <Copy size={15}/> Duplicate Previous Invoice
+                   </button>
+                </div>
              </div>
              <form onSubmit={handleAdminCreateBooking} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-8 gap-4 items-end bg-slate-50 p-6 rounded-2xl border border-slate-300 border-dashed">
                 <div className="lg:col-span-1">
@@ -3792,9 +3828,19 @@ C.&S.H. Group Properties, LLC
                          </span>
                       )}
                    </div>
-                   <button type="submit" className="w-full md:w-auto bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-indigo-500 transition-colors shadow-sm">
-                      {createInvoiceForPayment ? "Create & Open Invoice Template" : "Create Override Booking"}
-                   </button>
+                   <div className="flex items-center gap-2 w-full md:w-auto">
+                      <button 
+                         type="button"
+                         onClick={handleClearManualBookingAndInvoice}
+                         className="w-full md:w-auto bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 px-5 py-3 rounded-xl font-bold transition-colors shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+                         title="Clear all manual booking fields and reset invoice back to Null/Blank"
+                      >
+                         <Eraser size={16}/> Clear
+                      </button>
+                      <button type="submit" className="w-full md:w-auto bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-indigo-500 transition-colors shadow-sm cursor-pointer">
+                         {createInvoiceForPayment ? "Create & Open Invoice Template" : "Create Override Booking"}
+                      </button>
+                   </div>
                 </div>
              </form>
           </div>
@@ -5742,15 +5788,26 @@ C.&S.H. Group Properties, LLC
                             Review and update billing details below. The invoice will be automatically emailed to the responsible party to complete this booking override.
                          </p>
                       </div>
-                      <button 
-                         onClick={() => {
-                            setShowInvoiceTemplate(false);
-                            setPendingBookingData(null);
-                         }} 
-                         className="text-slate-400 hover:text-slate-600 transition-colors bg-white border border-slate-200 hover:border-slate-300 px-3 py-1.5 rounded-xl text-xs font-bold"
-                      >
-                         Cancel Override
-                      </button>
+                      <div className="flex items-center gap-2">
+                         <button 
+                            type="button"
+                            onClick={handleClearManualBookingAndInvoice} 
+                            className="text-xs font-bold text-slate-600 hover:text-slate-800 bg-white border border-slate-200 hover:border-slate-300 px-3.5 py-2 rounded-xl transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+                            title="Clear all fields and reset New Invoice back to Null/Blank"
+                         >
+                            <Eraser size={14} /> Clear All
+                         </button>
+                         <button 
+                            type="button"
+                            onClick={() => {
+                               setShowInvoiceTemplate(false);
+                               setPendingBookingData(null);
+                            }} 
+                            className="text-slate-400 hover:text-slate-600 transition-colors bg-white border border-slate-200 hover:border-slate-300 px-3.5 py-2 rounded-xl text-xs font-bold cursor-pointer"
+                         >
+                            Cancel Override
+                         </button>
+                      </div>
                    </div>
 
                    {/* Main Content (Split Side-by-Side: Left fields, Right Preview) */}
