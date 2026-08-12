@@ -2497,23 +2497,36 @@ C.&S.H. Group Properties, LLC
     if (!b || !b.checkIn) {
       return {
         isWithinNonCancelFeeDays: false,
+        isFreeCancellation: true,
+        isManualInvoice: false,
+        isOutsideBookingStartDate: true,
         freeCancelHoursBefore: 48,
         lateCancelFeePercent: 100,
         hoursUntilCheckIn: 0,
         tripDays: 1,
         calculatedLateFee: 0,
-        grandTotal: 0
+        grandTotal: 0,
+        policyDescription: "No booking dates provided."
       };
     }
 
-    const checkInDate = new Date(b.checkIn);
-    const checkOutDate = new Date(b.checkOut || b.checkIn);
+    const checkInStr = b.checkIn.split('T')[0];
+    const checkInDate = new Date(checkInStr + 'T15:00:00');
+    const checkOutDate = new Date(b.checkOut ? b.checkOut.split('T')[0] + 'T11:00:00' : checkInStr + 'T11:00:00');
     const now = new Date();
-    const hoursUntilCheckIn = Math.round((checkInDate.getTime() - now.getTime()) / (1000 * 60 * 60));
-    const tripDays = Math.max(1, Math.round((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24)));
+    const todayStr = now.toISOString().split('T')[0];
+
+    const isManualInvoice = !!(b.invoiceDetails || b.isManualOverride || b.userId === 'admin-override' || b.bookingRef?.startsWith('INV-'));
+    
+    // Check if cancellation date (today) is outside / before the booking start_date
+    const isOutsideBookingStartDate = todayStr < checkInStr || now.getTime() < checkInDate.getTime();
+
+    const inv = b.invoiceDetails || {};
+    const grandTotal = inv.grandTotal !== undefined ? inv.grandTotal : (b.totalPrice ? b.totalPrice / 100 : 0);
 
     let freeCancelHoursBefore = 48;
     let lateCancelFeePercent = 100;
+    const tripDays = Math.max(1, Math.round((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24)));
 
     if (globalSettings?.cancellationRules && globalSettings.cancellationRules.length > 0) {
       const sortedRules = [...globalSettings.cancellationRules].sort((a: any, b: any) => b.minBookingDays - a.minBookingDays);
@@ -2524,20 +2537,36 @@ C.&S.H. Group Properties, LLC
       }
     }
 
+    const hoursUntilCheckIn = Math.round((checkInDate.getTime() - now.getTime()) / (1000 * 60 * 60));
     const isWithinNonCancelFeeDays = hoursUntilCheckIn < freeCancelHoursBefore;
-    
-    const inv = b.invoiceDetails || {};
-    const grandTotal = inv.grandTotal !== undefined ? inv.grandTotal : (b.totalPrice ? b.totalPrice / 100 : 0);
-    const calculatedLateFee = isWithinNonCancelFeeDays ? Math.round(grandTotal * (lateCancelFeePercent / 100) * 100) / 100 : 0;
 
-    const isFreeCancellation = !isWithinNonCancelFeeDays;
-    const policyDescription = isWithinNonCancelFeeDays 
-      ? `Check-in is in ${hoursUntilCheckIn} hours (within the ${freeCancelHoursBefore}-hour non-cancellation window). A ${lateCancelFeePercent}% cancellation fee ($${calculatedLateFee.toFixed(2)}) is assessed.`
-      : `Check-in is in ${hoursUntilCheckIn} hours (outside the ${freeCancelHoursBefore}-hour non-cancellation window). Free cancellation window is active ($0.00 fee).`;
+    let isFreeCancellation = false;
+    let calculatedLateFee = 0;
+    let policyDescription = "";
+
+    if (isManualInvoice && isOutsideBookingStartDate) {
+      isFreeCancellation = true;
+      calculatedLateFee = 0;
+      policyDescription = `Manual Created Invoice: Cancel date (${todayStr}) is outside of the booking start date (${checkInStr}). $0.00 cancellation fee is charged to the guest/customer.`;
+    } else if (isManualInvoice) {
+      isFreeCancellation = false;
+      calculatedLateFee = Math.round(grandTotal * (lateCancelFeePercent / 100) * 100) / 100;
+      policyDescription = `Manual Created Invoice: Cancel date (${todayStr}) is on or after the booking start date (${checkInStr}). A ${lateCancelFeePercent}% cancellation fee ($${calculatedLateFee.toFixed(2)}) is assessed.`;
+    } else if (!isWithinNonCancelFeeDays) {
+      isFreeCancellation = true;
+      calculatedLateFee = 0;
+      policyDescription = `Check-in is in ${hoursUntilCheckIn} hours (outside the ${freeCancelHoursBefore}-hour non-cancellation window). Free cancellation window is active ($0.00 fee).`;
+    } else {
+      isFreeCancellation = false;
+      calculatedLateFee = Math.round(grandTotal * (lateCancelFeePercent / 100) * 100) / 100;
+      policyDescription = `Check-in is in ${hoursUntilCheckIn} hours (within the ${freeCancelHoursBefore}-hour non-cancellation window). A ${lateCancelFeePercent}% cancellation fee ($${calculatedLateFee.toFixed(2)}) is assessed.`;
+    }
 
     return {
       isWithinNonCancelFeeDays,
       isFreeCancellation,
+      isManualInvoice,
+      isOutsideBookingStartDate,
       freeCancelHoursBefore,
       lateCancelFeePercent,
       hoursUntilCheckIn,
