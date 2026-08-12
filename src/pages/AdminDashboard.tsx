@@ -1513,6 +1513,76 @@ export const AdminDashboard: React.FC = () => {
      alert(`Invoice data from #${inv.invoiceNumber || b.bookingRef || b.id} duplicated into Create Manual Booking form!`);
   };
 
+  const handleRenewInvoice = (b: Booking) => {
+     const inv = b.invoiceDetails || {};
+     
+     let stayDays = 1;
+     const originalCheckOutStr = b.checkOut ? b.checkOut.split('T')[0] : '';
+     const originalCheckInStr = b.checkIn ? b.checkIn.split('T')[0] : '';
+
+     if (originalCheckInStr && originalCheckOutStr) {
+       const inDate = new Date(originalCheckInStr + 'T12:00:00');
+       const outDate = new Date(originalCheckOutStr + 'T12:00:00');
+       const diffMs = outDate.getTime() - inDate.getTime();
+       if (diffMs > 0) {
+         stayDays = Math.max(1, Math.round(diffMs / (1000 * 60 * 60 * 24)));
+       }
+     }
+
+     const todayStr = new Date().toISOString().split('T')[0];
+     const newCheckInDateStr = originalCheckOutStr || todayStr;
+     
+     const newCheckInObj = new Date(newCheckInDateStr + 'T12:00:00');
+     const newCheckOutObj = new Date(newCheckInObj.getTime() + stayDays * 24 * 60 * 60 * 1000);
+     const newCheckOutDateStr = newCheckOutObj.toISOString().split('T')[0];
+
+     setManualBookingPropId(b.propertyId || '');
+     setManualBookingCheckIn(newCheckInDateStr);
+     setManualBookingCheckOut(newCheckOutDateStr);
+
+     if (b.selectedBedrooms && Array.isArray(b.selectedBedrooms)) {
+        setManualBookingRooms(b.selectedBedrooms.map((r: any) => typeof r === 'string' ? r : (r.roomNumber || '')));
+     } else if (b.selectedBedroom) {
+        setManualBookingRooms([typeof b.selectedBedroom === 'object' ? b.selectedBedroom.roomNumber : b.selectedBedroom]);
+     } else {
+        setManualBookingRooms([]);
+     }
+
+     const gName = b.guestName || inv.sponsorName || '';
+     const gEmail = b.guestEmail || inv.sponsorEmail || '';
+     const gPhone = b.guestPhone || inv.sponsorPhone || '';
+     const basePrice = inv.baseAmount !== undefined ? String(inv.baseAmount) : String((b.totalPrice || 0) / 100);
+
+     setManualGuestName(gName);
+     setManualGuestEmail(gEmail);
+     setManualGuestPhone(gPhone);
+     setManualTotalPrice(basePrice);
+     setManualAccessCode(b.accessCode || '');
+
+     setCreateInvoiceForPayment(true);
+
+     setInvoiceSponsorName(inv.sponsorName || gName);
+     setInvoiceSponsorEmail(inv.sponsorEmail || gEmail);
+     setInvoiceSponsorPhone(inv.sponsorPhone || gPhone);
+     setInvoiceSponsorAddress(inv.sponsorAddress || '');
+     setInvoiceCustomNotes(inv.customNotes || `Renewal invoice for ${gName} (${stayDays} days stay: ${newCheckInDateStr} to ${newCheckOutDateStr}).`);
+     setInvoiceDaysLate(0);
+     setInvoiceLateFeePerDay(inv.lateFeePerDay || 25);
+     setInvoiceNumber(`INV-RNW-${Math.floor(100000 + Math.random() * 900000)}`);
+     setInvoiceDueDate(newCheckInDateStr);
+
+     setViewingInvoiceBooking(null);
+
+     setTimeout(() => {
+        const formElem = document.getElementById('create-manual-booking-form');
+        if (formElem) {
+           formElem.scrollIntoView({ behavior: 'smooth' });
+        }
+     }, 100);
+
+     alert(`Invoice Renewal Initialized!\n\nOriginal Invoice: #${inv.invoiceNumber || b.bookingRef || b.id}\nStay Duration: ${stayDays} day(s)\n\n• New Check-In: ${newCheckInDateStr}\n• New Check-Out: ${newCheckOutDateStr}\n\nAll details loaded into Create Manual Booking form below. Review and click "Create Booking" or "Email Invoice & Complete Booking" to issue.`);
+  };
+
   const handleSendInvoiceAndCompleteBooking = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!db) return alert("Firebase not configured");
@@ -3559,7 +3629,7 @@ C.&S.H. Group Properties, LLC
               </div>
           </div>
 
-          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm mt-8">
+          <div id="create-manual-booking-form" className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm mt-8">
              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                 <h2 className="text-xl font-bold flex items-center gap-2"><CalendarIcon size={20}/> Create Manual Booking</h2>
                 <button 
@@ -4672,6 +4742,14 @@ C.&S.H. Group Properties, LLC
                                                        {sendingInvoiceId === b.id ? "Sending..." : "Resend Email"}
                                                     </button>
                                                  )}
+
+                                                 <button
+                                                    onClick={() => handleRenewInvoice(b)}
+                                                    className="text-[10px] font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1 rounded-lg transition-all inline-flex items-center gap-1 cursor-pointer"
+                                                    title="Create a renewed invoice defaulting to the same stay length following current check-out"
+                                                 >
+                                                    <RotateCw size={12} /> Renew Invoice
+                                                 </button>
                                               </>
                                            )}
                                         </div>
@@ -6159,9 +6237,19 @@ C.&S.H. Group Properties, LLC
 
                          {/* Dates, Notes & Session IDs block */}
                          <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
-                            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-2">
-                               Transaction Ledger & Metadata
-                            </h4>
+                            <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                                  Transaction Ledger & Metadata
+                               </h4>
+                               <button
+                                  type="button"
+                                  onClick={() => handleRenewInvoice(liveBooking)}
+                                  className="text-xs font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-3 py-1 rounded-lg transition-all inline-flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                                  title="Create a renewed invoice defaulting to the same stay length following current check-out"
+                               >
+                                  <RotateCw size={13} /> Renew Invoice
+                               </button>
+                            </div>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs">
                                <div className="space-y-1">
                                   <span className="text-slate-400 font-bold">INVOICE SENT TIME</span>
@@ -6280,6 +6368,14 @@ C.&S.H. Group Properties, LLC
                             className="text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-500 border border-indigo-700 px-5 py-2.5 rounded-xl transition-all inline-flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
                          >
                             {sendingInvoiceId === liveBooking.id ? 'Sending...' : 'Resend Invoice Email'}
+                         </button>
+
+                         <button
+                            type="button"
+                            onClick={() => handleRenewInvoice(liveBooking)}
+                            className="text-sm font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-5 py-2.5 rounded-xl transition-all inline-flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                         >
+                            <RotateCw size={14} /> Renew Invoice
                          </button>
                       </div>
                    </div>
