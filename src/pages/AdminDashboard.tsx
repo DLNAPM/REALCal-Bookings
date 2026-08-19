@@ -6,7 +6,7 @@ import { Navigate, useNavigate, Link } from 'react-router-dom';
 import { format, eachDayOfInterval, parseISO, addDays } from 'date-fns';
 import { cn } from '../lib/utils';
 import { BlackoutDate, PricingRule, Booking, Property, PropertyManager, PropertyImage, getImageUrl, getImageRoomNumber, DiscountCode } from '../types';
-import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight, RefreshCw, MessageSquare, CheckCircle, Loader2, FileText, XCircle, HelpCircle, MapPin, Upload, Database, Ticket, Send, Clock, Bell, FileCheck, RotateCw, CheckSquare, Copy, Search, X, AlertTriangle, Video, Eraser } from 'lucide-react';
+import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight, RefreshCw, MessageSquare, CheckCircle, Loader2, FileText, XCircle, HelpCircle, MapPin, Upload, Database, Ticket, Send, Clock, Bell, FileCheck, RotateCw, CheckSquare, Copy, Search, X, AlertTriangle, Video, Eraser, Pencil } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 const formatPhoneE164 = (phone: string) => {
@@ -60,6 +60,17 @@ export const AdminDashboard: React.FC = () => {
   const [refreshingUsers, setRefreshingUsers] = useState(false);
   const [pricingTarget, setPricingTarget] = useState<'property' | 'room'>('property');
   const [selectedRoomForPricing, setSelectedRoomForPricing] = useState<string | null>(null);
+  
+  // Pricing Rule Edit States
+  const [editingPricingRule, setEditingPricingRule] = useState<PricingRule | null>(null);
+  const [editRuleType, setEditRuleType] = useState<string>('default');
+  const [editRuleRate, setEditRuleRate] = useState<string>('');
+  const [editRuleName, setEditRuleName] = useState<string>('');
+  const [editRuleStartDate, setEditRuleStartDate] = useState<string>('');
+  const [editRuleEndDate, setEditRuleEndDate] = useState<string>('');
+  const [editRuleTargetType, setEditRuleTargetType] = useState<'property' | 'room'>('property');
+  const [editRuleRoomNumber, setEditRuleRoomNumber] = useState<string>('');
+  const [isUpdatingPricingRule, setIsUpdatingPricingRule] = useState<boolean>(false);
   const [blackoutTarget, setBlackoutTarget] = useState<'property' | 'room'>('property');
   const [selectedRoomForBlackout, setSelectedRoomForBlackout] = useState<string | null>(null);
   const [selectedBlackoutIds, setSelectedBlackoutIds] = useState<string[]>([]);
@@ -624,6 +635,54 @@ export const AdminDashboard: React.FC = () => {
       (e.target as HTMLFormElement).reset();
     } catch (e: any) { alert(e.message); }
   }
+
+  const handleStartEditPricingRule = (rule: PricingRule) => {
+    setEditingPricingRule(rule);
+    setEditRuleType(rule.type || 'default');
+    setEditRuleRate(rule.rate !== undefined ? String(rule.rate) : '');
+    setEditRuleName(rule.name || '');
+    setEditRuleStartDate(rule.startDate || '');
+    setEditRuleEndDate(rule.endDate || '');
+    setEditRuleTargetType(rule.targetType || 'property');
+    setEditRuleRoomNumber(rule.roomNumber || '');
+  };
+
+  const handleUpdatePricingRule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!db) return alert("Firebase not configured");
+    if (!editingPricingRule) return;
+
+    const rateNum = Number(editRuleRate);
+    if (isNaN(rateNum) || rateNum < 0) {
+      return alert("Please enter a valid positive rate.");
+    }
+
+    if (editRuleStartDate && editRuleEndDate) {
+      if (editRuleEndDate < editRuleStartDate) {
+        return alert("End date cannot be before start date.");
+      }
+    }
+
+    setIsUpdatingPricingRule(true);
+    try {
+      const updatePayload: any = {
+        type: editRuleType,
+        rate: rateNum,
+        name: editRuleName.trim() || '',
+        targetType: editRuleTargetType,
+        roomNumber: editRuleTargetType === 'room' ? (editRuleRoomNumber || null) : null,
+        startDate: editRuleStartDate || '',
+        endDate: editRuleEndDate || ''
+      };
+
+      await updateDoc(doc(db, 'pricing_rules', editingPricingRule.id), updatePayload);
+      setEditingPricingRule(null);
+    } catch (err: any) {
+      alert("Failed to update pricing rule: " + err.message);
+    } finally {
+      setIsUpdatingPricingRule(false);
+    }
+  };
 
   const handleCreateBlackout = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -5686,7 +5745,7 @@ C.&S.H. Group Properties, LLC
                              <div>
                                 <div className="flex items-center gap-2">
                                     <span className="font-bold text-slate-800">
-                                       {r.type === 'five_day' ? '5-Day Rate' : r.type === 'daily' ? 'Daily Rate' : r.type === 'weekly' ? 'Weekly Rate' : r.type === 'monthly' ? 'Monthly Rate' : (r.type === 'default' ? 'Default Layer' : r.type)}
+                                       {r.name ? `${r.name} · ` : ''}{r.type === 'five_day' ? '5-Day Rate' : r.type === 'daily' ? 'Daily Rate' : r.type === 'weekly' ? 'Weekly Rate' : r.type === 'monthly' ? 'Monthly Rate' : (r.type === 'default' ? 'Default Layer' : r.type === 'weekend' ? 'Weekend Override' : r.type === 'holiday' ? 'Holiday Promo' : r.type === 'custom' ? 'Custom Range' : r.type)}
                                     </span>
                                     {r.targetType === 'room' && (
                                         <span className="text-[10px] bg-slate-100 text-indigo-600 px-1.5 py-0.5 rounded font-bold">Room {r.roomNumber}</span>
@@ -5694,9 +5753,24 @@ C.&S.H. Group Properties, LLC
                                 </div>
                                 {r.startDate && <span className="text-xs text-slate-500">({r.startDate} to {r.endDate})</span>}
                              </div>
-                             <div className="flex items-center gap-3">
-                                <span className="font-bold text-indigo-600">${(r.rate)}/nt</span>
-                                <button type="button" onClick={() => handleDeletePricingRule(r.id)} className="text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"><Trash2 size={16}/></button>
+                             <div className="flex items-center gap-2">
+                                <span className="font-bold text-indigo-600 mr-1">${(r.rate)}/nt</span>
+                                <button 
+                                   type="button" 
+                                   onClick={() => handleStartEditPricingRule(r)} 
+                                   className="text-slate-400 hover:text-indigo-600 p-1.5 rounded-lg hover:bg-indigo-50 transition-colors cursor-pointer"
+                                   title="Edit Pricing Rule"
+                                >
+                                   <Pencil size={15}/>
+                                </button>
+                                <button 
+                                   type="button" 
+                                   onClick={() => handleDeletePricingRule(r.id)} 
+                                   className="text-slate-300 hover:text-red-500 p-1.5 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
+                                   title="Delete Pricing Rule"
+                                >
+                                   <Trash2 size={15}/>
+                                </button>
                              </div>
                           </div>
                        ))}
@@ -6890,6 +6964,210 @@ C.&S.H. Group Properties, LLC
                 </div>
              </div>
           )}
+
+          {/* Modal for Edit Pricing Rule */}
+          {editingPricingRule && (() => {
+             const ruleProperty = properties.find(p => p.id === (editingPricingRule.propertyId || activePropertyId));
+             const hasBedrooms = ruleProperty && ruleProperty.bedrooms && ruleProperty.bedrooms.length > 0;
+
+             return (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
+                   <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden text-left animate-in zoom-in-95 duration-200">
+                      {/* Modal Header */}
+                      <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+                         <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+                               <Pencil size={18} />
+                            </div>
+                            <div>
+                               <h3 className="text-lg font-bold text-slate-900">Edit Pricing Rule</h3>
+                               <p className="text-xs text-slate-500 font-medium">
+                                  {ruleProperty?.name || 'Property'} &bull; Update rates &amp; conditions
+                               </p>
+                            </div>
+                         </div>
+                         <button 
+                            type="button"
+                            onClick={() => setEditingPricingRule(null)}
+                            className="text-slate-400 hover:text-slate-600 p-2 rounded-full hover:bg-slate-100 transition-colors cursor-pointer"
+                            title="Close modal"
+                         >
+                            <X size={18} />
+                         </button>
+                      </div>
+
+                      {/* Modal Form */}
+                      <form onSubmit={handleUpdatePricingRule} className="p-6 space-y-4">
+                         {/* Target Type selector if property has rooms */}
+                         {hasBedrooms && (
+                            <div>
+                               <label className="text-xs font-bold text-slate-500 uppercase tracking-tight block mb-1.5">Rule Target</label>
+                               <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-xl">
+                                  <button
+                                     type="button"
+                                     onClick={() => {
+                                        setEditRuleTargetType('property');
+                                        setEditRuleRoomNumber('');
+                                     }}
+                                     className={cn(
+                                        "py-2 text-xs font-bold rounded-lg transition-all text-center cursor-pointer",
+                                        editRuleTargetType === 'property' 
+                                           ? "bg-white text-indigo-700 shadow-sm" 
+                                           : "text-slate-600 hover:text-slate-900"
+                                     )}
+                                  >
+                                     Entire Property
+                                  </button>
+                                  <button
+                                     type="button"
+                                     onClick={() => {
+                                        setEditRuleTargetType('room');
+                                        if (!editRuleRoomNumber && ruleProperty?.bedrooms?.[0]) {
+                                           setEditRuleRoomNumber(ruleProperty.bedrooms[0].roomNumber);
+                                        }
+                                     }}
+                                     className={cn(
+                                        "py-2 text-xs font-bold rounded-lg transition-all text-center cursor-pointer",
+                                        editRuleTargetType === 'room' 
+                                           ? "bg-white text-indigo-700 shadow-sm" 
+                                           : "text-slate-600 hover:text-slate-900"
+                                     )}
+                                  >
+                                     Specific Bedroom
+                                  </button>
+                               </div>
+                            </div>
+                         )}
+
+                         {/* Room selector if target is room */}
+                         {editRuleTargetType === 'room' && (
+                            <div>
+                               <label className="text-xs font-bold text-slate-500 uppercase tracking-tight block mb-1">Select Bedroom</label>
+                               <select 
+                                  value={editRuleRoomNumber}
+                                  onChange={(e) => setEditRuleRoomNumber(e.target.value)}
+                                  required
+                                  className="w-full border border-slate-200 rounded-xl p-2.5 bg-white shadow-sm text-sm"
+                               >
+                                  <option value="">Choose a room...</option>
+                                  {ruleProperty?.bedrooms?.map(room => (
+                                     <option key={room.roomNumber} value={room.roomNumber}>
+                                        Room {room.roomNumber} - {room.type}
+                                     </option>
+                                  ))}
+                               </select>
+                            </div>
+                         )}
+
+                         {/* Rule Name / Label (Optional) */}
+                         <div>
+                            <label className="text-xs font-bold text-slate-500 uppercase tracking-tight block mb-1">
+                               Rule Name / Description <span className="text-slate-400 font-normal">(Optional)</span>
+                            </label>
+                            <input 
+                               type="text"
+                               value={editRuleName}
+                               onChange={(e) => setEditRuleName(e.target.value)}
+                               placeholder="e.g. Peak Summer Surge, Midweek Special"
+                               className="w-full border border-slate-200 rounded-xl p-2.5 bg-white shadow-sm text-sm"
+                            />
+                         </div>
+
+                         {/* Rule Type & Rate */}
+                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                               <label className="text-xs font-bold text-slate-500 uppercase tracking-tight block mb-1">Rule Type</label>
+                               <select 
+                                  value={editRuleType}
+                                  onChange={(e) => setEditRuleType(e.target.value)}
+                                  required
+                                  className="w-full border border-slate-200 rounded-xl p-2.5 bg-white shadow-sm text-sm"
+                               >
+                                  <option value="default">Default Layer</option>
+                                  <option value="daily">Daily Pricing Rule</option>
+                                  <option value="five_day">5-Day Pricing Rule</option>
+                                  <option value="weekly">Weekly Pricing Rule</option>
+                                  <option value="monthly">Monthly Pricing Rule</option>
+                                  <option value="weekend">Weekend Override</option>
+                                  <option value="holiday">Holiday Promo/Surge</option>
+                                  <option value="custom">Custom Range</option>
+                               </select>
+                            </div>
+                            <div>
+                               <label className="text-xs font-bold text-slate-500 uppercase tracking-tight block mb-1">Per Night Rate ($)</label>
+                               <div className="relative">
+                                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
+                                  <input 
+                                     type="number"
+                                     step="any"
+                                     min="0"
+                                     required
+                                     value={editRuleRate}
+                                     onChange={(e) => setEditRuleRate(e.target.value)}
+                                     className="w-full border border-slate-200 rounded-xl py-2.5 pl-8 pr-3 bg-white shadow-sm text-sm font-semibold font-mono text-slate-800"
+                                     placeholder="150"
+                                  />
+                               </div>
+                            </div>
+                         </div>
+
+                         {/* Date Range (Start / End Date) */}
+                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                               <label className="text-xs font-bold text-slate-500 uppercase tracking-tight block mb-1">
+                                  Start Date <span className="text-slate-400 font-normal">(Optional)</span>
+                               </label>
+                               <input 
+                                  type="date"
+                                  value={editRuleStartDate}
+                                  onChange={(e) => setEditRuleStartDate(e.target.value)}
+                                  className="w-full border border-slate-200 rounded-xl p-2.5 bg-white shadow-sm text-sm"
+                               />
+                            </div>
+                            <div>
+                               <label className="text-xs font-bold text-slate-500 uppercase tracking-tight block mb-1">
+                                  End Date <span className="text-slate-400 font-normal">(Optional)</span>
+                               </label>
+                               <input 
+                                  type="date"
+                                  value={editRuleEndDate}
+                                  onChange={(e) => setEditRuleEndDate(e.target.value)}
+                                  className="w-full border border-slate-200 rounded-xl p-2.5 bg-white shadow-sm text-sm"
+                               />
+                            </div>
+                         </div>
+
+                         {/* Modal Action Buttons */}
+                         <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                            <button
+                               type="button"
+                               onClick={() => setEditingPricingRule(null)}
+                               disabled={isUpdatingPricingRule}
+                               className="px-5 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-xs transition-all cursor-pointer"
+                            >
+                               Cancel
+                            </button>
+                            <button
+                               type="submit"
+                               disabled={isUpdatingPricingRule}
+                               className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-6 py-2.5 rounded-xl shadow-md shadow-indigo-100 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                            >
+                               {isUpdatingPricingRule ? (
+                                  <>
+                                     <Loader2 size={14} className="animate-spin" /> Saving...
+                                  </>
+                               ) : (
+                                  <>
+                                     <CheckCircle size={14} /> Save Changes
+                                  </>
+                               )}
+                            </button>
+                         </div>
+                      </form>
+                   </div>
+                </div>
+             );
+          })()}
 
        </div>
     </div>
