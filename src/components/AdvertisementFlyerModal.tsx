@@ -198,12 +198,462 @@ export const AdvertisementFlyerModal: React.FC<AdvertisementFlyerModalProps> = (
 
   const printAreaRef = useRef<HTMLDivElement>(null);
 
-  // Trigger browser print
+  // Trigger browser print for 8x10 2-Page layout
   const handlePrint = () => {
-    window.print();
+    const printWindow = window.open('', '_blank', 'width=850,height=1100');
+    if (!printWindow) {
+      window.print();
+      return;
+    }
+
+    const propertyName = selectedProperty?.name || 'Stonewall Villa';
+    const htmlToPrint = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>${propertyName} - 8x10 2-Page Artist Lodging Flyer</title>
+  <style>
+    @page {
+      size: 8in 10in;
+      margin: 0;
+    }
+    * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      background: #f1f5f9;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      color: #0f172a;
+      line-height: 1.35;
+    }
+    .page {
+      width: 8in;
+      height: 10in;
+      max-height: 10in;
+      margin: 0 auto 20px auto;
+      background: #ffffff;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 0.32in 0.38in;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+      position: relative;
+    }
+    @media print {
+      body {
+        background: #ffffff;
+        margin: 0;
+        padding: 0;
+      }
+      .page {
+        width: 8in !important;
+        height: 10in !important;
+        max-height: 10in !important;
+        margin: 0 !important;
+        padding: 0.32in 0.38in !important;
+        box-shadow: none !important;
+        border: none !important;
+        overflow: hidden !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
+      .page-1 {
+        page-break-after: always !important;
+        break-after: page !important;
+      }
+      .page-2 {
+        page-break-before: always !important;
+        break-before: page !important;
+        page-break-after: avoid !important;
+        break-after: avoid !important;
+      }
+    }
+    .header-banner {
+      background: linear-gradient(135deg, #090d16 0%, #17153b 100%);
+      color: #ffffff;
+      padding: 14px 18px;
+      border-radius: 12px;
+      margin-bottom: 10px;
+    }
+    .badge-top {
+      display: inline-block;
+      background: #4f46e5;
+      color: #ffffff;
+      font-size: 8.5px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 2px 8px;
+      border-radius: 999px;
+      margin-bottom: 4px;
+    }
+    .title-main {
+      font-size: 20px;
+      font-weight: 800;
+      margin: 0;
+      letter-spacing: -0.01em;
+      color: #ffffff;
+    }
+    .subtitle-main {
+      font-size: 10.5px;
+      color: #cbd5e1;
+      margin: 3px 0 0 0;
+      font-weight: 500;
+      line-height: 1.3;
+    }
+    .venues-strip {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 6px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      font-size: 9.5px;
+    }
+    .venue-pill {
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      color: #1e1b4b;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 6px;
+    }
+    .section-heading {
+      font-size: 12px;
+      font-weight: 800;
+      color: #0f172a;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1.5px solid #e2e8f0;
+      padding-bottom: 4px;
+      margin-bottom: 8px;
+    }
+    .rooms-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 9px;
+    }
+    .room-card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .room-card img {
+      width: 100%;
+      height: 98px;
+      object-fit: cover;
+      background: #e2e8f0;
+    }
+    .room-content {
+      padding: 7px 9px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      flex: 1;
+    }
+    .room-name-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 2px;
+    }
+    .room-title {
+      font-size: 11px;
+      font-weight: 800;
+      color: #0f172a;
+      line-height: 1.15;
+    }
+    .room-rate-badge {
+      background: #4f46e5;
+      color: #ffffff;
+      font-size: 10px;
+      font-weight: 800;
+      padding: 1px 5px;
+      border-radius: 5px;
+      white-space: nowrap;
+    }
+    .room-sub {
+      font-size: 9px;
+      color: #64748b;
+      margin-bottom: 4px;
+    }
+    .room-features-list {
+      margin: 0;
+      padding-left: 12px;
+      font-size: 8.5px;
+      color: #475569;
+      line-height: 1.35;
+    }
+    .page-footer-strip {
+      background: #f8fafc;
+      border-top: 1px solid #e2e8f0;
+      padding: 6px 12px;
+      border-radius: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 8.5px;
+      color: #64748b;
+      font-weight: 600;
+      margin-top: 6px;
+    }
+    .page-2-header {
+      background: #0f172a;
+      color: #ffffff;
+      padding: 10px 14px;
+      border-radius: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .reviews-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .review-card {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .review-quote {
+      font-size: 9px;
+      color: #334155;
+      font-style: italic;
+      line-height: 1.35;
+      margin: 0 0 6px 0;
+    }
+    .review-author-row {
+      font-size: 8.5px;
+      font-weight: 800;
+      color: #0f172a;
+      border-top: 1px solid #e2e8f0;
+      padding-top: 4px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .amenities-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 7px;
+      margin-bottom: 10px;
+    }
+    .amenity-card {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 7px 9px;
+    }
+    .amenity-title {
+      font-size: 9.5px;
+      font-weight: 800;
+      color: #0f172a;
+      margin-bottom: 2px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .amenity-desc {
+      font-size: 8px;
+      color: #64748b;
+      line-height: 1.25;
+      margin: 0;
+    }
+    .booking-callout {
+      background: linear-gradient(135deg, #090d16 0%, #1e1b4b 100%);
+      color: #ffffff;
+      border-radius: 12px;
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 6px;
+    }
+    .promo-pill {
+      display: inline-block;
+      background: rgba(79, 70, 229, 0.35);
+      border: 1px solid #818cf8;
+      color: #e0e7ff;
+      font-size: 9.5px;
+      font-weight: 800;
+      padding: 2px 8px;
+      border-radius: 6px;
+      margin-top: 3px;
+    }
+  </style>
+</head>
+<body>
+  <!-- PAGE 1: FRONT COVER (SIDE A) -->
+  <div class="page page-1">
+    <div>
+      <div class="header-banner">
+        <div class="badge-top">8x10 Professional Digital 1-Pager • Side A</div>
+        <h1 class="title-main">${propertyName} | Atlanta, GA</h1>
+        <p class="subtitle-main">${flyerSubheadline}</p>
+      </div>
+
+      <div class="venues-strip">
+        <span style="font-weight: 800; color: #475569; text-transform: uppercase; font-size: 8.5px;">📍 Venue Proximity:</span>
+        <span class="venue-pill">St. James Live (8 mins / 4.5 mi)</span>
+        <span class="venue-pill">Wolf Creek Amphitheater (10 mins / 6.2 mi)</span>
+        <span class="venue-pill">ATL Airport (15 mins)</span>
+      </div>
+
+      <div class="section-heading">
+        <span>✨ Luxury Suites, Photo Gallery & Rates</span>
+        <span style="font-size: 9px; font-weight: 600; color: #64748b;">Individual Rooms & Full Villa Buyouts</span>
+      </div>
+
+      <div class="rooms-grid">
+        ${roomRates.map(r => `
+          <div class="room-card">
+            <img src="${r.photoUrl}" alt="${r.name}" />
+            <div class="room-content">
+              <div>
+                <div class="room-name-row">
+                  <span class="room-title">${r.name}</span>
+                  <span class="room-rate-badge">$${r.rate}/nt</span>
+                </div>
+                <div class="room-sub">${r.bedType} &bull; ${r.sqFt} sq ft</div>
+              </div>
+              <ul class="room-features-list">
+                ${r.features.slice(0, 3).map(f => `<li>${f}</li>`).join('')}
+              </ul>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+
+    <div class="page-footer-strip">
+      <span>★ Preferred Venue Rates with Promo Code: <strong style="color: #4f46e5;">${promoCode}</strong></span>
+      <span>Turn Over for Amenities, Reviews & Direct Booking (Side B) ➔</span>
+    </div>
+  </div>
+
+  <!-- PAGE 2: BACK COVER (SIDE B - TWO-SIDED REVERSE) -->
+  <div class="page page-2">
+    <div>
+      <div class="page-2-header">
+        <div>
+          <span style="font-size: 8.5px; font-weight: 800; color: #818cf8; text-transform: uppercase;">8x10 Two-Sided Print Edition • Side B</span>
+          <div style="font-size: 14px; font-weight: 800; color: #ffffff;">${propertyName} • Artist Accommodations & Guest Reviews</div>
+        </div>
+        <div style="font-size: 9px; color: #94a3b8; text-align: right;">
+          Atlanta, Georgia &bull; Direct Management
+        </div>
+      </div>
+
+      <div class="section-heading">
+        <span>⭐️ Verified Touring Guest & Artist Survey Reviews</span>
+        <span style="font-size: 9px; color: #16a34a; font-weight: 700;">100% 5-Star Hospitality</span>
+      </div>
+
+      <div class="reviews-grid">
+        ${surveys.filter(s => selectedSurveyIds.includes(s.id)).slice(0, 2).map(s => `
+          <div class="review-card">
+            <div style="color: #f59e0b; font-size: 10px; margin-bottom: 3px;">★★★★★ <span style="color: #64748b; font-size: 8px; font-weight: 700;">(${s.venueMentioned})</span></div>
+            <p class="review-quote">"${s.comment}"</p>
+            <div class="review-author-row">
+              <span>${s.author}</span>
+              <span style="color: #64748b; font-weight: 500;">${s.role}</span>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+
+      <div class="section-heading">
+        <span>🎸 Tailored Amenities for Performing Artists & Production Teams</span>
+      </div>
+
+      <div class="amenities-grid">
+        <div class="amenity-card">
+          <div class="amenity-title">🔐 Keyless Smart Locks</div>
+          <p class="amenity-desc">Individual YAMIRY digital PIN codes for main estate & private bedroom suites.</p>
+        </div>
+        <div class="amenity-card">
+          <div class="amenity-title">🚐 Tour Van Parking</div>
+          <p class="amenity-desc">Secure private driveway accommodating SUVs, trailers & tour sprinter vans.</p>
+        </div>
+        <div class="amenity-card">
+          <div class="amenity-title">📶 Gigabit Fiber WiFi</div>
+          <p class="amenity-desc">Ultra-fast upload speeds for stems, live-streaming, setlists & HD video.</p>
+        </div>
+        <div class="amenity-card">
+          <div class="amenity-title">🍳 Gourmet Chef Kitchen</div>
+          <p class="amenity-desc">Complete premium cookware, appliances, and 24/7 espresso & coffee bar.</p>
+        </div>
+        <div class="amenity-card">
+          <div class="amenity-title">🕒 Late Show Flexibility</div>
+          <p class="amenity-desc">Flexible check-in / check-out times aligned with concert soundcheck & encores.</p>
+        </div>
+        <div class="amenity-card">
+          <div class="amenity-title">📋 Itemized Direct Billing</div>
+          <p class="amenity-desc">Clean corporate billing & receipts for tour management accounting.</p>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="booking-callout">
+        <div>
+          <div style="font-size: 13px; font-weight: 800; color: #ffffff;">Reserve Artist Suites Direct</div>
+          <div style="font-size: 9.5px; color: #cbd5e1; margin-top: 2px;">
+            Phone: <strong>${contactPhone}</strong> &bull; Email: <strong>${contactEmail}</strong>
+          </div>
+          <div class="promo-pill">
+            Promo Code: <strong>${promoCode}</strong> (${discountDesc})
+          </div>
+        </div>
+        <div style="text-align: right;">
+          <div style="background: #4f46e5; color: #ffffff; font-size: 10px; font-weight: 800; padding: 6px 14px; border-radius: 8px; text-transform: uppercase;">
+            ${bookingWebsite.replace(/^https?:\/\//, '')}
+          </div>
+          <div style="font-size: 7.5px; color: #94a3b8; margin-top: 3px;">Book Online with Instant Confirmation</div>
+        </div>
+      </div>
+
+      <div class="page-footer-strip" style="margin-top: 6px;">
+        <span>Stonewall Villa VIP Tour Lodging &bull; ${propertyName}</span>
+        <span>Double-Sided 8x10 Print Edition &bull; 2-Pages Exact</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    window.onload = function() {
+      setTimeout(function() {
+        window.print();
+      }, 500);
+    };
+  </script>
+</body>
+</html>`;
+
+    printWindow.document.open();
+    printWindow.document.write(htmlToPrint);
+    printWindow.document.close();
   };
 
-  // Trigger HTML download
+  // Trigger 8x10 HTML/PDF Download
   const handleDownloadHtml = () => {
     const propertyName = selectedProperty?.name || 'Stonewall Villa';
     const htmlContent = `<!DOCTYPE html>
@@ -211,103 +661,472 @@ export const AdvertisementFlyerModal: React.FC<AdvertisementFlyerModalProps> = (
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${propertyName} - Professional Artist & Tour Lodging 1-Pager</title>
+  <title>${propertyName} - 8x10 2-Page Professional Artist & Tour Lodging Flyer</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 24px; background: #f8fafc; color: #0f172a; line-height: 1.5; }
-    .container { max-width: 900px; margin: 0 auto; background: #ffffff; border-radius: 24px; border: 1px solid #e2e8f0; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05); overflow: hidden; }
-    .header { background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%); color: #ffffff; padding: 36px 40px; }
-    .badge { display: inline-block; background: #4f46e5; color: #ffffff; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; padding: 4px 12px; border-radius: 9999px; margin-bottom: 12px; }
-    .title { font-size: 28px; font-weight: 800; margin: 0 0 8px 0; color: #ffffff; letter-spacing: -0.02em; }
-    .subtitle { font-size: 15px; color: #cbd5e1; margin: 0; max-width: 700px; }
-    .venues-banner { background: #f1f5f9; border-bottom: 1px solid #e2e8f0; padding: 16px 40px; display: flex; flex-wrap: wrap; gap: 20px; align-items: center; }
-    .venue-pill { background: #ffffff; border: 1px solid #cbd5e1; padding: 6px 14px; border-radius: 12px; font-size: 13px; font-weight: 700; color: #1e1b4b; }
-    .content { padding: 32px 40px; }
-    .section-title { font-size: 18px; font-weight: 800; color: #0f172a; margin: 24px 0 16px 0; display: flex; align-items: center; gap: 8px; border-bottom: 2px solid #f1f5f9; padding-bottom: 8px; }
-    .rooms-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
-    .room-card { border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; background: #ffffff; }
-    .room-img { width: 100%; height: 160px; object-fit: cover; background: #e2e8f0; }
-    .room-body { padding: 16px; }
-    .room-title { font-size: 16px; font-weight: 700; color: #0f172a; margin: 0 0 4px 0; }
-    .room-rate { font-size: 18px; font-weight: 800; color: #4f46e5; margin-bottom: 8px; }
-    .room-features { font-size: 12px; color: #64748b; padding-left: 18px; margin: 0; }
-    .reviews-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
-    .review-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px; padding: 16px; }
-    .review-stars { color: #f59e0b; margin-bottom: 6px; font-size: 14px; }
-    .review-text { font-size: 13px; color: #334155; font-style: italic; margin: 0 0 10px 0; }
-    .review-author { font-size: 12px; font-weight: 700; color: #0f172a; }
-    .review-role { font-size: 11px; color: #64748b; }
-    .amenities-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 12px; }
-    .amenity-item { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; font-size: 12px; font-weight: 600; color: #1e293b; }
-    .footer { background: #0f172a; color: #ffffff; padding: 28px 40px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #334155; }
-    .promo-box { background: rgba(79, 70, 229, 0.2); border: 1px solid #6366f1; padding: 8px 16px; border-radius: 12px; }
-    .btn { background: #4f46e5; color: #ffffff; padding: 10px 24px; border-radius: 10px; text-decoration: none; font-weight: 700; font-size: 14px; display: inline-block; }
+    @page {
+      size: 8in 10in;
+      margin: 0;
+    }
+    * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    body {
+      margin: 0;
+      padding: 24px 0;
+      background: #0f172a;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      color: #0f172a;
+      line-height: 1.35;
+    }
+    .print-controls-bar {
+      max-width: 8in;
+      margin: 0 auto 16px auto;
+      background: #1e293b;
+      padding: 12px 20px;
+      border-radius: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: #ffffff;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    }
+    .print-btn {
+      background: #4f46e5;
+      color: #ffffff;
+      border: none;
+      padding: 8px 18px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .print-btn:hover {
+      background: #4338ca;
+    }
+    .page {
+      width: 8in;
+      height: 10in;
+      max-height: 10in;
+      margin: 0 auto 24px auto;
+      background: #ffffff;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 0.32in 0.38in;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+      position: relative;
+      border-radius: 12px;
+    }
     @media print {
-      body { padding: 0; background: #ffffff; }
-      .container { box-shadow: none; border: none; max-width: 100%; border-radius: 0; }
+      body {
+        background: #ffffff;
+        margin: 0;
+        padding: 0;
+      }
+      .print-controls-bar {
+        display: none !important;
+      }
+      .page {
+        width: 8in !important;
+        height: 10in !important;
+        max-height: 10in !important;
+        margin: 0 !important;
+        padding: 0.32in 0.38in !important;
+        box-shadow: none !important;
+        border: none !important;
+        border-radius: 0 !important;
+        overflow: hidden !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
+      .page-1 {
+        page-break-after: always !important;
+        break-after: page !important;
+      }
+      .page-2 {
+        page-break-before: always !important;
+        break-before: page !important;
+        page-break-after: avoid !important;
+        break-after: avoid !important;
+      }
+    }
+    .header-banner {
+      background: linear-gradient(135deg, #090d16 0%, #17153b 100%);
+      color: #ffffff;
+      padding: 14px 18px;
+      border-radius: 12px;
+      margin-bottom: 10px;
+    }
+    .badge-top {
+      display: inline-block;
+      background: #4f46e5;
+      color: #ffffff;
+      font-size: 8.5px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 2px 8px;
+      border-radius: 999px;
+      margin-bottom: 4px;
+    }
+    .title-main {
+      font-size: 20px;
+      font-weight: 800;
+      margin: 0;
+      letter-spacing: -0.01em;
+      color: #ffffff;
+    }
+    .subtitle-main {
+      font-size: 10.5px;
+      color: #cbd5e1;
+      margin: 3px 0 0 0;
+      font-weight: 500;
+      line-height: 1.3;
+    }
+    .venues-strip {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 6px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      font-size: 9.5px;
+    }
+    .venue-pill {
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      color: #1e1b4b;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 6px;
+    }
+    .section-heading {
+      font-size: 12px;
+      font-weight: 800;
+      color: #0f172a;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1.5px solid #e2e8f0;
+      padding-bottom: 4px;
+      margin-bottom: 8px;
+    }
+    .rooms-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 9px;
+    }
+    .room-card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .room-card img {
+      width: 100%;
+      height: 98px;
+      object-fit: cover;
+      background: #e2e8f0;
+    }
+    .room-content {
+      padding: 7px 9px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      flex: 1;
+    }
+    .room-name-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 2px;
+    }
+    .room-title {
+      font-size: 11px;
+      font-weight: 800;
+      color: #0f172a;
+      line-height: 1.15;
+    }
+    .room-rate-badge {
+      background: #4f46e5;
+      color: #ffffff;
+      font-size: 10px;
+      font-weight: 800;
+      padding: 1px 5px;
+      border-radius: 5px;
+      white-space: nowrap;
+    }
+    .room-sub {
+      font-size: 9px;
+      color: #64748b;
+      margin-bottom: 4px;
+    }
+    .room-features-list {
+      margin: 0;
+      padding-left: 12px;
+      font-size: 8.5px;
+      color: #475569;
+      line-height: 1.35;
+    }
+    .page-footer-strip {
+      background: #f8fafc;
+      border-top: 1px solid #e2e8f0;
+      padding: 6px 12px;
+      border-radius: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 8.5px;
+      color: #64748b;
+      font-weight: 600;
+      margin-top: 6px;
+    }
+    .page-2-header {
+      background: #0f172a;
+      color: #ffffff;
+      padding: 10px 14px;
+      border-radius: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .reviews-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .review-card {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .review-quote {
+      font-size: 9px;
+      color: #334155;
+      font-style: italic;
+      line-height: 1.35;
+      margin: 0 0 6px 0;
+    }
+    .review-author-row {
+      font-size: 8.5px;
+      font-weight: 800;
+      color: #0f172a;
+      border-top: 1px solid #e2e8f0;
+      padding-top: 4px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .amenities-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 7px;
+      margin-bottom: 10px;
+    }
+    .amenity-card {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 7px 9px;
+    }
+    .amenity-title {
+      font-size: 9.5px;
+      font-weight: 800;
+      color: #0f172a;
+      margin-bottom: 2px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .amenity-desc {
+      font-size: 8px;
+      color: #64748b;
+      line-height: 1.25;
+      margin: 0;
+    }
+    .booking-callout {
+      background: linear-gradient(135deg, #090d16 0%, #1e1b4b 100%);
+      color: #ffffff;
+      border-radius: 12px;
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 6px;
+    }
+    .promo-pill {
+      display: inline-block;
+      background: rgba(79, 70, 229, 0.35);
+      border: 1px solid #818cf8;
+      color: #e0e7ff;
+      font-size: 9.5px;
+      font-weight: 800;
+      padding: 2px 8px;
+      border-radius: 6px;
+      margin-top: 3px;
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
-      <div class="badge">Exclusive Artist & Touring Lodging</div>
-      <h1 class="title">${propertyName} | Atlanta, GA</h1>
-      <p class="subtitle">${flyerSubheadline}</p>
+  <div class="print-controls-bar">
+    <div>
+      <strong style="font-size: 14px;">📄 8x10 Two-Sided Digital Flyer</strong>
+      <div style="font-size: 11px; color: #94a3b8;">Formatted strictly for 8x10 PDF download and double-sided printing (2-Pages exact).</div>
     </div>
+    <button class="print-btn" onclick="window.print()">
+      🖨️ Print / Save 8x10 PDF
+    </button>
+  </div>
 
-    <div class="venues-banner">
-      <div style="font-size: 12px; font-weight: 800; color: #64748b; text-transform: uppercase;">Proximity to Venues:</div>
-      ${PRESET_VENUES.map(v => `<div class="venue-pill">📍 ${v.name} (${v.distance})</div>`).join('')}
-    </div>
+  <!-- PAGE 1: FRONT COVER (SIDE A) -->
+  <div class="page page-1">
+    <div>
+      <div class="header-banner">
+        <div class="badge-top">8x10 Professional Digital 1-Pager • Side A</div>
+        <h1 class="title-main">${propertyName} | Atlanta, GA</h1>
+        <p class="subtitle-main">${flyerSubheadline}</p>
+      </div>
 
-    <div class="content">
-      <div class="section-title">✨ Premier Room Types & Nightly Rates</div>
+      <div class="venues-strip">
+        <span style="font-weight: 800; color: #475569; text-transform: uppercase; font-size: 8.5px;">📍 Venue Proximity:</span>
+        <span class="venue-pill">St. James Live (8 mins / 4.5 mi)</span>
+        <span class="venue-pill">Wolf Creek Amphitheater (10 mins / 6.2 mi)</span>
+        <span class="venue-pill">ATL Airport (15 mins)</span>
+      </div>
+
+      <div class="section-heading">
+        <span>✨ Luxury Suites, Photo Gallery & Rates</span>
+        <span style="font-size: 9px; font-weight: 600; color: #64748b;">Individual Rooms & Full Villa Buyouts</span>
+      </div>
+
       <div class="rooms-grid">
         ${roomRates.map(r => `
           <div class="room-card">
-            <img class="room-img" src="${r.photoUrl}" alt="${r.name}" />
-            <div class="room-body">
-              <div class="room-title">${r.name}</div>
-              <div class="room-rate">$${r.rate} / night <span style="font-size: 12px; font-weight: 500; color: #64748b;">(${r.bedType})</span></div>
-              <ul class="room-features">
-                ${r.features.map(f => `<li>${f}</li>`).join('')}
+            <img src="${r.photoUrl}" alt="${r.name}" />
+            <div class="room-content">
+              <div>
+                <div class="room-name-row">
+                  <span class="room-title">${r.name}</span>
+                  <span class="room-rate-badge">$${r.rate}/nt</span>
+                </div>
+                <div class="room-sub">${r.bedType} &bull; ${r.sqFt} sq ft</div>
+              </div>
+              <ul class="room-features-list">
+                ${r.features.slice(0, 3).map(f => `<li>${f}</li>`).join('')}
               </ul>
             </div>
           </div>
         `).join('')}
       </div>
+    </div>
 
-      <div class="section-title">⭐️ Verified Survey Feedback from Past Touring Guests</div>
+    <div class="page-footer-strip">
+      <span>★ Preferred Venue Rates with Promo Code: <strong style="color: #4f46e5;">${promoCode}</strong></span>
+      <span>Turn Over for Amenities, Reviews & Direct Booking (Side B) ➔</span>
+    </div>
+  </div>
+
+  <!-- PAGE 2: BACK COVER (SIDE B - TWO-SIDED REVERSE) -->
+  <div class="page page-2">
+    <div>
+      <div class="page-2-header">
+        <div>
+          <span style="font-size: 8.5px; font-weight: 800; color: #818cf8; text-transform: uppercase;">8x10 Two-Sided Print Edition • Side B</span>
+          <div style="font-size: 14px; font-weight: 800; color: #ffffff;">${propertyName} • Artist Accommodations & Guest Reviews</div>
+        </div>
+        <div style="font-size: 9px; color: #94a3b8; text-align: right;">
+          Atlanta, Georgia &bull; Direct Management
+        </div>
+      </div>
+
+      <div class="section-heading">
+        <span>⭐️ Verified Touring Guest & Artist Survey Reviews</span>
+        <span style="font-size: 9px; color: #16a34a; font-weight: 700;">100% 5-Star Hospitality</span>
+      </div>
+
       <div class="reviews-grid">
-        ${surveys.filter(s => selectedSurveyIds.includes(s.id)).map(s => `
+        ${surveys.filter(s => selectedSurveyIds.includes(s.id)).slice(0, 2).map(s => `
           <div class="review-card">
-            <div class="review-stars">★★★★★</div>
-            <p class="review-text">"${s.comment}"</p>
-            <div class="review-author">${s.author}</div>
-            <div class="review-role">${s.role} &bull; ${s.venueMentioned}</div>
+            <div style="color: #f59e0b; font-size: 10px; margin-bottom: 3px;">★★★★★ <span style="color: #64748b; font-size: 8px; font-weight: 700;">(${s.venueMentioned})</span></div>
+            <p class="review-quote">"${s.comment}"</p>
+            <div class="review-author-row">
+              <span>${s.author}</span>
+              <span style="color: #64748b; font-weight: 500;">${s.role}</span>
+            </div>
           </div>
         `).join('')}
       </div>
 
-      <div class="section-title">🎸 Key Amenities for Touring Artists & Production Crews</div>
-      <div class="amenities-list">
-        <div class="amenity-item">🔐 YAMIRY Keyless Smart Lock System</div>
-        <div class="amenity-item">🚐 Secure Tour Sprinter / SUV Parking</div>
-        <div class="amenity-item">📶 Ultra High-Speed Gigabit WiFi</div>
-        <div class="amenity-item">🍳 Full Gourmet Chef Kitchen</div>
-        <div class="amenity-item">☕ 24/7 Espresso & Coffee Bar</div>
-        <div class="amenity-item">🕒 Flexible Late Performance Check-In</div>
+      <div class="section-heading">
+        <span>🎸 Tailored Amenities for Performing Artists & Production Teams</span>
+      </div>
+
+      <div class="amenities-grid">
+        <div class="amenity-card">
+          <div class="amenity-title">🔐 Keyless Smart Locks</div>
+          <p class="amenity-desc">Individual YAMIRY digital PIN codes for main estate & private bedroom suites.</p>
+        </div>
+        <div class="amenity-card">
+          <div class="amenity-title">🚐 Tour Van Parking</div>
+          <p class="amenity-desc">Secure private driveway accommodating SUVs, trailers & tour sprinter vans.</p>
+        </div>
+        <div class="amenity-card">
+          <div class="amenity-title">📶 Gigabit Fiber WiFi</div>
+          <p class="amenity-desc">Ultra-fast upload speeds for stems, live-streaming, setlists & HD video.</p>
+        </div>
+        <div class="amenity-card">
+          <div class="amenity-title">🍳 Gourmet Chef Kitchen</div>
+          <p class="amenity-desc">Complete premium cookware, appliances, and 24/7 espresso & coffee bar.</p>
+        </div>
+        <div class="amenity-card">
+          <div class="amenity-title">🕒 Late Show Flexibility</div>
+          <p class="amenity-desc">Flexible check-in / check-out times aligned with concert soundcheck & encores.</p>
+        </div>
+        <div class="amenity-card">
+          <div class="amenity-title">📋 Itemized Direct Billing</div>
+          <p class="amenity-desc">Clean corporate billing & receipts for tour management accounting.</p>
+        </div>
       </div>
     </div>
 
-    <div class="footer">
-      <div>
-        <div style="font-size: 16px; font-weight: 800;">Book Directly with Management</div>
-        <div style="font-size: 13px; color: #94a3b8; margin-top: 4px;">Phone: ${contactPhone} &bull; Email: ${contactEmail}</div>
-        <div style="margin-top: 8px;" class="promo-box">Use Promo Code: <strong style="color: #a5b4fc;">${promoCode}</strong> (${discountDesc})</div>
+    <div>
+      <div class="booking-callout">
+        <div>
+          <div style="font-size: 13px; font-weight: 800; color: #ffffff;">Reserve Artist Suites Direct</div>
+          <div style="font-size: 9.5px; color: #cbd5e1; margin-top: 2px;">
+            Phone: <strong>${contactPhone}</strong> &bull; Email: <strong>${contactEmail}</strong>
+          </div>
+          <div class="promo-pill">
+            Promo Code: <strong>${promoCode}</strong> (${discountDesc})
+          </div>
+        </div>
+        <div style="text-align: right;">
+          <div style="background: #4f46e5; color: #ffffff; font-size: 10px; font-weight: 800; padding: 6px 14px; border-radius: 8px; text-transform: uppercase;">
+            ${bookingWebsite.replace(/^https?:\/\//, '')}
+          </div>
+          <div style="font-size: 7.5px; color: #94a3b8; margin-top: 3px;">Book Online with Instant Confirmation</div>
+        </div>
       </div>
-      <div>
-        <a href="${bookingWebsite}" class="btn">Reserve Suites Online</a>
+
+      <div class="page-footer-strip" style="margin-top: 6px;">
+        <span>Stonewall Villa VIP Tour Lodging &bull; ${propertyName}</span>
+        <span>Double-Sided 8x10 Print Edition &bull; 2-Pages Exact</span>
       </div>
     </div>
   </div>
@@ -318,7 +1137,7 @@ export const AdvertisementFlyerModal: React.FC<AdvertisementFlyerModalProps> = (
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${propertyName.replace(/\s+/g, '_')}_Artist_Lodging_Advertisement.html`;
+    a.download = `${propertyName.replace(/\s+/g, '_')}_8x10_2Page_Artist_Lodging_Flyer.html`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -555,18 +1374,23 @@ Stonewall Villa provides private luxury bedroom suites and full estate buyouts s
         {/* Modal Body Container */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-100 print:p-0 print:bg-white">
           
-          {/* TAB 1: LIVE 1-PAGER PREVIEW & PRINTABLE VIEW */}
+          {/* TAB 1: LIVE 8x10 2-PAGE PREVIEW & PRINTABLE VIEW */}
           {activeTab === 'preview' && (
             <div className="space-y-4">
               <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm print:hidden">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center font-bold text-sm">
-                    ✨
+                  <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-200 flex items-center justify-center font-bold text-sm">
+                    📄
                   </div>
                   <div>
-                    <span className="font-bold text-slate-800 text-sm">High-Resolution Digital 1-Pager</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-slate-900 text-sm">8x10 Format Advertisement (2-Pages Exact)</span>
+                      <span className="text-[10px] font-extrabold uppercase bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded-full">
+                        Two-Sided Ready
+                      </span>
+                    </div>
                     <p className="text-xs text-slate-500">
-                      Ready to be downloaded, printed on Letter/A4, or emailed to concert venues and talent managers.
+                      Formatted strictly to print or download in 8&times;10 PDF across 2 pages (Side A front &amp; Side B reverse) for venues and performing artists.
                     </p>
                   </div>
                 </div>
@@ -574,264 +1398,300 @@ Stonewall Villa provides private luxury bedroom suites and full estate buyouts s
                   <button
                     type="button"
                     onClick={handleCopyPitch}
-                    className="text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg border border-slate-200 transition-all flex items-center gap-1 cursor-pointer"
+                    className="text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-xl border border-slate-200 transition-all flex items-center gap-1 cursor-pointer"
                   >
                     {copiedPitch ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
-                    {copiedPitch ? 'Copied Pitch!' : 'Copy Pitch Text'}
+                    {copiedPitch ? 'Copied Pitch!' : 'Copy Pitch'}
                   </button>
                   <button
                     type="button"
                     onClick={handlePrint}
-                    className="text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3.5 py-1.5 rounded-lg border border-indigo-200 transition-all flex items-center gap-1 cursor-pointer"
+                    className="text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-xl shadow-md shadow-indigo-200 transition-all flex items-center gap-1.5 cursor-pointer"
                   >
-                    <Printer size={14} /> Print / Save PDF
+                    <Printer size={14} /> Print 8x10 (2-Pages)
                   </button>
                 </div>
               </div>
 
-              {/* The Actual 1-Pager Presentation Canvas */}
-              <div 
-                ref={printAreaRef} 
-                className="bg-white rounded-3xl border border-slate-200 shadow-lg overflow-hidden max-w-4xl mx-auto print:max-w-none print:shadow-none print:border-none print:rounded-none"
-              >
-                {/* Header Banner */}
-                <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 text-white p-8 sm:p-10 relative overflow-hidden">
-                  <div className="absolute right-0 top-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-                  <div className="relative z-10">
-                    <div className="inline-flex items-center gap-2 bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-3">
-                      <Music size={13} className="text-indigo-400" /> Premier Artist & Touring Lodging
-                    </div>
-                    <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-                      {propertyName} <span className="text-indigo-400 font-light">| Atlanta, GA</span>
-                    </h1>
-                    <p className="text-sm sm:text-base text-slate-300 mt-2 max-w-2xl font-medium leading-relaxed">
-                      {flyerSubheadline}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Proximity Strip */}
-                <div className="bg-slate-50 border-b border-slate-200 px-6 sm:px-8 py-3.5 flex flex-wrap items-center justify-between gap-3 text-xs">
-                  <div className="flex items-center gap-2 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
-                    <MapPin size={14} className="text-indigo-600" /> Prime Atlanta Venue Proximity:
-                  </div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="bg-white border border-indigo-100 text-indigo-900 font-bold px-3 py-1 rounded-xl shadow-xs flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                      St. James Live (~8 mins / 4.5 mi)
-                    </span>
-                    <span className="bg-white border border-indigo-100 text-indigo-900 font-bold px-3 py-1 rounded-xl shadow-xs flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                      Wolf Creek Amphitheater (~10 mins / 6.2 mi)
-                    </span>
-                    <span className="bg-white border border-slate-200 text-slate-700 font-bold px-3 py-1 rounded-xl shadow-xs">
-                      ✈️ ATL Airport (~15 mins)
-                    </span>
-                  </div>
-                </div>
-
-                {/* Body Content */}
-                <div className="p-6 sm:p-8 space-y-8">
+              {/* The 2-Page 8x10 Printable Presentation Canvas */}
+              <div ref={printAreaRef} className="space-y-6 print:space-y-0">
+                
+                {/* PAGE 1 (FRONT COVER / SIDE A) */}
+                <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden max-w-4xl mx-auto flex flex-col justify-between p-6 sm:p-8 relative print:max-w-none print:shadow-none print:border-none print:rounded-none print:p-0 print:m-0 print:h-[10in] print:w-[8in] print:overflow-hidden print:break-after-page">
                   
-                  {/* Section 1: Room Types & Photos & Rates */}
                   <div>
-                    <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-2.5">
-                      <h2 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
-                        <BedDouble className="text-indigo-600" size={20} />
-                        Luxury Room Types, Photo Gallery & Rates
-                      </h2>
-                      <span className="text-xs text-slate-500 font-semibold">Individual Rooms or Full Villa Buyout</span>
+                    {/* Header Banner */}
+                    <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 text-white p-6 sm:p-7 rounded-2xl relative overflow-hidden mb-4 shadow-sm">
+                      <div className="relative z-10">
+                        <div className="inline-flex items-center gap-2 bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 px-3 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider mb-2">
+                          <Music size={12} className="text-indigo-400" /> 8x10 Artist &amp; Tour Lodging &bull; Side A
+                        </div>
+                        <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+                          {propertyName} <span className="text-indigo-400 font-light">| Atlanta, GA</span>
+                        </h1>
+                        <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-2xl font-medium leading-relaxed">
+                          {flyerSubheadline}
+                        </p>
+                      </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {roomRates.map((room) => (
-                        <div 
-                          key={room.id}
-                          className="bg-slate-50/70 border border-slate-200 rounded-2xl overflow-hidden hover:shadow-md transition-shadow flex flex-col"
-                        >
-                          <div className="relative h-44 bg-slate-200 overflow-hidden">
-                            <img 
-                              src={room.photoUrl} 
-                              alt={room.name}
-                              className="w-full h-full object-cover"
-                              referrerPolicy="no-referrer"
-                            />
-                            <div className="absolute top-3 left-3 bg-slate-900/80 backdrop-blur-xs text-white text-[11px] font-bold px-2.5 py-1 rounded-lg">
-                              {room.type}
-                            </div>
-                            <div className="absolute bottom-3 right-3 bg-indigo-600 text-white font-extrabold text-sm px-3 py-1 rounded-xl shadow-md">
-                              ${room.rate}<span className="text-xs font-normal opacity-80">/nt</span>
-                            </div>
-                          </div>
-                          
-                          <div className="p-4 flex-1 flex flex-col justify-between space-y-2.5">
-                            <div>
-                              <h3 className="font-bold text-slate-900 text-base">{room.name}</h3>
-                              <p className="text-xs text-slate-500 font-medium">{room.bedType} &bull; {room.sqFt} sq ft</p>
+                    {/* Proximity Strip */}
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs mb-4">
+                      <div className="flex items-center gap-1.5 text-slate-600 font-bold uppercase tracking-wider text-[10px]">
+                        <MapPin size={13} className="text-indigo-600" /> Atlanta Venue Proximity:
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap text-[11px]">
+                        <span className="bg-white border border-indigo-100 text-indigo-900 font-bold px-2.5 py-1 rounded-lg shadow-xs flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                          St. James Live (~8 mins / 4.5 mi)
+                        </span>
+                        <span className="bg-white border border-indigo-100 text-indigo-900 font-bold px-2.5 py-1 rounded-lg shadow-xs flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                          Wolf Creek Amphitheater (~10 mins / 6.2 mi)
+                        </span>
+                        <span className="bg-white border border-slate-200 text-slate-700 font-bold px-2.5 py-1 rounded-lg shadow-xs">
+                          ✈️ ATL Airport (~15 mins)
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Section 1: Room Types & Photos & Rates */}
+                    <div>
+                      <div className="flex items-center justify-between mb-3 border-b border-slate-200 pb-1.5">
+                        <h2 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                          <BedDouble className="text-indigo-600" size={17} />
+                          Luxury Room Types, Photo Gallery &amp; Rates
+                        </h2>
+                        <span className="text-[11px] text-slate-500 font-semibold">Individual Rooms &amp; Full Villa Buyouts</span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {roomRates.map((room) => (
+                          <div 
+                            key={room.id}
+                            className="bg-slate-50 border border-slate-200 rounded-xl overflow-hidden flex flex-col"
+                          >
+                            <div className="relative h-28 sm:h-32 bg-slate-200 overflow-hidden">
+                              <img 
+                                src={room.photoUrl} 
+                                alt={room.name}
+                                className="w-full h-full object-cover"
+                                referrerPolicy="no-referrer"
+                              />
+                              <div className="absolute top-2 left-2 bg-slate-900/80 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-md">
+                                {room.type}
+                              </div>
+                              <div className="absolute bottom-2 right-2 bg-indigo-600 text-white font-extrabold text-xs px-2.5 py-1 rounded-lg shadow-md">
+                                ${room.rate}<span className="text-[10px] font-normal opacity-80">/nt</span>
+                              </div>
                             </div>
                             
-                            <ul className="grid grid-cols-2 gap-1.5 text-[11px] text-slate-600">
-                              {room.features.map((feat, idx) => (
-                                <li key={idx} className="flex items-center gap-1 font-medium">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 flex-shrink-0" />
-                                  <span className="truncate">{feat}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Section 2: Verified Survey Feedback from Past Bookings */}
-                  <div>
-                    <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-2.5">
-                      <h2 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
-                        <Star className="text-amber-500 fill-amber-500" size={20} />
-                        Verified Guest & Artist Survey Reviews
-                      </h2>
-                      <span className="text-xs text-emerald-600 font-bold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md flex items-center gap-1">
-                        <CheckCircle size={12} /> 100% 5-Star Ratings
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {surveys.filter(s => selectedSurveyIds.includes(s.id)).map((survey) => (
-                        <div 
-                          key={survey.id}
-                          className="bg-slate-50 rounded-2xl p-5 border border-slate-200 relative flex flex-col justify-between"
-                        >
-                          <div>
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-1 text-amber-500">
-                                {[...Array(survey.rating)].map((_, i) => (
-                                  <Star key={i} size={14} className="fill-amber-400" />
-                                ))}
+                            <div className="p-2.5 flex-1 flex flex-col justify-between space-y-1.5">
+                              <div>
+                                <h3 className="font-bold text-slate-900 text-xs sm:text-sm">{room.name}</h3>
+                                <p className="text-[10px] text-slate-500 font-medium">{room.bedType} &bull; {room.sqFt} sq ft</p>
                               </div>
-                              <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full">
-                                {survey.venueMentioned}
-                              </span>
-                            </div>
-                            <p className="text-xs text-slate-700 leading-relaxed italic mb-4 font-medium">
-                              "{survey.comment}"
-                            </p>
-                          </div>
-
-                          <div className="flex items-center gap-2.5 pt-3 border-t border-slate-200/80">
-                            <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 font-extrabold text-xs flex items-center justify-center">
-                              {survey.author.charAt(0)}
-                            </div>
-                            <div>
-                              <div className="font-bold text-slate-900 text-xs">{survey.author}</div>
-                              <div className="text-[10px] text-slate-500">{survey.role}</div>
+                              
+                              <ul className="grid grid-cols-2 gap-1 text-[10px] text-slate-600">
+                                {room.features.slice(0, 4).map((feat, idx) => (
+                                  <li key={idx} className="flex items-center gap-1 font-medium truncate">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 flex-shrink-0" />
+                                    <span className="truncate">{feat}</span>
+                                  </li>
+                                ))}
+                              </ul>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
                   </div>
 
-                  {/* Section 3: Essential Amenities for Touring Artists & Production */}
+                  {/* Page 1 Bottom Transition Strip */}
+                  <div className="mt-4 pt-3 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 bg-slate-50 p-2.5 rounded-xl">
+                    <span className="font-semibold">
+                      ★ Preferred Venue Promo Code: <strong className="text-indigo-600 font-mono">{promoCode}</strong>
+                    </span>
+                    <span className="font-bold text-indigo-700 flex items-center gap-1">
+                      Side A (Page 1) &bull; Turn Over for Reviews &amp; Booking ➔
+                    </span>
+                  </div>
+                </div>
+
+                {/* PAGE 2 (BACK COVER / SIDE B - REVERSE SIDE FOR TWO-SIDED PRINTING) */}
+                <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden max-w-4xl mx-auto flex flex-col justify-between p-6 sm:p-8 relative print:max-w-none print:shadow-none print:border-none print:rounded-none print:p-0 print:m-0 print:h-[10in] print:w-[8in] print:overflow-hidden print:break-before-page">
+                  
                   <div>
-                    <div className="mb-4 border-b border-slate-100 pb-2.5">
-                      <h2 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
-                        <ShieldCheck className="text-indigo-600" size={20} />
-                        Tailored Tour & Artist Accommodations
-                      </h2>
+                    {/* Header Page 2 */}
+                    <div className="bg-slate-900 text-white px-5 py-3 rounded-xl flex items-center justify-between mb-4">
+                      <div>
+                        <span className="text-[10px] font-extrabold text-indigo-400 uppercase tracking-wider">
+                          8x10 Two-Sided Print Edition &bull; Side B
+                        </span>
+                        <h2 className="text-base sm:text-lg font-bold text-white">
+                          {propertyName} &bull; Artist Accommodations &amp; Guest Reviews
+                        </h2>
+                      </div>
+                      <div className="text-right text-[11px] text-slate-400 font-medium">
+                        Atlanta, Georgia &bull; Direct Management
+                      </div>
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
-                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-start gap-2.5">
-                        <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center flex-shrink-0">
-                          <ShieldCheck size={16} />
-                        </div>
-                        <div>
-                          <p className="font-bold text-slate-900">Keyless Smart Locks</p>
-                          <p className="text-[11px] text-slate-500">Private YAMIRY codes for main door & bedroom suites</p>
-                        </div>
+                    {/* Section 2: Verified Survey Feedback */}
+                    <div className="mb-4">
+                      <div className="flex items-center justify-between mb-2.5 border-b border-slate-200 pb-1.5">
+                        <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                          <Star className="text-amber-500 fill-amber-500" size={17} />
+                          Verified Guest &amp; Artist Survey Reviews
+                        </h3>
+                        <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md flex items-center gap-1">
+                          <CheckCircle size={11} /> 100% 5-Star Ratings
+                        </span>
                       </div>
 
-                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-start gap-2.5">
-                        <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center flex-shrink-0">
-                          <Car size={16} />
-                        </div>
-                        <div>
-                          <p className="font-bold text-slate-900">Tour Van Parking</p>
-                          <p className="text-[11px] text-slate-500">Secure private driveway for SUVs & sprinter vans</p>
-                        </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {surveys.filter(s => selectedSurveyIds.includes(s.id)).slice(0, 2).map((survey) => (
+                          <div 
+                            key={survey.id}
+                            className="bg-slate-50 rounded-xl p-3.5 border border-slate-200 relative flex flex-col justify-between"
+                          >
+                            <div>
+                              <div className="flex items-center justify-between mb-1.5">
+                                <div className="flex items-center gap-0.5 text-amber-500">
+                                  {[...Array(survey.rating)].map((_, i) => (
+                                    <Star key={i} size={12} className="fill-amber-400" />
+                                  ))}
+                                </div>
+                                <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full">
+                                  {survey.venueMentioned}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-slate-700 leading-relaxed italic mb-2 font-medium">
+                                "{survey.comment}"
+                              </p>
+                            </div>
+
+                            <div className="flex items-center gap-2 pt-2 border-t border-slate-200">
+                              <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 font-extrabold text-[10px] flex items-center justify-center">
+                                {survey.author.charAt(0)}
+                              </div>
+                              <div>
+                                <div className="font-bold text-slate-900 text-xs">{survey.author}</div>
+                                <div className="text-[10px] text-slate-500">{survey.role}</div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Section 3: Tailored Tour & Production Amenities */}
+                    <div>
+                      <div className="mb-2.5 border-b border-slate-200 pb-1.5">
+                        <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                          <ShieldCheck className="text-indigo-600" size={17} />
+                          Tailored Tour &amp; Artist Accommodations
+                        </h3>
                       </div>
 
-                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-start gap-2.5">
-                        <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center flex-shrink-0">
-                          <Wifi size={16} />
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
+                        <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 flex items-start gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center flex-shrink-0">
+                            <ShieldCheck size={15} />
+                          </div>
+                          <div>
+                            <p className="font-bold text-slate-900 text-xs">Keyless Smart Locks</p>
+                            <p className="text-[10px] text-slate-500 leading-tight">YAMIRY digital PIN codes for main door &amp; private rooms</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-bold text-slate-900">Gigabit WiFi</p>
-                          <p className="text-[11px] text-slate-500">Ultra-fast upload speeds for stems, setlists & video</p>
-                        </div>
-                      </div>
 
-                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-start gap-2.5">
-                        <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center flex-shrink-0">
-                          <Coffee size={16} />
+                        <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 flex items-start gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center flex-shrink-0">
+                            <Car size={15} />
+                          </div>
+                          <div>
+                            <p className="font-bold text-slate-900 text-xs">Tour Van Parking</p>
+                            <p className="text-[10px] text-slate-500 leading-tight">Secure private driveway for SUVs &amp; sprinter vans</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-bold text-slate-900">Gourmet Kitchen</p>
-                          <p className="text-[11px] text-slate-500">Full cookware & 24/7 coffee / espresso staging bar</p>
-                        </div>
-                      </div>
 
-                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-start gap-2.5">
-                        <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center flex-shrink-0">
-                          <Calendar size={16} />
+                        <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 flex items-start gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center flex-shrink-0">
+                            <Wifi size={15} />
+                          </div>
+                          <div>
+                            <p className="font-bold text-slate-900 text-xs">Gigabit Fiber WiFi</p>
+                            <p className="text-[10px] text-slate-500 leading-tight">Ultra-fast upload speeds for stems, setlists &amp; streaming</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-bold text-slate-900">Late Show Flexibility</p>
-                          <p className="text-[11px] text-slate-500">Custom checkout times tailored to performance sets</p>
-                        </div>
-                      </div>
 
-                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-start gap-2.5">
-                        <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center flex-shrink-0">
-                          <Tag size={16} />
+                        <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 flex items-start gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center flex-shrink-0">
+                            <Coffee size={15} />
+                          </div>
+                          <div>
+                            <p className="font-bold text-slate-900 text-xs">Gourmet Kitchen</p>
+                            <p className="text-[10px] text-slate-500 leading-tight">Full cookware &amp; 24/7 coffee / espresso staging bar</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-bold text-slate-900">Direct Invoicing</p>
-                          <p className="text-[11px] text-slate-500">Itemized billing for production & tour management</p>
+
+                        <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 flex items-start gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center flex-shrink-0">
+                            <Calendar size={15} />
+                          </div>
+                          <div>
+                            <p className="font-bold text-slate-900 text-xs">Late Show Check-In</p>
+                            <p className="text-[10px] text-slate-500 leading-tight">Flexible schedules aligned with soundchecks &amp; encores</p>
+                          </div>
+                        </div>
+
+                        <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 flex items-start gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center flex-shrink-0">
+                            <Tag size={15} />
+                          </div>
+                          <div>
+                            <p className="font-bold text-slate-900 text-xs">Itemized Invoicing</p>
+                            <p className="text-[10px] text-slate-500 leading-tight">Direct receipts for production &amp; tour accounting</p>
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
 
+                  {/* Section 4: VIP Booking & Exclusive Venue Discount Box */}
+                  <div className="mt-4 bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 text-white p-5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 border border-slate-800">
+                    <div className="space-y-1 text-center sm:text-left">
+                      <div className="inline-flex items-center gap-2 bg-indigo-500/20 border border-indigo-400/40 px-3 py-0.5 rounded-lg text-xs font-bold text-indigo-300">
+                        <Tag size={12} /> Venue Promo: <strong className="text-white font-mono">{promoCode}</strong>
+                      </div>
+                      <p className="text-xs text-slate-400 font-medium">
+                        {discountDesc} &bull; Preferred Rates for Concert Artists
+                      </p>
+                      <div className="flex items-center gap-3 text-xs text-slate-300 font-semibold pt-1 flex-wrap justify-center sm:justify-start">
+                        <span className="flex items-center gap-1"><Phone size={12} className="text-indigo-400" /> {contactPhone}</span>
+                        <span className="flex items-center gap-1"><Mail size={12} className="text-indigo-400" /> {contactEmail}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex-shrink-0 text-center sm:text-right">
+                      <a
+                        href={bookingWebsite}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow-lg shadow-indigo-600/30 transition-all inline-flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Sparkles size={14} /> Reserve Direct Online
+                      </a>
+                      <div className="text-[9px] text-slate-400 mt-1 font-mono">{bookingWebsite.replace(/^https?:\/\//, '')}</div>
+                    </div>
+                  </div>
+
+                  {/* Page 2 Bottom Subtext */}
+                  <div className="mt-2 text-center text-[10px] text-slate-400">
+                    Stonewall Villa &bull; Official 8x10 Double-Sided Digital Advertisement (Side B) &bull; 2-Pages Exact
+                  </div>
                 </div>
 
-                {/* Footer Strip / Booking & Promotion Callout */}
-                <div className="bg-slate-900 text-white p-6 sm:p-8 flex flex-col md:flex-row items-center justify-between gap-6 border-t border-slate-800">
-                  <div className="space-y-1.5 text-center md:text-left">
-                    <div className="inline-flex items-center gap-2 bg-indigo-500/20 border border-indigo-400/40 px-3 py-1 rounded-xl text-xs font-bold text-indigo-300">
-                      <Tag size={12} /> Venue & Artist Promo Code: <strong className="text-white font-mono">{promoCode}</strong>
-                    </div>
-                    <p className="text-xs text-slate-400 font-medium">
-                      {discountDesc}
-                    </p>
-                    <div className="flex items-center gap-4 text-xs text-slate-300 font-semibold pt-1 flex-wrap justify-center md:justify-start">
-                      <span className="flex items-center gap-1"><Phone size={13} className="text-indigo-400" /> {contactPhone}</span>
-                      <span className="flex items-center gap-1"><Mail size={13} className="text-indigo-400" /> {contactEmail}</span>
-                    </div>
-                  </div>
-
-                  <div className="flex-shrink-0">
-                    <a
-                      href={bookingWebsite}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm px-6 py-3 rounded-2xl shadow-lg shadow-indigo-600/30 transition-all inline-flex items-center gap-2 cursor-pointer"
-                    >
-                      <Sparkles size={16} /> Reserve Suites Online
-                    </a>
-                  </div>
-                </div>
               </div>
             </div>
           )}
