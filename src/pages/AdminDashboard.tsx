@@ -6,7 +6,8 @@ import { Navigate, useNavigate, Link } from 'react-router-dom';
 import { format, eachDayOfInterval, parseISO, addDays } from 'date-fns';
 import { cn } from '../lib/utils';
 import { BlackoutDate, PricingRule, Booking, Property, PropertyManager, PropertyImage, getImageUrl, getImageRoomNumber, DiscountCode } from '../types';
-import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight, RefreshCw, MessageSquare, CheckCircle, Loader2, FileText, XCircle, HelpCircle, MapPin, Upload, Database, Ticket, Send, Clock, Bell, FileCheck, RotateCw, CheckSquare, Copy, Search, X, AlertTriangle, Video, Eraser, Pencil } from 'lucide-react';
+import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight, RefreshCw, MessageSquare, CheckCircle, Loader2, FileText, XCircle, HelpCircle, MapPin, Upload, Database, Ticket, Send, Clock, Bell, FileCheck, RotateCw, CheckSquare, Copy, Search, X, AlertTriangle, Video, Eraser, Pencil, Sparkles, Megaphone } from 'lucide-react';
+import { AdvertisementFlyerModal } from '../components/AdvertisementFlyerModal';
 import { v4 as uuidv4 } from 'uuid';
 
 const formatPhoneE164 = (phone: string) => {
@@ -79,6 +80,7 @@ export const AdminDashboard: React.FC = () => {
   const [editingBedrooms, setEditingBedrooms] = useState<{ roomNumber: string; roomLockNumber: string; type: 'Master Bed' | 'Guest Bedroom'; sqFt: number; fee: number; maxCapacity?: number }[]>([]);
   const [createPromoVideoUrl, setCreatePromoVideoUrl] = useState<string>('');
   const [editPromoVideoUrl, setEditPromoVideoUrl] = useState<string>('');
+  const [showAdvertisementModal, setShowAdvertisementModal] = useState<boolean>(false);
 
   const handleVideoFileUpload = (e: React.ChangeEvent<HTMLInputElement>, isEdit: boolean) => {
       const file = e.target.files?.[0];
@@ -1455,6 +1457,28 @@ export const AdminDashboard: React.FC = () => {
        
        const propRef1 = doc(collection(db, 'properties'));
        batch.set(propRef1, {
+           name: "Stonewall Villa",
+           location: "Atlanta, GA",
+           description: "Exclusive luxury lodging estate located minutes from St. James Live and Wolf Creek Amphitheater. Features private master & guest suites with YAMIRY smart locks, gigabit WiFi, chef's kitchen, and tour vehicle parking.",
+           images: [
+             "https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&q=80&w=2000",
+             "https://images.unsplash.com/photo-1566665797739-1674de7a421a?auto=format&fit=crop&q=80&w=2000",
+             "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&q=80&w=2000",
+             "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&q=80&w=2000"
+           ],
+           bedrooms: [
+             { roomNumber: "1", roomLockNumber: "101", type: "Master Bed", sqFt: 380, fee: 185 },
+             { roomNumber: "2", roomLockNumber: "102", type: "Guest Bedroom", sqFt: 260, fee: 145 },
+             { roomNumber: "3", roomLockNumber: "103", type: "Guest Bedroom", sqFt: 240, fee: 135 }
+           ],
+           hasSmartLock: true,
+           allowIndividualRoomRental: true,
+           isTestProperty: true,
+           createdAt: serverTimestamp()
+       });
+
+       const propRef2 = doc(collection(db, 'properties'));
+       batch.set(propRef2, {
            name: "Oceanview Paradise Villa",
            description: "A stunning oceanfront villa with panoramic views, private pool, and luxury detailing.",
            images: ["https://images.unsplash.com/photo-1499793983690-e29da59ef1c2?auto=format&fit=crop&q=80&w=2000"],
@@ -1462,8 +1486,8 @@ export const AdminDashboard: React.FC = () => {
            createdAt: serverTimestamp()
        });
 
-       const propRef2 = doc(collection(db, 'properties'));
-       batch.set(propRef2, {
+       const propRef3 = doc(collection(db, 'properties'));
+       batch.set(propRef3, {
            name: "Mountain Retreat Cabin",
            description: "Quiet and cozy cabin nested in the woods, perfect for a relaxing getaway.",
            images: ["https://images.unsplash.com/photo-1542314831-c6a4d14effca?auto=format&fit=crop&q=80&w=2000"],
@@ -1482,7 +1506,7 @@ export const AdminDashboard: React.FC = () => {
        });
 
        await batch.commit();
-       alert("Test Database Seeded! reach_dlaniger@hotmail.com added as Manager and demo properties generated.");
+       alert("Test Database Seeded! Stonewall Villa & demo properties generated, reach_dlaniger@hotmail.com added as Manager.");
     } catch (e: any) {
        alert("Seeding failed: " + e.message);
     }
@@ -3148,7 +3172,14 @@ C.&S.H. Group Properties, LLC
                 <div className="flex-1">
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="text-lg font-bold text-indigo-900">Admin Quick Stats</h3>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap items-center">
+                        <button
+                          onClick={() => setShowAdvertisementModal(true)}
+                          className="text-xs bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 hover:from-indigo-700 hover:to-purple-800 text-white font-bold px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 shadow-sm shadow-indigo-200 cursor-pointer"
+                          title="Generate Professional Digital 1-Pager Advertisement for Performing Artists & Venues"
+                        >
+                          <Sparkles size={14} className="text-amber-300 animate-pulse" /> Digital 1-Pager Ad
+                        </button>
                         <div className="relative group">
                             <button onClick={handleSeedTestData} className="text-xs bg-indigo-100 text-indigo-700 font-bold px-3 py-1.5 rounded-lg hover:bg-indigo-200 transition-colors flex items-center gap-1">
                                Seed Test Data
@@ -3158,9 +3189,10 @@ C.&S.H. Group Properties, LLC
                                   <span>🌱</span> Seeding Test Data:
                                </p>
                                <ul className="space-y-1.5 text-[11px] text-slate-200 leading-normal list-disc pl-3">
+                                  <li>Creates **Stonewall Villa** (Atlanta, GA near St. James Live & Wolf Creek Amphitheater).</li>
                                   <li>Creates **Oceanview Paradise Villa** test property.</li>
                                   <li>Creates **Mountain Retreat Cabin** test property.</li>
-                                  <li>Registers **Test Manager** (<span className="text-indigo-300 font-mono font-bold">reach_dlaniger@hotmail.com</span>) to receive automated email/SMS alerts.</li>
+                                  <li>Registers **Test Manager** (<span className="text-indigo-300 font-mono font-bold">reach_dlaniger@hotmail.com</span>) to receive automated alerts.</li>
                                   <li>Commits all records atomically to Firestore.</li>
                                </ul>
                             </div>
@@ -5184,10 +5216,24 @@ C.&S.H. Group Properties, LLC
              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                  {properties.map(p => (
                      <div key={p.id} className={`border p-4 rounded-2xl cursor-pointer transition-colors shadow-sm ${activePropertyId === p.id ? 'ring-2 ring-indigo-600 bg-indigo-50 border-indigo-200' : 'hover:bg-slate-50 border-slate-200 bg-white'}`} onClick={() => setActivePropertyId(p.id)}>
-                         {p.images.length > 0 && <img src={p.images[0]} className="w-full h-40 object-cover rounded-xl mb-3 shadow-sm" />}
+                         {p.images.length > 0 && <img src={typeof p.images[0] === 'string' ? p.images[0] : (p.images[0] as any)?.url} className="w-full h-40 object-cover rounded-xl mb-3 shadow-sm" />}
                          <div className="flex justify-between items-start">
                              <h4 className="font-bold text-lg text-slate-800">{p.name}</h4>
-                             <button type="button" onClick={(e) => { e.stopPropagation(); handleDeleteProperty(p.id); }} className="text-slate-400 hover:text-red-500 p-1 transition-colors"><Trash2 size={16}/></button>
+                             <div className="flex items-center gap-1">
+                                 <button
+                                     type="button"
+                                     onClick={(e) => {
+                                         e.stopPropagation();
+                                         setActivePropertyId(p.id);
+                                         setShowAdvertisementModal(true);
+                                     }}
+                                     className="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold px-2 py-1 rounded-lg border border-indigo-200 flex items-center gap-1 transition-colors"
+                                     title="Generate 1-Pager Digital Ad"
+                                 >
+                                     <Sparkles size={12} className="text-indigo-600" /> Ad Flyer
+                                 </button>
+                                 <button type="button" onClick={(e) => { e.stopPropagation(); handleDeleteProperty(p.id); }} className="text-slate-400 hover:text-red-500 p-1 transition-colors"><Trash2 size={16}/></button>
+                             </div>
                          </div>
                          <p className="text-sm text-slate-500 line-clamp-2 mt-1">{p.description}</p>
                          <div className="mt-3 text-xs font-bold text-slate-400 uppercase tracking-widest">{p.images.length} Photos</div>
@@ -7168,6 +7214,16 @@ C.&S.H. Group Properties, LLC
                 </div>
              );
           })()}
+
+          {/* Professional Digital 1-Pager Advertisement Modal */}
+          <AdvertisementFlyerModal
+            isOpen={showAdvertisementModal}
+            onClose={() => setShowAdvertisementModal(false)}
+            properties={properties}
+            pricingRules={pricingRules}
+            propertyManagers={propertyManagers}
+            activePropertyId={activePropertyId}
+          />
 
        </div>
     </div>

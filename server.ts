@@ -941,6 +941,38 @@ async function startServer() {
     }
   });
 
+  app.post("/api/send-advertisement-email", async (req, res) => {
+    console.log("[API] Send Advertisement Email hit");
+    try {
+      const { to, subject, html, text, venueName, recipientName, propertyName } = req.body;
+      const smtpHost = process.env.SMTP_HOST;
+
+      if (!smtpHost) {
+        return res.status(400).json({ error: "SMTP_HOST environment variable is not configured on Render.com." });
+      }
+
+      if (!to) {
+        return res.status(400).json({ error: "Venue or recipient email address is required." });
+      }
+
+      const emailSubject = subject || `Exclusive Artist & Tour Accommodations near ${venueName || 'St. James Live'} | ${propertyName || 'Stonewall Villa'}`;
+      const emailText = text || `Exclusive Artist Lodging for ${venueName || 'Your Venue'}. Please view the HTML version of this digital one-pager for details on room suites, rates, photos, and past booking reviews at ${propertyName || 'Stonewall Villa'}.`;
+
+      const result = await sendSmtpEmail({
+        to,
+        subject: emailSubject,
+        text: emailText,
+        html: html
+      });
+
+      console.log(`[API] Advertisement Email successfully dispatched to ${to} (${venueName || 'Venue'}):`, result);
+      res.json({ success: true, result, message: `Advertisement flyer successfully emailed to ${to}` });
+    } catch (err: any) {
+      console.error("[API] Advertisement Email Error:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.post("/api/checkin-booking", async (req, res) => {
     console.log("[API] Checkin Booking hit");
     try {
