@@ -107,6 +107,8 @@ export interface Booking {
   renewalDecision?: 'yes' | 'no' | 'pending' | 'renewed';
   sentRenewalNotification?: boolean;
   sentRenewalNotificationAt?: string;
+  sentSurveyEmail?: boolean;
+  sentSurveyEmailAt?: string;
 }
 
 export interface GlobalSettings {
@@ -139,6 +141,8 @@ export interface Lease {
   validatedForNextMonth?: boolean;
   validatedAt?: string;
   lastReminderSentAt?: string;
+  sentSurveyEmail?: boolean;
+  sentSurveyEmailAt?: string;
   createdAt: any;
 }
 
@@ -166,6 +170,48 @@ export interface DiscountCode {
   useCount: number;
   isActive: boolean;
   notes?: string;
+  createdAt: any;
+}
+
+export interface SurveyResponse {
+  id: string;
+  guestName: string;
+  guestEmail: string;
+  guestPhone?: string;
+  propertyId?: string;
+  propertyName: string;
+  bookingRef?: string;
+  stayType?: 'booking' | 'lease' | 'manual_booking';
+  checkIn?: string;
+  checkOut?: string;
+  comfort: string;
+  comfortRating?: number; // 1-5
+  amenities: string;
+  cleanliness: string;
+  cleanlinessRating?: string;
+  operations: string;
+  operationsHadIssues?: boolean;
+  futureIdeas: string;
+  wouldStayAgain?: string;
+  overallRating?: number; // 1-5
+  publicReviewComment?: string;
+  publishAsReview?: boolean;
+  createdAt: any;
+}
+
+export interface Review {
+  id: string;
+  author: string;
+  role?: string; // e.g. "Verified Guest", "Touring Musician", "Production Crew"
+  rating: number; // 1-5
+  title?: string;
+  comment: string;
+  propertyId?: string;
+  propertyName: string;
+  stayDates?: string;
+  bookingRef?: string;
+  verified: boolean;
+  venueMentioned?: string;
   createdAt: any;
 }
 

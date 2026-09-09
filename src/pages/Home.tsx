@@ -6,7 +6,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { 
   Calendar as CalendarIcon, Key, LogOut, ChevronRight, Lock, BellRing, 
   ShieldCheck, MessageSquare, HelpCircle, MapPin, Ticket, Sparkles, 
-  Music, Trophy, Compass, Smile, RotateCw, RefreshCw, CheckCircle2
+  Music, Trophy, Compass, Smile, RotateCw, RefreshCw, CheckCircle2, Star
 } from 'lucide-react';
 import { Property, getImageUrl } from '../types';
 import { PrivacyPolicyModal } from '../components/PrivacyPolicyModal';
@@ -160,6 +160,14 @@ export const Home: React.FC = () => {
                                     <span>Events</span>
                                 </button>
                                 <Link 
+                                  to="/reviews" 
+                                  className="text-slate-600 hover:text-indigo-600 font-bold flex items-center gap-1 text-xs sm:text-sm transition-colors rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 hover:bg-slate-50"
+                                  title="Guest Reviews"
+                                >
+                                    <Star size={15} className="text-amber-500 fill-amber-500/30"/>
+                                    <span className="hidden md:inline">Reviews</span>
+                                </Link>
+                                <Link 
                                   to="/faq" 
                                   className="text-slate-600 hover:text-indigo-600 font-bold flex items-center gap-1 text-xs sm:text-sm transition-colors rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 hover:bg-slate-50"
                                   title="Frequently Asked Questions"
@@ -212,7 +220,7 @@ export const Home: React.FC = () => {
                                 >
                                     <Compass size={14}/> Events
                                 </button>
-                                <Link to="/faq" className="text-slate-500 hover:text-indigo-600 font-bold text-[10px] sm:text-xs uppercase tracking-widest transition-colors flex items-center gap-1">
+                                <Link to="/reviews" className="text-slate-500 hover:text-indigo-600 font-bold text-[10px] sm:text-xs uppercase tracking-widest transition-colors flex items-center gap-1"><Star size={14} className="text-amber-500 fill-amber-500/30"/> Reviews</Link> <Link to="/faq" className="text-slate-500 hover:text-indigo-600 font-bold text-[10px] sm:text-xs uppercase tracking-widest transition-colors flex items-center gap-1">
                                     <HelpCircle size={14}/> FAQ
                                 </Link>
                                 <Link to="/opt-in" className="text-slate-500 hover:text-indigo-600 font-bold text-[10px] sm:text-xs uppercase tracking-widest transition-colors">

@@ -200,12 +200,6 @@ export const AdvertisementFlyerModal: React.FC<AdvertisementFlyerModalProps> = (
 
   // Trigger browser print for 8x10 2-Page layout
   const handlePrint = () => {
-    const printWindow = window.open('', '_blank', 'width=850,height=1100');
-    if (!printWindow) {
-      window.print();
-      return;
-    }
-
     const propertyName = selectedProperty?.name || 'Stonewall Villa';
     const htmlToPrint = `<!DOCTYPE html>
 <html lang="en">
@@ -648,9 +642,47 @@ export const AdvertisementFlyerModal: React.FC<AdvertisementFlyerModalProps> = (
 </body>
 </html>`;
 
-    printWindow.document.open();
-    printWindow.document.write(htmlToPrint);
-    printWindow.document.close();
+    try {
+      const printWindow = window.open('', '_blank', 'width=850,height=1100');
+      if (printWindow) {
+        printWindow.document.open();
+        printWindow.document.write(htmlToPrint);
+        printWindow.document.close();
+        return;
+      }
+    } catch (e) {
+      console.warn("window.open blocked, using iframe fallback for 8x10 print:", e);
+    }
+
+    // Fallback: Invisible iframe printing for iframe sandbox environments
+    try {
+      const existingIframe = document.getElementById('ad-flyer-print-frame');
+      if (existingIframe) existingIframe.remove();
+
+      const printFrame = document.createElement('iframe');
+      printFrame.id = 'ad-flyer-print-frame';
+      printFrame.style.position = 'fixed';
+      printFrame.style.right = '0';
+      printFrame.style.bottom = '0';
+      printFrame.style.width = '0';
+      printFrame.style.height = '0';
+      printFrame.style.border = '0';
+      document.body.appendChild(printFrame);
+
+      const frameDoc = printFrame.contentWindow?.document || printFrame.contentDocument;
+      if (frameDoc) {
+        frameDoc.open();
+        frameDoc.write(htmlToPrint);
+        frameDoc.close();
+        printFrame.contentWindow?.focus();
+        setTimeout(() => {
+          printFrame.contentWindow?.print();
+        }, 600);
+      }
+    } catch (fallbackErr) {
+      console.error("Print fallback error:", fallbackErr);
+      window.print();
+    }
   };
 
   // Trigger 8x10 HTML/PDF Download

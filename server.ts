@@ -146,6 +146,318 @@ function formatPhoneToE164(phone: string | undefined): string {
   return cleaned;
 }
 
+// ==========================================
+// SURVEY & REVIEWS NOTIFICATION HELPERS
+// ==========================================
+
+async function sendStaySurveyEmail({
+  guestName,
+  guestEmail,
+  propertyName,
+  bookingRef,
+  appUrl,
+  stayType = 'booking'
+}: {
+  guestName: string;
+  guestEmail: string;
+  propertyName: string;
+  bookingRef?: string;
+  appUrl?: string;
+  stayType?: string;
+}) {
+  if (!guestEmail) return false;
+
+  const baseAppUrl = appUrl || process.env.APP_URL || process.env.PUBLIC_URL || "https://realcal.app";
+  const normalizedBase = baseAppUrl.endsWith('/') ? baseAppUrl.slice(0, -1) : baseAppUrl;
+  
+  const reviewsUrl = `${normalizedBase}/reviews?prop=${encodeURIComponent(propertyName)}&ref=${encodeURIComponent(bookingRef || '')}`;
+  const surveyUrl = `${normalizedBase}/survey?ref=${encodeURIComponent(bookingRef || '')}&property=${encodeURIComponent(propertyName)}&guest=${encodeURIComponent(guestName)}&email=${encodeURIComponent(guestEmail)}&stayType=${encodeURIComponent(stayType)}`;
+
+  const subject = `Your Stay at ${propertyName} - Stay Survey & Reviews`;
+
+  const emailText = `Hi ${guestName},
+
+Thank you so much for choosing to stay at ${propertyName}! It was a pleasure hosting you, and I hope you had a safe trip home.
+
+We always strive to provide a 5-star experience, so we would love to hear your thoughts on a few quick questions:
+•	Comfort: How was your overall experience during your stay?
+•	Amenities: Was there anything missing that could have made your stay more comfortable?
+•	Cleanliness: Did the space meet your expectations for cleanliness and preparation?
+•	Operations: Did you run into any issues with check-in, the Wi-Fi, or any appliances?
+•	Future Ideas: Do you have any suggestions for future improvements, or would you stay with us again?
+
+Your feedback helps us keep improving for future guests. If you have a moment, we would also truly appreciate it if you could leave us a quick review on our Review Page here! ${reviewsUrl}
+
+You can also submit your 5 quick answers online directly here:
+${surveyUrl}
+
+Thank you again. We hope to host you, your friends, or your family again soon.
+
+Management
+RealCal Bookings
+C&SH Group Properties, LLC`;
+
+  const emailHtml = `
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  </head>
+  <body style="margin: 0; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #1e293b; line-height: 1.6;">
+    <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+      
+      <div style="background-color: #4f46e5; padding: 24px 32px; text-align: left;">
+        <h1 style="color: #ffffff; margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -0.5px;">RealCal Bookings</h1>
+        <p style="color: #e0e7ff; margin: 4px 0 0; font-size: 12px; font-weight: 500;">C&SH Group Properties, LLC</p>
+      </div>
+
+      <div style="padding: 32px;">
+        <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 0;">Hi ${guestName},</p>
+        
+        <p style="font-size: 14px; color: #334155; margin-bottom: 20px;">
+          Thank you so much for choosing to stay at <strong>${propertyName}</strong>! It was a pleasure hosting you, and I hope you had a safe trip home.
+        </p>
+        
+        <p style="font-size: 14px; color: #334155; margin-bottom: 20px;">
+          We always strive to provide a 5-star experience, so we would love to hear your thoughts on a few quick questions:
+        </p>
+
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px 24px; margin-bottom: 24px;">
+          <ul style="margin: 0; padding-left: 20px; font-size: 13.5px; color: #334155; line-height: 1.8;">
+            <li style="margin-bottom: 8px;"><strong>Comfort:</strong> How was your overall experience during your stay?</li>
+            <li style="margin-bottom: 8px;"><strong>Amenities:</strong> Was there anything missing that could have made your stay more comfortable?</li>
+            <li style="margin-bottom: 8px;"><strong>Cleanliness:</strong> Did the space meet your expectations for cleanliness and preparation?</li>
+            <li style="margin-bottom: 8px;"><strong>Operations:</strong> Did you run into any issues with check-in, the Wi-Fi, or any appliances?</li>
+            <li style="margin-bottom: 0;"><strong>Future Ideas:</strong> Do you have any suggestions for future improvements, or would you stay with us again?</li>
+          </ul>
+        </div>
+
+        <div style="text-align: center; margin: 28px 0;">
+          <a href="${surveyUrl}" style="display: inline-block; background-color: #4f46e5; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 10px; font-weight: 700; font-size: 14px; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2);">
+            Complete 5-Question Survey &rarr;
+          </a>
+        </div>
+
+        <p style="font-size: 14px; color: #334155; margin-bottom: 24px; line-height: 1.6;">
+          Your feedback helps us keep improving for future guests. If you have a moment, we would also truly appreciate it if you could leave us a quick review on our <a href="${reviewsUrl}" style="color: #4f46e5; font-weight: 700; text-decoration: underline;">Review Page here!</a>
+        </p>
+
+        <p style="font-size: 14px; color: #334155; margin-bottom: 28px;">
+          Thank you again. We hope to host you, your friends, or your family again soon.
+        </p>
+
+        <div style="border-top: 1px solid #f1f5f9; padding-top: 20px; font-size: 13px; color: #64748b;">
+          <p style="margin: 0; font-weight: 700; color: #0f172a;">Management</p>
+          <p style="margin: 2px 0;">RealCal Bookings</p>
+          <p style="margin: 2px 0;">C&SH Group Properties, LLC</p>
+        </div>
+      </div>
+
+      <div style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 16px 32px; text-align: center; font-size: 11px; color: #94a3b8;">
+        &copy; 2026 C&SH Group Properties, LLC &bull; Automated Guest Experience Services
+      </div>
+    </div>
+  </body>
+  </html>
+  `;
+
+  try {
+    await sendSmtpEmail({
+      to: guestEmail,
+      subject,
+      text: emailText,
+      html: emailHtml
+    });
+    console.log(`[Survey Email] Successfully sent stay survey email to ${guestEmail}`);
+    return true;
+  } catch (err: any) {
+    console.error(`[Survey Email] Failed to send stay survey email to ${guestEmail}:`, err.message);
+    return false;
+  }
+}
+
+async function sendSurveyResultsToPropertyManagers({
+  surveyData,
+  activeDb
+}: {
+  surveyData: any;
+  activeDb: any;
+}) {
+  const propertyName = surveyData.propertyName || "Stonewall Villa";
+  const guestName = surveyData.guestName || "Guest";
+  const guestEmail = surveyData.guestEmail || "N/A";
+  const guestPhone = surveyData.guestPhone || "N/A";
+  const rating = surveyData.overallRating || surveyData.comfortRating || 5;
+  const stayRef = surveyData.bookingRef ? `(Ref: ${surveyData.bookingRef})` : "";
+
+  const subject = `[Guest Survey Results] ${propertyName} - ${guestName} (${rating}/5 Stars)`;
+
+  const text = `A guest has completed their Stay Survey for ${propertyName} ${stayRef}.
+
+GUEST DETAILS:
+• Name: ${guestName}
+• Email: ${guestEmail}
+• Phone: ${guestPhone}
+• Property: ${propertyName}
+• Stay Reference: ${surveyData.bookingRef || 'N/A'}
+• Overall Rating: ${rating} / 5 Stars
+
+SURVEY QUESTIONS & ANSWERS:
+1. Comfort: How was your overall experience during your stay?
+Rating: ${surveyData.comfortRating || rating} / 5 Stars
+Feedback: ${surveyData.comfort || 'N/A'}
+
+2. Amenities: Was there anything missing that could have made your stay more comfortable?
+Response: ${surveyData.amenities || 'N/A'}
+
+3. Cleanliness: Did the space meet your expectations for cleanliness and preparation?
+Status: ${surveyData.cleanlinessRating || 'N/A'}
+Feedback: ${surveyData.cleanliness || 'N/A'}
+
+4. Operations: Did you run into any issues with check-in, the Wi-Fi, or any appliances?
+Status: ${surveyData.operationsStatus || 'N/A'}
+Feedback: ${surveyData.operations || 'N/A'}
+
+5. Future Ideas: Do you have any suggestions for future improvements, or would you stay with us again?
+Would Stay Again: ${surveyData.wouldStayAgain || 'N/A'}
+Suggestions: ${surveyData.futureIdeas || 'N/A'}
+
+PUBLIC REVIEW COMMENT:
+${surveyData.publishAsReview ? (surveyData.publicReviewComment || surveyData.comfort || 'Yes (Shared to Review Page)') : 'Guest opted for private feedback only'}
+
+---
+RealCal Bookings Property Management Notification
+C&SH Group Properties, LLC`;
+
+  const html = `
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <meta charset="utf-8">
+  </head>
+  <body style="margin: 0; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #1e293b; line-height: 1.6;">
+    <div style="max-width: 650px; margin: 0 auto; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+      <div style="background-color: #4f46e5; padding: 20px 28px;">
+        <span style="display: inline-block; background-color: #3730a3; color: #ffffff; padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">Property Management Notification</span>
+        <h2 style="color: #ffffff; margin: 0; font-size: 20px; font-weight: 800;">New Guest Survey Completed</h2>
+        <p style="color: #c7d2fe; margin: 4px 0 0; font-size: 13px;">${propertyName} &bull; ${guestName} &bull; <strong>${rating} / 5 Stars</strong></p>
+      </div>
+
+      <div style="padding: 28px;">
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px; font-size: 13px;">
+          <tr style="border-bottom: 1px solid #f1f5f9;">
+            <td style="padding: 8px 0; color: #64748b; font-weight: 600; width: 35%;">Guest Name:</td>
+            <td style="padding: 8px 0; color: #0f172a; font-weight: 700;">${guestName}</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #f1f5f9;">
+            <td style="padding: 8px 0; color: #64748b; font-weight: 600;">Email:</td>
+            <td style="padding: 8px 0; color: #0f172a;"><a href="mailto:${guestEmail}" style="color: #4f46e5; text-decoration: none; font-weight: 600;">${guestEmail}</a></td>
+          </tr>
+          <tr style="border-bottom: 1px solid #f1f5f9;">
+            <td style="padding: 8px 0; color: #64748b; font-weight: 600;">Phone:</td>
+            <td style="padding: 8px 0; color: #0f172a;">${guestPhone}</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #f1f5f9;">
+            <td style="padding: 8px 0; color: #64748b; font-weight: 600;">Property:</td>
+            <td style="padding: 8px 0; color: #0f172a; font-weight: 600;">${propertyName}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #64748b; font-weight: 600;">Stay Reference:</td>
+            <td style="padding: 8px 0; color: #0f172a; font-family: monospace;">${surveyData.bookingRef || 'N/A'}</td>
+          </tr>
+        </table>
+
+        <h3 style="font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: #475569; margin: 0 0 12px; border-bottom: 2px solid #f1f5f9; padding-bottom: 6px;">
+          5 Stay Questions & Answers
+        </h3>
+
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 12px;">
+          <p style="margin: 0 0 4px; font-size: 12px; font-weight: 700; color: #4f46e5;">1. Comfort: How was your overall experience during your stay?</p>
+          <p style="margin: 0 0 4px; font-size: 12px; font-weight: 600; color: #0f172a;">Rating: <strong>${surveyData.comfortRating || rating} / 5 Stars</strong></p>
+          <p style="margin: 0; font-size: 13px; color: #334155;">${surveyData.comfort || 'No written comment'}</p>
+        </div>
+
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 12px;">
+          <p style="margin: 0 0 4px; font-size: 12px; font-weight: 700; color: #4f46e5;">2. Amenities: Was there anything missing that could have made your stay more comfortable?</p>
+          <p style="margin: 0; font-size: 13px; color: #334155;">${surveyData.amenities || 'All amenities were provided'}</p>
+        </div>
+
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 12px;">
+          <p style="margin: 0 0 4px; font-size: 12px; font-weight: 700; color: #4f46e5;">3. Cleanliness: Did the space meet your expectations for cleanliness and preparation?</p>
+          <p style="margin: 0 0 4px; font-size: 12px; font-weight: 600; color: #059669;">Status: ${surveyData.cleanlinessRating || 'Met expectations'}</p>
+          <p style="margin: 0; font-size: 13px; color: #334155;">${surveyData.cleanliness || 'No further notes'}</p>
+        </div>
+
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 12px;">
+          <p style="margin: 0 0 4px; font-size: 12px; font-weight: 700; color: #4f46e5;">4. Operations: Did you run into any issues with check-in, the Wi-Fi, or any appliances?</p>
+          <p style="margin: 0 0 4px; font-size: 12px; font-weight: 600; color: #0f172a;">Status: ${surveyData.operationsStatus || 'Smooth'}</p>
+          <p style="margin: 0; font-size: 13px; color: #334155;">${surveyData.operations || 'No operational issues reported'}</p>
+        </div>
+
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+          <p style="margin: 0 0 4px; font-size: 12px; font-weight: 700; color: #4f46e5;">5. Future Ideas: Suggestions for future improvements, or would stay again?</p>
+          <p style="margin: 0 0 4px; font-size: 12px; font-weight: 600; color: #0f172a;">Would Stay Again: <strong>${surveyData.wouldStayAgain || 'Yes'}</strong></p>
+          <p style="margin: 0; font-size: 13px; color: #334155;">${surveyData.futureIdeas || 'None'}</p>
+        </div>
+
+        ${surveyData.publishAsReview ? `
+        <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 12px; padding: 16px; margin-bottom: 20px;">
+          <p style="margin: 0 0 4px; font-size: 12px; font-weight: 700; color: #1d4ed8;">Public Review Published on Review Page:</p>
+          <p style="margin: 0; font-size: 13px; color: #1e3a8a; font-style: italic;">"${surveyData.publicReviewComment || surveyData.comfort}"</p>
+        </div>
+        ` : ''}
+
+        <p style="font-size: 12px; color: #94a3b8; margin: 24px 0 0; border-top: 1px solid #e2e8f0; padding-top: 16px;">
+          This survey notification was automatically dispatched to all enabled Property Management Contacts at C&SH Group Properties, LLC.
+        </p>
+      </div>
+    </div>
+  </body>
+  </html>
+  `;
+
+  const recipientEmails: string[] = [];
+
+  if (activeDb) {
+    try {
+      const managersSnap = await activeDb.collection("property_managers").where("enabled", "==", true).get();
+      if (!managersSnap.empty) {
+        for (const doc of managersSnap.docs) {
+          const email = doc.data()?.email;
+          if (email && !recipientEmails.includes(email)) {
+            recipientEmails.push(email);
+          }
+        }
+      }
+    } catch (e: any) {
+      console.warn("[Survey] Could not fetch property_managers from Firestore:", e.message);
+    }
+  }
+
+  if (recipientEmails.length === 0) {
+    const fallbackEmail = process.env.ADMIN_EMAIL || process.env.SMTP_USER || "donotreply@cashgroupproperties.com";
+    recipientEmails.push(fallbackEmail);
+  }
+
+  console.log(`[Survey] Sending survey results to Property Management contacts: ${recipientEmails.join(", ")}`);
+
+  for (const email of recipientEmails) {
+    try {
+      await sendSmtpEmail({
+        to: email,
+        subject,
+        text,
+        html
+      });
+      console.log(`[Survey] Successfully sent survey results to Property Manager: ${email}`);
+    } catch (err: any) {
+      console.error(`[Survey] Failed to send survey results to Property Manager ${email}:`, err.message);
+    }
+  }
+}
+
+
 async function sendInvoicePaymentAdminNotification(bookingId: string, bookingData: any, activeDb: any) {
   try {
     const invoiceDetails = bookingData.invoiceDetails || {};
@@ -1348,6 +1660,25 @@ async function startServer() {
             attachments: emailAttachments
           });
           results.push(`Guest thank-you email sent to ${guestEmail}`);
+          // Also dispatch Stay Survey & Review email
+          try {
+            const hostUrl = `${req.protocol}://${req.get('host')}`;
+            await sendStaySurveyEmail({
+              guestName,
+              guestEmail,
+              propertyName,
+              bookingRef: booking.bookingRef || bookingId,
+              appUrl: hostUrl,
+              stayType: 'booking'
+            });
+            await db.collection("bookings").doc(bookingId).update({
+              sentSurveyEmail: true,
+              sentSurveyEmailAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+            results.push(`Stay survey email dispatched to ${guestEmail}`);
+          } catch (surveyErr: any) {
+            console.warn("[API] Checkout survey email dispatch error:", surveyErr);
+          }
         } catch (e: any) {
           results.push(`Guest thank-you email failed: ${e.message}`);
         }
@@ -2831,6 +3162,164 @@ async function startServer() {
     }
   });
 
+  
+  // ==========================================
+  // SURVEY & REVIEWS API ENDPOINTS
+  // ==========================================
+
+  // Submit 5-Question Survey and forward results to Property Management Contacts
+  app.post("/api/submit-survey", async (req, res) => {
+    console.log("[API] Submit Survey hit");
+    try {
+      const surveyData = req.body;
+      if (!surveyData || !surveyData.guestName) {
+        return res.status(400).json({ error: "Survey data and guest name are required." });
+      }
+
+      let surveyId = "srv-" + Date.now();
+
+      if (db) {
+        const docRef = await db.collection("surveys").add({
+          ...surveyData,
+          createdAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+        surveyId = docRef.id;
+
+        // If user opted to publish a public review comment
+        if (surveyData.publishAsReview && (surveyData.publicReviewComment || surveyData.comfort)) {
+          await db.collection("reviews").add({
+            author: surveyData.guestName,
+            email: surveyData.guestEmail || "",
+            role: surveyData.reviewRole || "Verified Guest",
+            propertyName: surveyData.propertyName || "Stonewall Villa",
+            rating: surveyData.overallRating || surveyData.comfortRating || 5,
+            comment: surveyData.publicReviewComment || surveyData.comfort,
+            bookingRef: surveyData.bookingRef || "",
+            verified: true,
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
+          });
+        }
+
+        // Mark booking as survey completed if reference provided
+        if (surveyData.bookingRef) {
+          try {
+            const bDoc = await db.collection("bookings").doc(surveyData.bookingRef).get();
+            if (bDoc.exists) {
+              await db.collection("bookings").doc(surveyData.bookingRef).update({
+                surveyCompleted: true,
+                surveyCompletedAt: admin.firestore.FieldValue.serverTimestamp()
+              });
+            }
+          } catch (e) {}
+        }
+
+        // Forward full survey results to Property Management Contacts
+        await sendSurveyResultsToPropertyManagers({ surveyData, activeDb: db });
+      } else {
+        await sendSurveyResultsToPropertyManagers({ surveyData, activeDb: null });
+      }
+
+      res.json({ success: true, surveyId });
+    } catch (err: any) {
+      console.error("[API] Error submitting survey:", err);
+      res.status(500).json({ error: err.message || "Failed to process survey." });
+    }
+  });
+
+  // Manually trigger or resend Stay Survey Email (e.g. from Admin Dashboard)
+  app.post("/api/send-survey-email", async (req, res) => {
+    console.log("[API] Send Survey Email hit");
+    try {
+      const { bookingId, leaseId, guestEmail, guestName, propertyName } = req.body;
+      const appUrl = `${req.protocol}://${req.get('host')}`;
+
+      let targetEmail = guestEmail;
+      let targetName = guestName || "Guest";
+      let targetProperty = propertyName || "Stonewall Villa";
+      let targetRef = bookingId || leaseId || "";
+      let stayType = bookingId ? "booking" : (leaseId ? "lease" : "manual_booking");
+
+      if (db && bookingId) {
+        const bDoc = await db.collection("bookings").doc(bookingId).get();
+        if (bDoc.exists) {
+          const b = bDoc.data() || {};
+          targetEmail = targetEmail || b.guestEmail;
+          targetName = targetName === "Guest" ? (b.guestName || "Guest") : targetName;
+          targetRef = b.bookingRef || bookingId;
+          if (!propertyName && b.propertyId) {
+            const pDoc = await db.collection("properties").doc(b.propertyId).get();
+            if (pDoc.exists) targetProperty = pDoc.data()?.name || targetProperty;
+          }
+          await db.collection("bookings").doc(bookingId).update({
+            sentSurveyEmail: true,
+            sentSurveyEmailAt: admin.firestore.FieldValue.serverTimestamp()
+          });
+        }
+      } else if (db && leaseId) {
+        const lDoc = await db.collection("leases").doc(leaseId).get();
+        if (lDoc.exists) {
+          const l = lDoc.data() || {};
+          targetEmail = targetEmail || l.tenantEmail;
+          targetName = targetName === "Guest" ? (l.tenantName || "Resident") : targetName;
+          targetRef = l.leaseCode || leaseId;
+          targetProperty = l.propertyNameOrRoom || targetProperty;
+          await db.collection("leases").doc(leaseId).update({
+            sentSurveyEmail: true,
+            sentSurveyEmailAt: admin.firestore.FieldValue.serverTimestamp()
+          });
+        }
+      }
+
+      if (!targetEmail) {
+        return res.status(400).json({ error: "Recipient guest email is required." });
+      }
+
+      const sent = await sendStaySurveyEmail({
+        guestName: targetName,
+        guestEmail: targetEmail,
+        propertyName: targetProperty,
+        bookingRef: targetRef,
+        appUrl,
+        stayType
+      });
+
+      res.json({ success: sent, guestEmail: targetEmail });
+    } catch (err: any) {
+      console.error("[API] Error sending survey email:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Notify property managers when a standalone review is submitted on Review Page
+  app.post("/api/notify-review-submitted", async (req, res) => {
+    try {
+      const { author, email, propertyName, rating, title, comment, bookingRef } = req.body;
+      const prop = propertyName || "Stonewall Villa";
+      const rAuthor = author || "Verified Guest";
+      const rRating = rating || 5;
+
+      const subject = `[New Review Published] ${prop} - ${rAuthor} (${rRating}/5 Stars)`;
+      const text = `A new guest review has been posted on the Reviews Page!\n\nProperty: ${prop}\nAuthor: ${rAuthor} (${email || 'No email'})\nRating: ${rRating} / 5 Stars\nTitle: ${title || 'N/A'}\nComment: "${comment || ''}"\nBooking Ref: ${bookingRef || 'N/A'}\n\nView in real time on the App's Review Page.`;
+
+      if (db) {
+        const managersSnap = await db.collection("property_managers").where("enabled", "==", true).get();
+        if (!managersSnap.empty) {
+          for (const doc of managersSnap.docs) {
+            const mEmail = doc.data()?.email;
+            if (mEmail) {
+              await sendSmtpEmail({ to: mEmail, subject, text });
+            }
+          }
+        }
+      }
+
+      res.json({ success: true });
+    } catch (err: any) {
+      console.warn("[API] notify-review-submitted non-fatal error:", err.message);
+      res.json({ success: false, error: err.message });
+    }
+  });
+
   // --- VITE / STATIC / FALLBACK ---
 
   if (isProd) {
@@ -3044,7 +3533,66 @@ async function startServer() {
             sentRenewalNotificationAt: admin.firestore.FieldValue.serverTimestamp()
           });
         }
+
+        // Automated Stay Survey Email when Booking Ends (checked out or past deadline)
+        const deadlineDate = getCheckoutDeadline(b.checkOut);
+        const bookingHasEnded = b.checkedOut === true || now > deadlineDate;
+        if (bookingHasEnded && !b.sentSurveyEmail && guestEmail) {
+          try {
+            console.log(`[Reminders] Sending post-stay survey email to ${guestEmail} for booking ${doc.id}`);
+            await sendStaySurveyEmail({
+              guestName,
+              guestEmail,
+              propertyName,
+              bookingRef: b.bookingRef || doc.id,
+              stayType: 'booking'
+            });
+            await db.collection("bookings").doc(doc.id).update({
+              sentSurveyEmail: true,
+              sentSurveyEmailAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+            console.log(`[Reminders] Sent survey email to ${guestEmail} for booking ${doc.id}`);
+          } catch (surveyErr: any) {
+            console.error(`[Reminders] Failed to send survey email to ${guestEmail}:`, surveyErr.message);
+          }
+        }
       }
+          // Check for ended leases Survey & Reviews Email
+      try {
+        const leasesSnap = await db.collection("leases").get();
+        for (const lDoc of leasesSnap.docs) {
+          const l = lDoc.data();
+          if (!l || l.sentSurveyEmail) continue;
+
+          let leaseHasEnded = false;
+          if (l.status === 'terminating') {
+            leaseHasEnded = true;
+          } else if (l.endDate) {
+            const endDateTime = new Date(`${l.endDate}T23:59:59`);
+            if (now > endDateTime) {
+              leaseHasEnded = true;
+            }
+          }
+
+          if (leaseHasEnded && l.tenantEmail) {
+            console.log(`[Reminders] Sending post-lease survey email to ${l.tenantEmail} for lease ${lDoc.id}`);
+            await sendStaySurveyEmail({
+              guestName: l.tenantName || 'Resident',
+              guestEmail: l.tenantEmail,
+              propertyName: l.propertyNameOrRoom || 'Stonewall Villa',
+              bookingRef: l.leaseCode || lDoc.id,
+              stayType: 'lease'
+            });
+            await db.collection("leases").doc(lDoc.id).update({
+              sentSurveyEmail: true,
+              sentSurveyEmailAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+          }
+        }
+      } catch (leaseSurveyErr: any) {
+        // Silently skip if permission denied in sandbox
+      }
+    
     } catch (err: any) {
       const isPermissionDenied = err.message?.includes("PERMISSION_DENIED") || 
                                  err.message?.includes("insufficient permissions") ||

@@ -5,7 +5,7 @@ import { YamiryLockGuide } from '../components/YamiryLockGuide';
 import { collection, query, where, getDocs, doc, updateDoc, getDoc, serverTimestamp, deleteDoc, setDoc } from 'firebase/firestore';
 import { Booking, Property, getImageUrl } from '../types';
 import { useNavigate, Link } from 'react-router-dom';
-import { ChevronLeft, Calendar as CalendarIcon, XCircle, CheckCircle, CheckCircle2, Lock, Home, MapPin, Edit3, X, Trash2, Printer, CreditCard, Loader2, AlertCircle, ArrowUpDown, Receipt } from 'lucide-react';
+import { ChevronLeft, Calendar as CalendarIcon, XCircle, CheckCircle, CheckCircle2, Lock, Home, MapPin, Edit3, X, Trash2, Printer, CreditCard, Loader2, AlertCircle, ArrowUpDown, Receipt, Star, MessageSquare } from 'lucide-react';
 import { parseISO, differenceInHours } from 'date-fns';
 import { Calendar } from '../components/Calendar';
 import { LegalFooter } from '../components/LegalFooter';
@@ -1323,6 +1323,33 @@ export const MyBookings: React.FC = () => {
                                                         ✅ Checked out on time! Thank you for staying with us.
                                                     </div>
                                                 )}
+
+                                                <div className="mt-3 p-3.5 bg-indigo-50/90 border border-indigo-200/90 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                                    <div className="space-y-0.5">
+                                                        <div className="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
+                                                            <Star size={13} className="fill-amber-400 text-amber-400" />
+                                                            <span>How was your stay? Complete our 5-Question Survey</span>
+                                                        </div>
+                                                        <p className="text-[11px] text-indigo-800/80 leading-relaxed">
+                                                            We always strive for a 5-star experience! Share your feedback with property management or leave a comment on our Review Page.
+                                                        </p>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 flex-shrink-0 w-full sm:w-auto">
+                                                        <Link
+                                                            to={`/survey?ref=${booking.id}&property=${encodeURIComponent((booking as any).propertyName || 'Stonewall Villa')}&guest=${encodeURIComponent(booking.guestName || user?.displayName || 'Guest')}&email=${encodeURIComponent(booking.guestEmail || user?.email || '')}&stayType=booking`}
+                                                            className="flex-1 sm:flex-none text-center px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors"
+                                                        >
+                                                            Take Survey
+                                                        </Link>
+                                                        <Link
+                                                            to={`/reviews?prop=${encodeURIComponent((booking as any).propertyName || 'Stonewall Villa')}&ref=${booking.id}`}
+                                                            className="flex-1 sm:flex-none text-center px-3 py-1.5 bg-white hover:bg-slate-50 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold shadow-2xs transition-colors flex items-center justify-center gap-1"
+                                                        >
+                                                            <MessageSquare size={12} />
+                                                            <span>Reviews</span>
+                                                        </Link>
+                                                    </div>
+                                                </div>
                                             </div>
                                         )}
 

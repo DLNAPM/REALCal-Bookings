@@ -18,6 +18,8 @@ import { TermsOfService } from './pages/TermsOfService';
 import { Itinerary } from './pages/Itinerary';
 import { FAQ } from './pages/FAQ';
 import { PayInvoice } from './pages/PayInvoice';
+import { Reviews } from './pages/Reviews';
+import { Survey } from './pages/Survey';
 import { HelpModal } from './components/HelpModal';
 
 export default function App() {
@@ -34,6 +36,9 @@ export default function App() {
            <Route path="/my-bookings" element={<MyBookings />} />
            <Route path="/pay-invoice/:bookingId" element={<PayInvoice />} />
            <Route path="/pay-invoice" element={<PayInvoice />} />
+           <Route path="/reviews" element={<Reviews />} />
+           <Route path="/survey" element={<Survey />} />
+           <Route path="/survey/:id" element={<Survey />} />
            <Route path="/opt-in" element={<OptIn />} />
            <Route path="/privacy" element={<PrivacyPolicy />} />
            <Route path="/terms" element={<TermsOfService />} />
