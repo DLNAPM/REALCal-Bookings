@@ -215,4 +215,36 @@ export interface Review {
   createdAt: any;
 }
 
+export type IncidentSeverity = 'critical' | 'high' | 'warning' | 'info';
+export type IncidentService = 'stripe' | 'twilio' | 'gemini' | 'smtp' | 'billing' | 'api' | 'smart_lock' | 'database' | 'other';
+export type IncidentStatus = 'active' | 'acknowledged' | 'resolved';
+
+export interface SystemIncident {
+  id: string;
+  title: string;
+  service: IncidentService;
+  severity: IncidentSeverity;
+  status: IncidentStatus;
+  message: string;
+  errorCode?: string | number;
+  errorDetails?: string;
+  endpoint?: string;
+  acknowledged: boolean;
+  acknowledgedAt?: string;
+  acknowledgedBy?: string;
+  acknowledgmentNotes?: string;
+  resolvedAt?: string;
+  resolvedBy?: string;
+  notificationsSent?: {
+    emails: string[];
+    sms: string[];
+    failedEmails?: string[];
+    failedSms?: string[];
+    timestamp: string;
+  };
+  metadata?: Record<string, any>;
+  createdAt: any;
+  updatedAt?: any;
+}
+
 

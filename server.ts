@@ -457,6 +457,250 @@ C&SH Group Properties, LLC`;
   }
 }
 
+// ==========================================
+// SYSTEM INCIDENT & ALARM MONITORING ENGINE
+// ==========================================
+
+// In-memory debounce cache to prevent duplicate email/SMS storms (key: service:errorCode:title -> timestamp)
+const recentIncidentAlerts = new Map<string, number>();
+
+export async function triggerSystemIncident({
+  service,
+  title,
+  message,
+  severity = 'high',
+  errorCode,
+  errorDetails,
+  endpoint,
+  metadata
+}: {
+  service: 'stripe' | 'twilio' | 'gemini' | 'smtp' | 'billing' | 'api' | 'smart_lock' | 'database' | 'other';
+  title: string;
+  message: string;
+  severity?: 'critical' | 'high' | 'warning' | 'info';
+  errorCode?: string | number;
+  errorDetails?: any;
+  endpoint?: string;
+  metadata?: Record<string, any>;
+}) {
+  console.error(`🚨 [SYSTEM INCIDENT REPORTED] [${severity.toUpperCase()}] [${service.toUpperCase()}] ${title}: ${message}`);
+  
+  const incidentId = `inc-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+  const timestampIso = new Date().toISOString();
+  const appUrl = process.env.APP_URL || `https://${process.env.VITE_FIREBASE_PROJECT_ID || 'realcal-bookings'}.web.app`;
+
+  // Deduplication check for notifications (5 min window)
+  const debounceKey = `${service}:${errorCode || ''}:${title.slice(0, 40)}`;
+  const now = Date.now();
+  const lastAlertTime = recentIncidentAlerts.get(debounceKey) || 0;
+  const shouldDispatchNotifications = (now - lastAlertTime) > (5 * 60 * 1000);
+
+  let formattedDetails = "";
+  if (typeof errorDetails === 'string') {
+    formattedDetails = errorDetails;
+  } else if (errorDetails && typeof errorDetails === 'object') {
+    try {
+      formattedDetails = JSON.stringify(errorDetails, Object.getOwnPropertyNames(errorDetails), 2);
+    } catch {
+      formattedDetails = String(errorDetails);
+    }
+  }
+
+  const notificationResults = {
+    emails: [] as string[],
+    sms: [] as string[],
+    failedEmails: [] as string[],
+    failedSms: [] as string[],
+    suppressedByThrottling: !shouldDispatchNotifications,
+    timestamp: timestampIso
+  };
+
+  if (shouldDispatchNotifications) {
+    recentIncidentAlerts.set(debounceKey, now);
+
+    // 1. Gather Email Recipients: APP Admin dlaniger.napm.consulting@gmail.com and Enabled Property Managers
+    const primaryAdminEmail = (process.env.ADMIN_ALERT_EMAIL || "dlaniger.napm.consulting@gmail.com").trim();
+    const recipientEmails = new Set<string>();
+    if (primaryAdminEmail) {
+      recipientEmails.add(primaryAdminEmail.toLowerCase());
+    }
+
+    // 2. Gather Phone Recipients for SMS
+    const recipientPhones = new Set<string>();
+    if (process.env.ADMIN_ALERT_PHONE) {
+      const formatted = formatPhoneToE164(process.env.ADMIN_ALERT_PHONE);
+      if (formatted) recipientPhones.add(formatted);
+    }
+
+    const activeDb = db;
+    if (activeDb) {
+      try {
+        const managersSnap = await activeDb.collection("property_managers").where("enabled", "==", true).get();
+        if (!managersSnap.empty) {
+          for (const doc of managersSnap.docs) {
+            const data = doc.data();
+            if (data.email) {
+              recipientEmails.add(data.email.trim().toLowerCase());
+            }
+            if (data.phone) {
+              const p = formatPhoneToE164(data.phone);
+              if (p) recipientPhones.add(p);
+            }
+          }
+        }
+      } catch (err: any) {
+        console.warn("[Incident Alert] Failed fetching property managers for incident dispatch:", err.message);
+      }
+    }
+
+    // Prepare Email Content
+    const severityColor = severity === 'critical' ? '#dc2626' : severity === 'high' ? '#ea580c' : severity === 'warning' ? '#d97706' : '#2563eb';
+    const emailSubject = `🚨 [REALCal SYSTEM ALARM - ${severity.toUpperCase()}] ${service.toUpperCase()}: ${title}`;
+    const emailText = `SYSTEM INCIDENT ALERT - ${severity.toUpperCase()}\n\n` +
+      `Service: ${service.toUpperCase()}\n` +
+      `Title: ${title}\n` +
+      `Message: ${message}\n` +
+      (errorCode ? `Error Code: ${errorCode}\n` : '') +
+      (endpoint ? `Endpoint: ${endpoint}\n` : '') +
+      `Time: ${timestampIso}\n\n` +
+      `Action Required: Please visit the REALCal Admin Dashboard to review and acknowledge this incident.\n` +
+      `Admin Dashboard: ${appUrl}/admin\n\n` +
+      (formattedDetails ? `Technical Details:\n${formattedDetails}\n` : '');
+
+    const emailHtml = `
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"></head>
+    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f8fafc; padding: 24px; margin: 0;">
+      <div style="max-width: 620px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+        <div style="background-color: ${severityColor}; padding: 22px 24px; color: #ffffff;">
+          <div style="display: inline-block; background-color: rgba(255,255,255,0.25); padding: 4px 10px; border-radius: 9999px; font-size: 11px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase;">
+            ${severity} INCIDENT ALARM
+          </div>
+          <h1 style="margin: 12px 0 4px; font-size: 20px; font-weight: 700; line-height: 1.3;">${title}</h1>
+          <p style="margin: 0; opacity: 0.9; font-size: 13px;">Service: <strong>${service.toUpperCase()}</strong> &bull; ${new Date().toLocaleString()}</p>
+        </div>
+        <div style="padding: 24px;">
+          <div style="background-color: #fff1f2; border-left: 4px solid ${severityColor}; padding: 14px 16px; border-radius: 8px; margin-bottom: 20px;">
+            <p style="margin: 0; font-size: 14px; font-weight: 600; color: #9f1239;">${message}</p>
+          </div>
+
+          <table style="width: 100%; font-size: 13px; margin-bottom: 20px; border-collapse: collapse;">
+            <tr style="border-bottom: 1px solid #f1f5f9;"><td style="padding: 8px 0; color: #64748b; font-weight: 600;">Service Category:</td><td style="padding: 8px 0; font-weight: 700; color: #0f172a; text-transform: uppercase;">${service}</td></tr>
+            ${errorCode ? `<tr style="border-bottom: 1px solid #f1f5f9;"><td style="padding: 8px 0; color: #64748b; font-weight: 600;">Error Code:</td><td style="padding: 8px 0; font-family: monospace; color: #b91c1c; font-weight: 600;">${errorCode}</td></tr>` : ''}
+            ${endpoint ? `<tr style="border-bottom: 1px solid #f1f5f9;"><td style="padding: 8px 0; color: #64748b; font-weight: 600;">API Endpoint:</td><td style="padding: 8px 0; font-family: monospace; color: #334155;">${endpoint}</td></tr>` : ''}
+            <tr><td style="padding: 8px 0; color: #64748b; font-weight: 600;">Incident ID:</td><td style="padding: 8px 0; font-family: monospace; color: #64748b;">${incidentId}</td></tr>
+          </table>
+
+          ${formattedDetails ? `
+          <div style="margin-bottom: 24px;">
+            <p style="margin: 0 0 6px; font-size: 12px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.05em;">Technical Details &amp; Payload</p>
+            <pre style="background-color: #0f172a; color: #f8fafc; padding: 14px; border-radius: 8px; font-size: 12px; overflow-x: auto; margin: 0; max-height: 220px; line-height: 1.4;">${formattedDetails}</pre>
+          </div>` : ''}
+
+          <div style="text-align: center; margin: 28px 0 16px;">
+            <a href="${appUrl}/admin" style="display: inline-block; background-color: #4f46e5; color: #ffffff; text-decoration: none; font-weight: 700; font-size: 14px; padding: 12px 28px; border-radius: 10px; box-shadow: 0 2px 4px rgba(79, 70, 229, 0.3);">
+              Open Admin Dashboard to Acknowledge &rarr;
+            </a>
+          </div>
+
+          <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 20px 0 0; border-top: 1px solid #e2e8f0; padding-top: 16px;">
+            Dispatched to App Admin (${primaryAdminEmail}) and enabled Property Managers.
+          </p>
+        </div>
+      </div>
+    </body>
+    </html>`;
+
+    // Dispatch Emails via Nodemailer
+    for (const email of recipientEmails) {
+      try {
+        await sendSmtpEmail({
+          to: email,
+          subject: emailSubject,
+          text: emailText,
+          html: emailHtml
+        });
+        notificationResults.emails.push(email);
+        console.log(`[Incident Alert] Email dispatched successfully to: ${email}`);
+      } catch (err: any) {
+        console.error(`[Incident Alert] Failed sending email to ${email}:`, err.message);
+        notificationResults.failedEmails.push(`${email}: ${err.message}`);
+      }
+    }
+
+    // Dispatch SMS via Twilio (if configured)
+    const tSid = process.env.TWILIO_ACCOUNT_SID;
+    const tTok = process.env.TWILIO_AUTH_TOKEN;
+    const tFrom = process.env.TWILIO_PHONE_NUMBER;
+    
+    if (tSid && tTok && tSid.startsWith('AC') && !tSid.includes('PROVIDE_REAL') && tFrom && recipientPhones.size > 0) {
+      try {
+        const twilioPkg = await import('twilio');
+        const twilio = twilioPkg.default || twilioPkg;
+        const twilioClient = (twilio as any)(tSid, tTok);
+
+        const smsBody = `🚨 REALCal ALARM [${severity.toUpperCase()}] ${service.toUpperCase()}: ${title}. ${message.slice(0, 80)}. Ack: ${appUrl}/admin`;
+
+        for (const phone of recipientPhones) {
+          try {
+            await twilioClient.messages.create({
+              body: smsBody,
+              from: tFrom,
+              to: phone
+            });
+            notificationResults.sms.push(phone);
+            console.log(`[Incident Alert] SMS dispatched successfully to: ${phone}`);
+          } catch (smsErr: any) {
+            console.error(`[Incident Alert] Failed sending SMS to ${phone}:`, smsErr.message);
+            notificationResults.failedSms.push(`${phone}: ${smsErr.message}`);
+          }
+        }
+      } catch (twErr: any) {
+        console.error("[Incident Alert] Twilio error during incident SMS dispatch:", twErr.message);
+      }
+    }
+  } else {
+    console.log(`[Incident Alert] Notification throttled (already sent in last 5m): ${debounceKey}`);
+  }
+
+  // Record Incident in Firestore
+  const incidentDoc = {
+    id: incidentId,
+    title,
+    service,
+    severity,
+    status: 'active',
+    message,
+    errorCode: errorCode ? String(errorCode) : null,
+    errorDetails: formattedDetails,
+    endpoint: endpoint || null,
+    acknowledged: false,
+    acknowledgedAt: null,
+    acknowledgedBy: null,
+    acknowledgmentNotes: null,
+    resolvedAt: null,
+    resolvedBy: null,
+    notificationsSent: notificationResults,
+    metadata: metadata || {},
+    createdAt: timestampIso,
+    updatedAt: timestampIso
+  };
+
+  const activeDb = db;
+  if (activeDb) {
+    try {
+      await activeDb.collection('incidents').doc(incidentId).set(incidentDoc);
+      await activeDb.collection('system_alerts').doc(incidentId).set(incidentDoc);
+      console.log(`[Incident Alert] Incident recorded in Firestore with ID: ${incidentId}`);
+    } catch (dbErr: any) {
+      console.error("[Incident Alert] Failed recording incident in Firestore:", dbErr.message);
+    }
+  }
+
+  return incidentDoc;
+}
+
 
 async function sendInvoicePaymentAdminNotification(bookingId: string, bookingData: any, activeDb: any) {
   try {
@@ -1162,6 +1406,22 @@ async function startServer() {
       res.json({ success: true, sid: result.sid });
     } catch (err: any) {
       console.error("[API] SMS Error:", err);
+      // Trigger system incident alert for App Admin and Property Managers
+      await triggerSystemIncident({
+        service: 'twilio',
+        title: 'Twilio SMS Dispatch Failure',
+        message: err.message || 'Error occurred while sending SMS',
+        severity: 'high',
+        errorCode: err.code || err.status || 'TWILIO_SMS_FAILED',
+        errorDetails: {
+          recipient: req.body.to,
+          error: err.message,
+          code: err.code,
+          moreInfo: err.moreInfo
+        },
+        endpoint: '/api/send-sms'
+      }).catch((incErr) => console.error("Failed recording SMS incident:", incErr));
+
       res.status(500).json({ error: err.message });
     }
   });
@@ -1880,6 +2140,21 @@ async function startServer() {
       res.json({ url: session.url });
     } catch (e: any) {
       console.error("Error creating booking checkout session:", e);
+      await triggerSystemIncident({
+        service: 'stripe',
+        title: 'Stripe Checkout Session Creation Failed',
+        message: e.message || 'Error occurred while creating Stripe checkout session',
+        severity: 'critical',
+        errorCode: e.code || e.type || 'STRIPE_CHECKOUT_ERROR',
+        errorDetails: {
+          bookingId: req.body?.bookingId,
+          error: e.message,
+          type: e.type,
+          code: e.code
+        },
+        endpoint: '/api/create-booking-checkout-session'
+      }).catch((incErr) => console.error("Failed recording Stripe incident:", incErr));
+
       res.status(500).json({ error: e.message });
     }
   });
@@ -3317,6 +3592,170 @@ async function startServer() {
     } catch (err: any) {
       console.warn("[API] notify-review-submitted non-fatal error:", err.message);
       res.json({ success: false, error: err.message });
+    }
+  });
+
+  // ==========================================
+  // INCIDENTS & SYSTEM ALARMS API ENDPOINTS
+  // ==========================================
+
+  // GET /api/incidents - List incidents with filtering
+  app.get("/api/incidents", async (req, res) => {
+    try {
+      if (!db) {
+        return res.json({ success: true, incidents: [], warning: "Database not connected" });
+      }
+
+      const statusFilter = req.query.status as string; // 'all', 'active', 'acknowledged', 'resolved'
+      const serviceFilter = req.query.service as string;
+
+      let snap: any;
+      try {
+        snap = await db.collection("incidents").orderBy("createdAt", "desc").limit(100).get();
+      } catch (errQ: any) {
+        console.warn("[API] Incidents orderBy error, falling back to simple get:", errQ.message);
+        snap = await db.collection("incidents").limit(100).get();
+      }
+
+      let incidents = snap.docs.map((doc: any) => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      // In-memory sort in case fallback was used
+      incidents.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+
+      if (statusFilter && statusFilter !== 'all') {
+        incidents = incidents.filter((inc: any) => inc.status === statusFilter);
+      }
+      if (serviceFilter && serviceFilter !== 'all') {
+        incidents = incidents.filter((inc: any) => inc.service === serviceFilter);
+      }
+
+      const activeCount = incidents.filter((inc: any) => inc.status === 'active' || !inc.acknowledged).length;
+
+      res.json({
+        success: true,
+        incidents,
+        count: incidents.length,
+        activeCount
+      });
+    } catch (err: any) {
+      console.error("[API] Error fetching incidents:", err.message);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // POST /api/incidents - Report a new incident (from client or internal)
+  app.post("/api/incidents", async (req, res) => {
+    try {
+      const { service, title, message, severity, errorCode, errorDetails, endpoint, metadata } = req.body;
+      if (!service || !title || !message) {
+        return res.status(400).json({ error: "Missing required fields: service, title, message" });
+      }
+
+      const incident = await triggerSystemIncident({
+        service,
+        title,
+        message,
+        severity: severity || 'high',
+        errorCode,
+        errorDetails,
+        endpoint: endpoint || req.path,
+        metadata
+      });
+
+      res.json({ success: true, incident });
+    } catch (err: any) {
+      console.error("[API] Error reporting incident:", err.message);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // POST /api/incidents/:id/acknowledge - Acknowledge an incident
+  app.post("/api/incidents/:id/acknowledge", async (req, res) => {
+    try {
+      const incidentId = req.params.id;
+      const { acknowledgedBy, notes } = req.body;
+
+      const updateData = {
+        acknowledged: true,
+        status: 'acknowledged',
+        acknowledgedAt: new Date().toISOString(),
+        acknowledgedBy: acknowledgedBy || 'Admin',
+        acknowledgmentNotes: notes || '',
+        updatedAt: new Date().toISOString()
+      };
+
+      if (db) {
+        await db.collection("incidents").doc(incidentId).set(updateData, { merge: true });
+        await db.collection("system_alerts").doc(incidentId).set(updateData, { merge: true });
+      }
+
+      console.log(`[Incident Alert] Incident ${incidentId} ACKNOWLEDGED by ${acknowledgedBy || 'Admin'}`);
+      res.json({ success: true, incidentId, ...updateData });
+    } catch (err: any) {
+      console.error(`[API] Error acknowledging incident ${req.params.id}:`, err.message);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // POST /api/incidents/:id/resolve - Mark incident as resolved
+  app.post("/api/incidents/:id/resolve", async (req, res) => {
+    try {
+      const incidentId = req.params.id;
+      const { resolvedBy } = req.body;
+
+      const updateData = {
+        status: 'resolved',
+        resolvedAt: new Date().toISOString(),
+        resolvedBy: resolvedBy || 'Admin',
+        updatedAt: new Date().toISOString()
+      };
+
+      if (db) {
+        await db.collection("incidents").doc(incidentId).set(updateData, { merge: true });
+        await db.collection("system_alerts").doc(incidentId).set(updateData, { merge: true });
+      }
+
+      console.log(`[Incident Alert] Incident ${incidentId} RESOLVED by ${resolvedBy || 'Admin'}`);
+      res.json({ success: true, incidentId, ...updateData });
+    } catch (err: any) {
+      console.error(`[API] Error resolving incident ${req.params.id}:`, err.message);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // POST /api/incidents/test - Dispatch a real test alarm & notifications to Admin and Managers
+  app.post("/api/incidents/test", async (req, res) => {
+    try {
+      const { service = 'api', severity = 'high', customMessage, adminEmail } = req.body;
+      const testTitle = `Test Alarm: Integration Health & Alert Pipeline Check`;
+      const testMsg = customMessage || `Verification of Automated Incident & Alarm Notifications. Confirming real-time routing to App Admin (dlaniger.napm.consulting@gmail.com) and all Enabled Property Managers.`;
+
+      const incident = await triggerSystemIncident({
+        service,
+        title: testTitle,
+        message: testMsg,
+        severity,
+        errorCode: 'HEALTH_CHECK_OK',
+        errorDetails: {
+          testInitiatedBy: adminEmail || 'dlaniger.napm.consulting@gmail.com',
+          environment: process.env.NODE_ENV || 'production',
+          timestamp: new Date().toISOString(),
+          simulatedIssue: 'Twilio SMS & Stripe integration verification'
+        },
+        endpoint: '/api/incidents/test'
+      });
+
+      res.json({
+        success: true,
+        message: "Test alarm created! Notification emails and SMS dispatched to App Admin and Property Managers.",
+        incident
+      });
+    } catch (err: any) {
+      console.error("[API] Error generating test incident:", err.message);
+      res.status(500).json({ success: false, error: err.message });
     }
   });
 

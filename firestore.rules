@@ -286,5 +286,17 @@ service cloud.firestore {
       allow update: if isAdmin() || (isSignedIn() && incoming().diff(existing()).affectedKeys().hasOnly(['useCount']));
       allow delete: if isAdmin();
     }
+
+    match /incidents/{incidentId} {
+      allow read: if isAdmin();
+      allow create: if true;
+      allow update, delete: if isAdmin();
+    }
+
+    match /system_alerts/{alertId} {
+      allow read: if isAdmin();
+      allow create: if true;
+      allow update, delete: if isAdmin();
+    }
   }
 }

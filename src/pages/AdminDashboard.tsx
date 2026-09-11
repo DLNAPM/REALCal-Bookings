@@ -6,8 +6,9 @@ import { Navigate, useNavigate, Link } from 'react-router-dom';
 import { format, eachDayOfInterval, parseISO, addDays } from 'date-fns';
 import { cn } from '../lib/utils';
 import { BlackoutDate, PricingRule, Booking, Property, PropertyManager, PropertyImage, getImageUrl, getImageRoomNumber, DiscountCode } from '../types';
-import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight, RefreshCw, MessageSquare, CheckCircle, Loader2, FileText, XCircle, HelpCircle, MapPin, Upload, Database, Ticket, Send, Clock, Bell, FileCheck, RotateCw, CheckSquare, Copy, Search, X, AlertTriangle, Video, Eraser, Pencil, Sparkles, Megaphone } from 'lucide-react';
+import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight, RefreshCw, MessageSquare, CheckCircle, Loader2, FileText, XCircle, HelpCircle, MapPin, Upload, Database, Ticket, Send, Clock, Bell, BellRing, FileCheck, RotateCw, CheckSquare, Copy, Search, X, AlertTriangle, Video, Eraser, Pencil, Sparkles, Megaphone } from 'lucide-react';
 import { AdvertisementFlyerModal } from '../components/AdvertisementFlyerModal';
+import { AdminAlarmsBanner, AdminAlarmsModal } from '../components/AdminAlarmsPanel';
 import { v4 as uuidv4 } from 'uuid';
 
 const formatPhoneE164 = (phone: string) => {
@@ -81,6 +82,7 @@ export const AdminDashboard: React.FC = () => {
   const [createPromoVideoUrl, setCreatePromoVideoUrl] = useState<string>('');
   const [editPromoVideoUrl, setEditPromoVideoUrl] = useState<string>('');
   const [showAdvertisementModal, setShowAdvertisementModal] = useState<boolean>(false);
+  const [showAlarmsModal, setShowAlarmsModal] = useState<boolean>(false);
 
   const handleVideoFileUpload = (e: React.ChangeEvent<HTMLInputElement>, isEdit: boolean) => {
       const file = e.target.files?.[0];
@@ -3167,12 +3169,22 @@ C.&S.H. Group Properties, LLC
             </div>
           </header>
 
+          {/* System Integration Alarms & Incident Banner */}
+          <AdminAlarmsBanner onOpenModal={() => setShowAlarmsModal(true)} />
+
           <div className="grid grid-cols-1 md:grid-cols-12 md:grid-rows-1 gap-5">
              <div className="col-span-1 md:col-span-12 bg-indigo-50 rounded-3xl border border-indigo-100 p-6 flex flex-col md:flex-row gap-6 shadow-sm">
                 <div className="flex-1">
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="text-lg font-bold text-indigo-900">Admin Quick Stats</h3>
                     <div className="flex gap-2 flex-wrap items-center">
+                        <button
+                          onClick={() => setShowAlarmsModal(true)}
+                          className="text-xs bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 font-bold px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
+                          title="View System Alarms, Integration Incidents, and Acknowledge Alerts"
+                        >
+                          <BellRing size={14} className="text-rose-600 animate-pulse" /> Alarms Hub
+                        </button>
                         <button
                           onClick={() => setShowAdvertisementModal(true)}
                           className="text-xs bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 hover:from-indigo-700 hover:to-purple-800 text-white font-bold px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 shadow-sm shadow-indigo-200 cursor-pointer"
@@ -7223,6 +7235,13 @@ C.&S.H. Group Properties, LLC
             pricingRules={pricingRules}
             propertyManagers={propertyManagers}
             activePropertyId={activePropertyId}
+          />
+
+          {/* System Alarms & Incidents Monitoring Modal */}
+          <AdminAlarmsModal
+            isOpen={showAlarmsModal}
+            onClose={() => setShowAlarmsModal(false)}
+            adminEmail={user?.email || 'dlaniger.napm.consulting@gmail.com'}
           />
 
        </div>
