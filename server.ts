@@ -461,6 +461,71 @@ C&SH Group Properties, LLC`;
 // SYSTEM INCIDENT & ALARM MONITORING ENGINE
 // ==========================================
 
+// In-memory cache for the live publicly accessible URL of the app
+let lastKnownAppUrl = process.env.APP_URL || process.env.PUBLIC_URL || "";
+
+export function resolveAppUrl(req?: any, explicitAppUrl?: string): string {
+  // 1. Explicit appUrl passed in parameter or request body
+  if (explicitAppUrl && typeof explicitAppUrl === 'string' && explicitAppUrl.startsWith('http')) {
+    const cleaned = explicitAppUrl.replace(/\/+$/, '');
+    if (!cleaned.includes('realcal-bookings.web.app')) {
+      lastKnownAppUrl = cleaned;
+      return cleaned;
+    }
+  }
+
+  // 2. Client origin or referer header if req is provided
+  if (req) {
+    const origin = req.headers?.origin as string;
+    if (origin && typeof origin === 'string' && origin.startsWith('http') && !origin.includes('localhost') && !origin.includes('127.0.0.1')) {
+      const cleaned = origin.replace(/\/+$/, '');
+      lastKnownAppUrl = cleaned;
+      return cleaned;
+    }
+
+    const referer = req.headers?.referer as string;
+    if (referer) {
+      try {
+        const parsed = new URL(referer);
+        if (parsed.origin && parsed.origin.startsWith('http') && !parsed.origin.includes('localhost') && !parsed.origin.includes('127.0.0.1')) {
+          const cleaned = parsed.origin.replace(/\/+$/, '');
+          lastKnownAppUrl = cleaned;
+          return cleaned;
+        }
+      } catch {}
+    }
+
+    const forwardedHost = (req.headers?.['x-forwarded-host'] as string)?.split(',')[0]?.trim();
+    const forwardedProto = (req.headers?.['x-forwarded-proto'] as string)?.split(',')[0]?.trim();
+    const host = forwardedHost || req.headers?.host || (typeof req.get === 'function' ? req.get('host') : null);
+    const proto = forwardedProto || (req.secure ? 'https' : 'https');
+
+    if (host && !host.includes('localhost') && !host.includes('127.0.0.1') && !host.includes('0.0.0.0')) {
+      const cleaned = `${proto}://${host}`.replace(/\/+$/, '');
+      lastKnownAppUrl = cleaned;
+      return cleaned;
+    }
+  }
+
+  // 3. Last known app URL captured from live HTTP requests
+  if (lastKnownAppUrl && lastKnownAppUrl.startsWith('http') && !lastKnownAppUrl.includes('realcal-bookings.web.app')) {
+    return lastKnownAppUrl.replace(/\/+$/, '');
+  }
+
+  // 4. process.env.APP_URL
+  if (process.env.APP_URL && process.env.APP_URL.startsWith('http') && !process.env.APP_URL.includes('realcal-bookings.web.app')) {
+    return process.env.APP_URL.replace(/\/+$/, '');
+  }
+
+  // 5. process.env.PUBLIC_URL
+  if (process.env.PUBLIC_URL && process.env.PUBLIC_URL.startsWith('http') && !process.env.PUBLIC_URL.includes('realcal-bookings.web.app')) {
+    return process.env.PUBLIC_URL.replace(/\/+$/, '');
+  }
+
+  // 6. Safe domain fallback
+  return "https://realcal.app";
+}
+
 // In-memory debounce cache to prevent duplicate email/SMS storms (key: service:errorCode:title -> timestamp)
 const recentIncidentAlerts = new Map<string, number>();
 
@@ -472,6 +537,8 @@ export async function triggerSystemIncident({
   errorCode,
   errorDetails,
   endpoint,
+  appUrl: explicitAppUrl,
+  req,
   metadata
 }: {
   service: 'stripe' | 'twilio' | 'gemini' | 'smtp' | 'billing' | 'api' | 'smart_lock' | 'database' | 'other';
@@ -481,13 +548,16 @@ export async function triggerSystemIncident({
   errorCode?: string | number;
   errorDetails?: any;
   endpoint?: string;
+  appUrl?: string;
+  req?: any;
   metadata?: Record<string, any>;
 }) {
   console.error(`🚨 [SYSTEM INCIDENT REPORTED] [${severity.toUpperCase()}] [${service.toUpperCase()}] ${title}: ${message}`);
   
   const incidentId = `inc-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
   const timestampIso = new Date().toISOString();
-  const appUrl = process.env.APP_URL || `https://${process.env.VITE_FIREBASE_PROJECT_ID || 'realcal-bookings'}.web.app`;
+  const appUrl = resolveAppUrl(req, explicitAppUrl);
+  const adminDashboardUrl = `${appUrl}/admin`;
 
   // Deduplication check for notifications (5 min window)
   const debounceKey = `${service}:${errorCode || ''}:${title.slice(0, 40)}`;
@@ -564,7 +634,7 @@ export async function triggerSystemIncident({
       (endpoint ? `Endpoint: ${endpoint}\n` : '') +
       `Time: ${timestampIso}\n\n` +
       `Action Required: Please visit the REALCal Admin Dashboard to review and acknowledge this incident.\n` +
-      `Admin Dashboard: ${appUrl}/admin\n\n` +
+      `Admin Dashboard: ${adminDashboardUrl}\n\n` +
       (formattedDetails ? `Technical Details:\n${formattedDetails}\n` : '');
 
     const emailHtml = `
@@ -599,7 +669,7 @@ export async function triggerSystemIncident({
           </div>` : ''}
 
           <div style="text-align: center; margin: 28px 0 16px;">
-            <a href="${appUrl}/admin" style="display: inline-block; background-color: #4f46e5; color: #ffffff; text-decoration: none; font-weight: 700; font-size: 14px; padding: 12px 28px; border-radius: 10px; box-shadow: 0 2px 4px rgba(79, 70, 229, 0.3);">
+            <a href="${adminDashboardUrl}" style="display: inline-block; background-color: #4f46e5; color: #ffffff; text-decoration: none; font-weight: 700; font-size: 14px; padding: 12px 28px; border-radius: 10px; box-shadow: 0 2px 4px rgba(79, 70, 229, 0.3);">
               Open Admin Dashboard to Acknowledge &rarr;
             </a>
           </div>
@@ -640,7 +710,7 @@ export async function triggerSystemIncident({
         const twilio = twilioPkg.default || twilioPkg;
         const twilioClient = (twilio as any)(tSid, tTok);
 
-        const smsBody = `🚨 REALCal ALARM [${severity.toUpperCase()}] ${service.toUpperCase()}: ${title}. ${message.slice(0, 80)}. Ack: ${appUrl}/admin`;
+        const smsBody = `🚨 REALCal ALARM [${severity.toUpperCase()}] ${service.toUpperCase()}: ${title}. ${message.slice(0, 80)}. Ack: ${adminDashboardUrl}`;
 
         for (const phone of recipientPhones) {
           try {
@@ -675,6 +745,8 @@ export async function triggerSystemIncident({
     errorCode: errorCode ? String(errorCode) : null,
     errorDetails: formattedDetails,
     endpoint: endpoint || null,
+    appUrl,
+    adminDashboardUrl,
     acknowledged: false,
     acknowledgedAt: null,
     acknowledgedBy: null,
@@ -1121,6 +1193,15 @@ async function startServer() {
   const app = express();
   const PORT = process.env.PORT || 3000;
 
+  // Trust proxy for accurate protocol & host recognition behind reverse proxies
+  app.set('trust proxy', true);
+
+  // Dynamic host tracking: automatically capture the public URL from live incoming requests
+  app.use((req, _res, next) => {
+    resolveAppUrl(req);
+    next();
+  });
+
   const isProd = process.env.NODE_ENV === "production";
   const rootDir = process.cwd();
   const distPath = path.resolve(rootDir, "dist");
@@ -1419,7 +1500,9 @@ async function startServer() {
           code: err.code,
           moreInfo: err.moreInfo
         },
-        endpoint: '/api/send-sms'
+        endpoint: '/api/send-sms',
+        req,
+        appUrl: resolveAppUrl(req)
       }).catch((incErr) => console.error("Failed recording SMS incident:", incErr));
 
       res.status(500).json({ error: err.message });
@@ -2152,7 +2235,9 @@ async function startServer() {
           type: e.type,
           code: e.code
         },
-        endpoint: '/api/create-booking-checkout-session'
+        endpoint: '/api/create-booking-checkout-session',
+        req,
+        appUrl: resolveAppUrl(req)
       }).catch((incErr) => console.error("Failed recording Stripe incident:", incErr));
 
       res.status(500).json({ error: e.message });
@@ -3649,10 +3734,12 @@ async function startServer() {
   // POST /api/incidents - Report a new incident (from client or internal)
   app.post("/api/incidents", async (req, res) => {
     try {
-      const { service, title, message, severity, errorCode, errorDetails, endpoint, metadata } = req.body;
+      const { service, title, message, severity, errorCode, errorDetails, endpoint, metadata, appUrl: clientAppUrl } = req.body;
       if (!service || !title || !message) {
         return res.status(400).json({ error: "Missing required fields: service, title, message" });
       }
+
+      const resolvedAppUrl = resolveAppUrl(req, clientAppUrl);
 
       const incident = await triggerSystemIncident({
         service,
@@ -3662,6 +3749,8 @@ async function startServer() {
         errorCode,
         errorDetails,
         endpoint: endpoint || req.path,
+        req,
+        appUrl: resolvedAppUrl,
         metadata
       });
 
@@ -3729,9 +3818,11 @@ async function startServer() {
   // POST /api/incidents/test - Dispatch a real test alarm & notifications to Admin and Managers
   app.post("/api/incidents/test", async (req, res) => {
     try {
-      const { service = 'api', severity = 'high', customMessage, adminEmail } = req.body;
+      const { service = 'api', severity = 'high', customMessage, adminEmail, appUrl: clientAppUrl } = req.body;
       const testTitle = `Test Alarm: Integration Health & Alert Pipeline Check`;
       const testMsg = customMessage || `Verification of Automated Incident & Alarm Notifications. Confirming real-time routing to App Admin (dlaniger.napm.consulting@gmail.com) and all Enabled Property Managers.`;
+
+      const resolvedAppUrl = resolveAppUrl(req, clientAppUrl);
 
       const incident = await triggerSystemIncident({
         service,
@@ -3745,12 +3836,15 @@ async function startServer() {
           timestamp: new Date().toISOString(),
           simulatedIssue: 'Twilio SMS & Stripe integration verification'
         },
-        endpoint: '/api/incidents/test'
+        endpoint: '/api/incidents/test',
+        req,
+        appUrl: resolvedAppUrl
       });
 
       res.json({
         success: true,
         message: "Test alarm created! Notification emails and SMS dispatched to App Admin and Property Managers.",
+        adminDashboardUrl: `${resolvedAppUrl}/admin`,
         incident
       });
     } catch (err: any) {

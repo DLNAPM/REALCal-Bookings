@@ -320,12 +320,13 @@ export function AdminAlarmsModal({
         body: JSON.stringify({
           service: testService,
           severity: 'high',
-          adminEmail
+          adminEmail,
+          appUrl: window.location.origin
         })
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        setTestSuccessMessage("Test alarm created! Notification emails and SMS dispatched to App Admin and Property Managers.");
+        setTestSuccessMessage(`Test alarm created! Notification dispatched with Admin link: ${data.adminDashboardUrl || (window.location.origin + '/admin')}`);
         await refresh();
       } else {
         alert(data.error || "Failed dispatching test alarm");
