@@ -4,11 +4,12 @@ import { Calendar } from '../components/Calendar';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
-import { ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, MapPin, Home, Shield, Sparkles, Video, Play, Maximize2, Film } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, MapPin, Home, Shield, Sparkles, Video, Play, Maximize2, Film, Youtube, ExternalLink } from 'lucide-react';
 import { Property, getImageUrl, getImageRoomNumber } from '../types';
 import { isAppleOS, getMapLink } from '../lib/utils';
 
 import { LegalFooter } from '../components/LegalFooter';
+import { PromotionalVideoModal } from '../components/PromotionalVideoModal';
 
 export const PropertyDetail: React.FC = () => {
     const { id } = useParams<{id: string}>();
@@ -152,34 +153,60 @@ export const PropertyDetail: React.FC = () => {
                            <p className="text-xl text-slate-500 leading-relaxed max-w-3xl">{property.description}</p>
                        </div>
 
-                       {property.promoVideoUrl && (
-                           <div className="w-full lg:w-96 shrink-0 bg-slate-900 rounded-3xl p-3 border border-slate-800 shadow-xl overflow-hidden group">
-                               <div className="flex items-center justify-between px-2 pb-2">
-                                   <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
-                                       <Video size={15} /> Promotional Video
-                                   </span>
-                                   <span className="text-[10px] font-semibold text-slate-400 bg-slate-800 px-2.5 py-0.5 rounded-full border border-slate-700">
-                                       Click to Enlarge
-                                   </span>
-                               </div>
-                               <div 
-                                   onClick={() => setIsVideoModalOpen(true)}
-                                   className="relative w-full aspect-video bg-black rounded-2xl overflow-hidden cursor-pointer flex items-center justify-center border border-slate-800 hover:border-indigo-500/50 transition-all group/vid shadow-inner"
-                               >
-                                   {renderVideoContent(property.promoVideoUrl, false)}
-                                   
-                                   {/* Click overlay */}
-                                   <div className="absolute inset-0 bg-slate-950/40 group-hover/vid:bg-slate-950/20 transition-all flex flex-col items-center justify-center gap-2">
-                                       <div className="w-12 h-12 rounded-full bg-indigo-600/90 text-white flex items-center justify-center shadow-xl group-hover/vid:scale-110 transition-transform ring-4 ring-white/20">
-                                           <Play size={22} className="ml-0.5 fill-current" />
-                                       </div>
-                                       <span className="text-xs font-bold text-white bg-black/70 px-3 py-1 rounded-full backdrop-blur-xs border border-white/20 flex items-center gap-1.5">
-                                           <Maximize2 size={12} /> Play in FULL Mode
+                       {property.promoVideoUrl && (() => {
+                           const promoYtMatch = property.promoVideoUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+                           const promoYtId = promoYtMatch ? promoYtMatch[1] : null;
+
+                           return (
+                               <div className="w-full lg:w-96 shrink-0 bg-slate-900 rounded-3xl p-3 border border-slate-800 shadow-xl overflow-hidden group">
+                                   <div className="flex items-center justify-between px-2 pb-2">
+                                       <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
+                                           <Video size={15} /> Promotional Video
                                        </span>
+                                       {promoYtId ? (
+                                           <a
+                                               href={`https://www.youtube.com/watch?v=${promoYtId}`}
+                                               target="_blank"
+                                               rel="noopener noreferrer"
+                                               onClick={(e) => e.stopPropagation()}
+                                               className="text-[10px] font-bold text-red-400 hover:text-red-300 bg-red-950/60 hover:bg-red-900/80 px-2 py-0.5 rounded-full border border-red-800/60 flex items-center gap-1 transition-colors cursor-pointer"
+                                               title="Watch directly on YouTube"
+                                           >
+                                               <Youtube size={12} className="fill-current" /> Watch on YouTube <ExternalLink size={9} />
+                                           </a>
+                                       ) : (
+                                           <span className="text-[10px] font-semibold text-slate-400 bg-slate-800 px-2.5 py-0.5 rounded-full border border-slate-700">
+                                               Click to Enlarge
+                                           </span>
+                                       )}
+                                   </div>
+                                   <div 
+                                       onClick={() => setIsVideoModalOpen(true)}
+                                       className="relative w-full aspect-video bg-black rounded-2xl overflow-hidden cursor-pointer flex items-center justify-center border border-slate-800 hover:border-indigo-500/50 transition-all group/vid shadow-inner"
+                                   >
+                                       {promoYtId ? (
+                                           <img
+                                               src={`https://img.youtube.com/vi/${promoYtId}/hqdefault.jpg`}
+                                               alt="Promotional Video Thumbnail"
+                                               className="w-full h-full object-cover group-hover/vid:scale-105 transition-transform duration-300"
+                                           />
+                                       ) : (
+                                           renderVideoContent(property.promoVideoUrl, false)
+                                       )}
+                                       
+                                       {/* Click overlay */}
+                                       <div className="absolute inset-0 bg-slate-950/40 group-hover/vid:bg-slate-950/20 transition-all flex flex-col items-center justify-center gap-2">
+                                           <div className="w-12 h-12 rounded-full bg-indigo-600/90 text-white flex items-center justify-center shadow-xl group-hover/vid:scale-110 transition-transform ring-4 ring-white/20">
+                                               <Play size={22} className="ml-0.5 fill-current" />
+                                           </div>
+                                           <span className="text-xs font-bold text-white bg-black/70 px-3 py-1 rounded-full backdrop-blur-xs border border-white/20 flex items-center gap-1.5">
+                                               <Maximize2 size={12} /> Play in FULL Mode
+                                           </span>
+                                       </div>
                                    </div>
                                </div>
-                           </div>
-                       )}
+                           );
+                       })()}
                    </div>
                    
                    <div className="h-[460px] w-full rounded-3xl overflow-hidden mb-12 flex gap-4 p-2 bg-white border border-slate-200 shadow-sm">
@@ -413,39 +440,14 @@ export const PropertyDetail: React.FC = () => {
                  </div>
              )}
 
-             {/* Fullscreen Video Modal */}
+             {/* Fullscreen Video Modal with audio synchronization & silence protection */}
              {isVideoModalOpen && property.promoVideoUrl && (
-                 <div 
-                     className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4 sm:p-8 animate-in fade-in duration-200"
-                     onClick={(e) => {
-                         if (e.target === e.currentTarget) setIsVideoModalOpen(false);
-                     }}
-                 >
-                     <div className="relative w-full max-w-5xl bg-slate-900 rounded-3xl overflow-hidden border border-slate-800 shadow-2xl flex flex-col">
-                         <div className="flex items-center justify-between p-4 px-6 border-b border-slate-800 bg-slate-900/90">
-                             <div className="flex items-center gap-3">
-                                 <div className="p-2.5 bg-indigo-500/20 text-indigo-400 rounded-xl border border-indigo-500/30">
-                                     <Video size={20} />
-                                 </div>
-                                 <div>
-                                     <h3 className="text-lg font-bold text-white">{property.name}</h3>
-                                     <p className="text-xs text-slate-400">Promotional Video &bull; Full Mode</p>
-                                 </div>
-                             </div>
-                             <button
-                                 type="button"
-                                 onClick={() => setIsVideoModalOpen(false)}
-                                 className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer border border-slate-700"
-                             >
-                                 <X size={20} />
-                             </button>
-                         </div>
-
-                         <div className="relative w-full aspect-video bg-black flex items-center justify-center">
-                             {renderVideoContent(property.promoVideoUrl, true)}
-                         </div>
-                     </div>
-                 </div>
+                 <PromotionalVideoModal
+                     isOpen={isVideoModalOpen}
+                     onClose={() => setIsVideoModalOpen(false)}
+                     videoUrl={property.promoVideoUrl}
+                     propertyName={property.name}
+                 />
              )}
 </div>
     )
