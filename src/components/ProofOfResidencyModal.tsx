@@ -72,15 +72,24 @@ export const ProofOfResidencyModal: React.FC<ProofOfResidencyModalProps> = ({
   // Invoices
   const [invoices, setInvoices] = useState<InvoiceItem[]>([]);
 
+  // Corporate Administration Details
+  const [companyName, setCompanyName] = useState<string>(
+    'C&SH Group Properties, LLC'
+  );
+  const [corporateAddress, setCorporateAddress] = useState<string>(
+    '9404 West 144th Place, Orland Park, IL 60462'
+  );
+  const [corporatePhone, setCorporatePhone] = useState<string>('(404) 555-0199');
+  const [corporateEmail, setCorporateEmail] = useState<string>(
+    'admin@cshgroupproperties.com'
+  );
+
   // Signer Details
   const [signerName, setSignerName] = useState<string>(
     currentUser?.displayName || 'David Laniger'
   );
   const [signerTitle, setSignerTitle] = useState<string>(
     'Property Operations Director & Authorized Corporate Officer'
-  );
-  const [companyName, setCompanyName] = useState<string>(
-    'C&SH Group Properties, LLC'
   );
   const [signerPhone, setSignerPhone] = useState<string>('(404) 555-0199');
   const [signerEmail, setSignerEmail] = useState<string>(
@@ -289,12 +298,120 @@ export const ProofOfResidencyModal: React.FC<ProofOfResidencyModalProps> = ({
     }
   };
 
-  // Calculations
-  const consecutiveDays = calculateDays(checkInDate, checkOutDate);
+  // Calculations - Automatically recalculates Stay Days whenever Check-In or Check-Out dates change
+  const consecutiveDays = useMemo(() => {
+    return calculateDays(checkInDate, checkOutDate);
+  }, [checkInDate, checkOutDate]);
+
   const meetsThreshold = consecutiveDays > 5;
 
+  // Invoices metrics - Automatically recalculates Grand Combined Total whenever invoices are removed, added, or updated
   const totalInvoicesCount = invoices.length;
-  const grandTotalAmount = invoices.reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
+  const grandTotalAmount = useMemo(() => {
+    return invoices.reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
+  }, [invoices]);
+
+  // Quick Stay Extension Handler
+  const handleExtendStay = (daysToAdd: number) => {
+    try {
+      const baseStr = checkOutDate || checkInDate;
+      if (!baseStr) return;
+      const d = new Date(baseStr.split('T')[0] + 'T12:00:00');
+      d.setDate(d.getDate() + daysToAdd);
+      setCheckOutDate(d.toISOString().split('T')[0]);
+    } catch (e) {
+      console.error("Error extending stay:", e);
+    }
+  };
+
+  // Reload/Reset original paid invoices for the selected guest
+  const handleReloadGuestInvoices = () => {
+    if (!selectedBookingId) return;
+    const b = eligibleBookings.find(x => x.id === selectedBookingId);
+    if (!b) return;
+
+    const gName = b.guestName || b.invoiceDetails?.sponsorName || 'Guest';
+    const gEmail = b.guestEmail || b.invoiceDetails?.sponsorEmail || '';
+
+    const invList: InvoiceItem[] = [];
+
+    // Primary invoice from booking
+    if (b.invoiceDetails) {
+      const isCancelled = b.invoiceDetails.cancelled || b.status === 'cancelled';
+      const isPaid = b.invoiceDetails.paid === true;
+      if (isPaid && !isCancelled) {
+        const invNum = b.invoiceDetails.invoiceNumber || `INV-${b.bookingRef || b.id.substring(0, 6).toUpperCase()}`;
+        const invTotal = b.invoiceDetails.grandTotal !== undefined 
+          ? b.invoiceDetails.grandTotal 
+          : (b.invoiceDetails.baseAmount || (b.totalPrice / 100));
+        const invDate = b.invoiceDetails.sentAt 
+          ? new Date(b.invoiceDetails.sentAt).toISOString().split('T')[0]
+          : (b.checkIn ? b.checkIn.split('T')[0] : new Date().toISOString().split('T')[0]);
+
+        invList.push({
+          id: 'primary-inv',
+          invoiceNumber: invNum,
+          date: invDate,
+          description: `Lodging Accommodations (${b.checkIn} to ${b.checkOut})`,
+          amount: Number(invTotal) || 0,
+          paid: true
+        });
+      }
+    } else if (b.status === 'confirmed' && b.totalPrice) {
+      invList.push({
+        id: 'booking-payment',
+        invoiceNumber: `INV-${b.bookingRef || b.id.substring(0, 6).toUpperCase()}`,
+        date: b.checkIn ? b.checkIn.split('T')[0] : new Date().toISOString().split('T')[0],
+        description: `Full Accommodations Stay (${b.checkIn} to ${b.checkOut})`,
+        amount: b.totalPrice / 100,
+        paid: true
+      });
+    }
+
+    // Additional paid invoices for same guest
+    const otherBookings = eligibleBookings.filter(other => 
+      other.id !== b.id &&
+      ((other.userId && other.userId === b.userId) || 
+       (other.guestEmail && gEmail && other.guestEmail.toLowerCase() === gEmail.toLowerCase()) ||
+       (other.guestName && gName && other.guestName.toLowerCase() === gName.toLowerCase()))
+    );
+
+    otherBookings.forEach((ob) => {
+      if (ob.invoiceDetails) {
+        const isCancelled = ob.invoiceDetails.cancelled || ob.status === 'cancelled';
+        const isPaid = ob.invoiceDetails.paid === true;
+        if (isPaid && !isCancelled) {
+          const oNum = ob.invoiceDetails.invoiceNumber || `INV-${ob.bookingRef || ob.id.substring(0, 6).toUpperCase()}`;
+          const oTotal = ob.invoiceDetails.grandTotal !== undefined 
+            ? ob.invoiceDetails.grandTotal 
+            : (ob.invoiceDetails.baseAmount || (ob.totalPrice / 100));
+          const oDate = ob.invoiceDetails.sentAt 
+            ? new Date(ob.invoiceDetails.sentAt).toISOString().split('T')[0]
+            : (ob.checkIn ? ob.checkIn.split('T')[0] : '');
+
+          invList.push({
+            id: `linked-inv-${ob.id}`,
+            invoiceNumber: oNum,
+            date: oDate,
+            description: `Stay Extension / Renewal (${ob.checkIn} to ${ob.checkOut})`,
+            amount: Number(oTotal) || 0,
+            paid: true
+          });
+        }
+      } else if (ob.status === 'confirmed' && ob.totalPrice) {
+        invList.push({
+          id: `linked-booking-${ob.id}`,
+          invoiceNumber: `INV-${ob.bookingRef || ob.id.substring(0, 6).toUpperCase()}`,
+          date: ob.checkIn ? ob.checkIn.split('T')[0] : '',
+          description: `Stay Extension / Additional Booking (${ob.checkIn} to ${ob.checkOut})`,
+          amount: ob.totalPrice / 100,
+          paid: true
+        });
+      }
+    });
+
+    setInvoices(invList);
+  };
 
   // Invoice management
   const handleAddInvoice = () => {
@@ -302,7 +419,7 @@ export const ProofOfResidencyModal: React.FC<ProofOfResidencyModalProps> = ({
       id: 'inv-' + Math.random().toString(36).substring(2, 7),
       invoiceNumber: `INV-${Math.floor(1000 + Math.random() * 9000)}`,
       date: new Date().toISOString().split('T')[0],
-      description: 'Additional Lodging / Extension Fee',
+      description: 'Additional Lodging / Verified Extension Fee',
       amount: 500,
       paid: true
     };
@@ -314,7 +431,8 @@ export const ProofOfResidencyModal: React.FC<ProofOfResidencyModalProps> = ({
   };
 
   const handleRemoveInvoice = (id: string) => {
-    setInvoices(invoices.filter(inv => inv.id !== id));
+    // Automatically recalculates grand total via grandTotalAmount useMemo
+    setInvoices(prev => prev.filter(inv => inv.id !== id));
   };
 
   // Format Dates for Letter
@@ -632,10 +750,10 @@ export const ProofOfResidencyModal: React.FC<ProofOfResidencyModalProps> = ({
         <div style="font-size: 12px; color: #475569; margin-top: 3px;">Operating: <strong>${propertyName}</strong></div>
       </div>
       <div class="contact-box">
-        <div><strong>Corporate Headquarters:</strong></div>
-        <div>${propertyAddress}</div>
-        <div>Phone: ${signerPhone}</div>
-        <div>Email: ${signerEmail}</div>
+        <div><strong>Corporate Administration:</strong></div>
+        <div>${corporateAddress}</div>
+        <div>Phone: ${corporatePhone}</div>
+        <div>Email: ${corporateEmail}</div>
       </div>
     </div>
 
@@ -762,7 +880,7 @@ export const ProofOfResidencyModal: React.FC<ProofOfResidencyModalProps> = ({
         <div style="font-size: 11px; color: #475569;">${signerTitle}</div>
         <div style="font-size: 11px; font-weight: 700; color: #4338ca;">${companyName}</div>
         <div style="font-size: 11px; color: #64748b; margin-top: 4px;">
-          Direct Verification: ${signerPhone} &bull; ${signerEmail}
+          Corporate Verification: ${corporatePhone} &bull; ${corporateEmail}
         </div>
       </div>
 
@@ -777,7 +895,7 @@ export const ProofOfResidencyModal: React.FC<ProofOfResidencyModalProps> = ({
 
     <!-- Footer Disclaimer -->
     <div class="footer-disclaimer">
-      This document has been issued by ${companyName} for official presentation to financial lending institutions, insurance underwriters, and administrative agencies. For instant verification, contact administration directly at ${signerEmail}.
+      This document has been issued by ${companyName} (${corporateAddress}) for official presentation to financial lending institutions, insurance underwriters, and administrative agencies. For instant verification, contact administration directly at ${corporateEmail} or ${corporatePhone}.
     </div>
   </div>
 </body>
@@ -790,6 +908,12 @@ export const ProofOfResidencyModal: React.FC<ProofOfResidencyModalProps> = ({
 PROOF OF RESIDENCY LETTER
 Date: ${todayFormatted}
 Verification Code: ${docVerificationCode}
+
+CORPORATE ADMINISTRATION:
+Entity: ${companyName}
+Corporate Office: ${corporateAddress}
+Phone: ${corporatePhone}
+Email: ${corporateEmail}
 
 TO: ${institutionName}
 ATTN: ${attentionTo}
@@ -820,8 +944,8 @@ Sincerely,
 ${signerName}
 ${signerTitle}
 ${companyName}
-Phone: ${signerPhone}
-Email: ${signerEmail}
+Corporate Phone: ${corporatePhone}
+Corporate Email: ${corporateEmail}
     `.trim();
 
     navigator.clipboard.writeText(text);
@@ -981,6 +1105,301 @@ Email: ${signerEmail}
               )}
             </div>
 
+            {/* Corporate Administration (Address, Phone, Email) */}
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="font-bold text-slate-800 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                  <Building2 size={13} className="text-indigo-600" />
+                  Corporate Administration
+                </label>
+                <span className="text-[10px] text-indigo-700 bg-indigo-50 font-bold px-2 py-0.5 rounded border border-indigo-100">
+                  Official Entity
+                </span>
+              </div>
+
+              <div className="space-y-2 pt-0.5">
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase">Rental Company Entity Name:</span>
+                  <input
+                    type="text"
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none mt-1"
+                    placeholder="e.g. C&SH Group Properties, LLC"
+                  />
+                </div>
+
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase">Corporate Headquarters Address:</span>
+                  <input
+                    type="text"
+                    value={corporateAddress}
+                    onChange={(e) => setCorporateAddress(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none mt-1"
+                    placeholder="e.g. 9404 West 144th Place, Orland Park, IL 60462"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">Corporate Phone:</span>
+                    <input
+                      type="text"
+                      value={corporatePhone}
+                      onChange={(e) => setCorporatePhone(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none mt-1"
+                      placeholder="e.g. (404) 555-0199"
+                    />
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">Corporate Email:</span>
+                    <input
+                      type="email"
+                      value={corporateEmail}
+                      onChange={(e) => setCorporateEmail(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none mt-1"
+                      placeholder="e.g. admin@cshgroupproperties.com"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Stay Period & Dates (Automatically calculate Stay Days) */}
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="font-bold text-slate-800 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                  <Calendar size={13} className="text-indigo-600" />
+                  Check-In &amp; Check-Out Dates
+                </label>
+                <span className="text-[10px] text-slate-500 font-bold">
+                  Auto-Calculates Stay
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase">Check-In Date:</span>
+                  <input
+                    type="date"
+                    value={checkInDate}
+                    onChange={(e) => setCheckInDate(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none mt-1"
+                  />
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase">Check-Out Date:</span>
+                  <input
+                    type="date"
+                    value={checkOutDate}
+                    onChange={(e) => setCheckOutDate(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none mt-1"
+                  />
+                </div>
+              </div>
+
+              {/* Automatically Calculated Stay Days Indicator */}
+              <div className={`p-3 rounded-xl border transition-all ${meetsThreshold ? 'bg-emerald-50 border-emerald-200 text-emerald-950' : 'bg-amber-50 border-amber-200 text-amber-950'}`}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                      Calculated Stay Duration:
+                    </span>
+                    <span className="font-black text-base text-slate-900">
+                      {consecutiveDays} Consecutive Days
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    {meetsThreshold ? (
+                      <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2.5 py-1 rounded-full inline-flex items-center gap-1">
+                        <CheckCircle size={11} className="text-emerald-600" />
+                        &gt;5 Days Verified
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold text-amber-800 bg-amber-100 border border-amber-300 px-2.5 py-1 rounded-full inline-flex items-center gap-1">
+                        &lt;= 5 Days (Requires &gt;5)
+                      </span>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Quick Extend Buttons for convenience */}
+                <div className="mt-2 pt-2 border-t border-slate-200/60 flex items-center justify-between text-[10px]">
+                  <span className="text-slate-500 font-medium">Quick Extend Stay:</span>
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      onClick={() => handleExtendStay(7)}
+                      className="px-2 py-0.5 bg-white hover:bg-slate-100 border border-slate-200 rounded font-bold text-slate-700 cursor-pointer shadow-2xs"
+                      title="Add 7 days to checkout"
+                    >
+                      +7 Days
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleExtendStay(14)}
+                      className="px-2 py-0.5 bg-white hover:bg-slate-100 border border-slate-200 rounded font-bold text-slate-700 cursor-pointer shadow-2xs"
+                      title="Add 14 days to checkout"
+                    >
+                      +14 Days
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleExtendStay(30)}
+                      className="px-2 py-0.5 bg-white hover:bg-slate-100 border border-slate-200 rounded font-bold text-slate-700 cursor-pointer shadow-2xs"
+                      title="Add 30 days to checkout"
+                    >
+                      +30 Days
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <span className="text-[10px] text-slate-400 font-bold uppercase">Property Physical Address:</span>
+                <input
+                  type="text"
+                  value={propertyAddress}
+                  onChange={(e) => setPropertyAddress(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs text-slate-800 focus:bg-white outline-none mt-1"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div className="col-span-1">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase">Rooms #:</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={roomsCount}
+                    onChange={(e) => setRoomsCount(parseInt(e.target.value, 10) || 1)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-slate-800 mt-1"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase">Rooms Details:</span>
+                  <input
+                    type="text"
+                    value={roomsDescription}
+                    onChange={(e) => setRoomsDescription(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs text-slate-800 focus:bg-white outline-none mt-1"
+                    placeholder="e.g. Room 1 (Master Suite)"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Invoices Breakdown (Remove any invoices not relating to the guest) */}
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+              <div className="flex justify-between items-center">
+                <div>
+                  <label className="font-bold text-slate-800 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                    <CreditCard size={13} className="text-indigo-600" />
+                    Guest Invoices ({invoices.length})
+                  </label>
+                  <p className="text-[10px] text-slate-400 mt-0.5">
+                    Remove invoices not relating to selected guest
+                  </p>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={handleReloadGuestInvoices}
+                    className="text-[10px] font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded-md transition-colors cursor-pointer flex items-center gap-1"
+                    title="Reset to default paid invoices for this guest"
+                  >
+                    ↺ Reset
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAddInvoice}
+                    className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded-md transition-colors cursor-pointer flex items-center gap-1"
+                  >
+                    <Plus size={11} /> Add
+                  </button>
+                </div>
+              </div>
+
+              {/* Invoices List with explicit Remove controls */}
+              {invoices.length === 0 ? (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-[11px] text-center">
+                  No invoices currently attached. Click <strong>&quot;+ Add&quot;</strong> or <strong>&quot;↺ Reset&quot;</strong> to restore guest invoices.
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                  {invoices.map((inv, idx) => (
+                    <div key={inv.id} className="p-2.5 bg-slate-50 hover:bg-slate-100/70 transition-colors rounded-xl border border-slate-200 space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-bold flex items-center justify-center flex-shrink-0">
+                            {idx + 1}
+                          </span>
+                          <input
+                            type="text"
+                            value={inv.invoiceNumber}
+                            onChange={(e) => handleUpdateInvoice(inv.id, 'invoiceNumber', e.target.value)}
+                            className="font-mono font-bold text-xs bg-white border border-slate-200 rounded px-1.5 py-0.5 text-indigo-700 w-24"
+                            placeholder="Invoice #"
+                          />
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] text-slate-400 font-bold">$</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={inv.amount}
+                            onChange={(e) => handleUpdateInvoice(inv.id, 'amount', parseFloat(e.target.value) || 0)}
+                            className="font-mono font-bold text-xs bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-800 w-20 text-right"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveInvoice(inv.id)}
+                            className="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-1 rounded-md transition-colors cursor-pointer ml-1"
+                            title="Remove invoice from verification letter"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        <input
+                          type="date"
+                          value={inv.date}
+                          onChange={(e) => handleUpdateInvoice(inv.id, 'date', e.target.value)}
+                          className="col-span-1 text-[10px] bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-600"
+                        />
+                        <input
+                          type="text"
+                          value={inv.description}
+                          onChange={(e) => handleUpdateInvoice(inv.id, 'description', e.target.value)}
+                          className="col-span-2 text-[11px] bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-600"
+                          placeholder="Description"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Automatically Recalculated Grand Total Display */}
+              <div className="pt-2.5 border-t border-slate-200 bg-indigo-50/60 rounded-xl p-2.5 flex justify-between items-center">
+                <div>
+                  <span className="text-[10px] font-extrabold text-indigo-950 uppercase tracking-wider block">
+                    Grand Combined Total ({invoices.length} {invoices.length === 1 ? 'Invoice' : 'Invoices'}):
+                  </span>
+                  <span className="text-[10px] text-indigo-600">
+                    Automatically recalculated
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="font-mono font-black text-indigo-700 text-base">
+                    ${grandTotalAmount.toFixed(2)} USD
+                  </span>
+                </div>
+              </div>
+            </div>
+
             {/* Recipient Institution */}
             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
               <label className="font-bold text-slate-700 uppercase tracking-wider text-[11px] block">
@@ -1054,166 +1473,12 @@ Email: ${signerEmail}
               </div>
             </div>
 
-            {/* Stay & Room Details */}
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
-              <label className="font-bold text-slate-700 uppercase tracking-wider text-[11px] block">
-                Stay Period &amp; Property Information
-              </label>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <span className="text-[10px] text-slate-400 font-bold uppercase">Check-In:</span>
-                  <input
-                    type="date"
-                    value={checkInDate}
-                    onChange={(e) => setCheckInDate(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-slate-800"
-                  />
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 font-bold uppercase">Check-Out:</span>
-                  <input
-                    type="date"
-                    value={checkOutDate}
-                    onChange={(e) => setCheckOutDate(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-slate-800"
-                  />
-                </div>
-              </div>
-
-              {/* Consecutive Days Status */}
-              <div className={`p-2.5 rounded-xl border flex items-center justify-between ${meetsThreshold ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-amber-50 border-amber-200 text-amber-900'}`}>
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider block">Stay Length:</span>
-                  <span className="font-extrabold text-sm">{consecutiveDays} Consecutive Days</span>
-                </div>
-                <div className="text-right">
-                  {meetsThreshold ? (
-                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full inline-block">
-                      &gt; 5 Days Verified &check;
-                    </span>
-                  ) : (
-                    <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full inline-block">
-                      Standard is &gt; 5 Days
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <span className="text-[10px] text-slate-400 font-bold uppercase">Property Address:</span>
-                <input
-                  type="text"
-                  value={propertyAddress}
-                  onChange={(e) => setPropertyAddress(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs text-slate-800 focus:bg-white outline-none mt-1"
-                />
-              </div>
-
-              <div className="grid grid-cols-3 gap-2">
-                <div className="col-span-1">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase">Rooms #:</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={20}
-                    value={roomsCount}
-                    onChange={(e) => setRoomsCount(parseInt(e.target.value, 10) || 1)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-slate-800 mt-1"
-                  />
-                </div>
-                <div className="col-span-2">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase">Rooms Details:</span>
-                  <input
-                    type="text"
-                    value={roomsDescription}
-                    onChange={(e) => setRoomsDescription(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs text-slate-800 focus:bg-white outline-none mt-1"
-                    placeholder="e.g. Room 1 (Master Suite)"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Invoices Editor */}
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
-              <div className="flex justify-between items-center">
-                <label className="font-bold text-slate-700 uppercase tracking-wider text-[11px]">
-                  Invoices Breakdown ({invoices.length})
-                </label>
-                <button
-                  type="button"
-                  onClick={handleAddInvoice}
-                  className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 px-2 py-0.5 rounded-md transition-colors cursor-pointer"
-                >
-                  <Plus size={12} /> Add Invoice
-                </button>
-              </div>
-
-              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                {invoices.map((inv) => (
-                  <div key={inv.id} className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <input
-                        type="text"
-                        value={inv.invoiceNumber}
-                        onChange={(e) => handleUpdateInvoice(inv.id, 'invoiceNumber', e.target.value)}
-                        className="font-mono font-bold text-xs bg-white border border-slate-200 rounded px-1.5 py-0.5 text-indigo-700 w-28"
-                        placeholder="Invoice #"
-                      />
-                      <div className="flex items-center gap-1">
-                        <span className="text-[10px] text-slate-400 font-bold">$</span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={inv.amount}
-                          onChange={(e) => handleUpdateInvoice(inv.id, 'amount', parseFloat(e.target.value) || 0)}
-                          className="font-mono font-bold text-xs bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-800 w-20 text-right"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveInvoice(inv.id)}
-                          className="text-slate-300 hover:text-red-500 p-1 transition-colors cursor-pointer"
-                          title="Remove invoice"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    </div>
-                    <input
-                      type="text"
-                      value={inv.description}
-                      onChange={(e) => handleUpdateInvoice(inv.id, 'description', e.target.value)}
-                      className="w-full text-[11px] bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-600"
-                      placeholder="Description"
-                    />
-                  </div>
-                ))}
-              </div>
-
-              {invoices.length > 1 && (
-                <div className="pt-2 border-t border-slate-100 flex justify-between items-center font-bold text-xs">
-                  <span className="text-slate-500 uppercase tracking-wider text-[10px]">Grand Combined Total:</span>
-                  <span className="font-mono text-indigo-700 text-sm">${grandTotalAmount.toFixed(2)}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Professional Signer & Entity Info */}
+            {/* Professional Signer */}
             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-2">
               <label className="font-bold text-slate-700 uppercase tracking-wider text-[11px] block">
-                Authorized Signer &amp; Company
+                Authorized Signer &amp; Officer
               </label>
               <div className="space-y-2">
-                <div>
-                  <span className="text-[10px] text-slate-400 font-bold uppercase">Rental Company Entity:</span>
-                  <input
-                    type="text"
-                    value={companyName}
-                    onChange={(e) => setCompanyName(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-slate-800"
-                  />
-                </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <span className="text-[10px] text-slate-400 font-bold uppercase">Signer Name:</span>
@@ -1259,9 +1524,9 @@ Email: ${signerEmail}
                 </div>
                 <div className="text-right text-xs text-slate-500 space-y-0.5">
                   <div className="font-bold text-slate-700">Corporate Administration</div>
-                  <div>{propertyAddress}</div>
-                  <div>Direct: {signerPhone}</div>
-                  <div>{signerEmail}</div>
+                  <div>{corporateAddress}</div>
+                  <div>Phone: {corporatePhone}</div>
+                  <div>Email: {corporateEmail}</div>
                 </div>
               </div>
 
@@ -1364,24 +1629,43 @@ Email: ${signerEmail}
                         <th className="py-2.5 px-3">Description</th>
                         <th className="py-2.5 px-3">Status</th>
                         <th className="py-2.5 px-3 text-right">Total (USD)</th>
+                        <th className="py-2.5 px-3 text-center print:hidden w-16">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {invoices.map((inv) => (
-                        <tr key={inv.id} className="hover:bg-slate-50/50">
-                          <td className="py-2 px-3 font-mono font-bold text-indigo-600">{inv.invoiceNumber}</td>
-                          <td className="py-2 px-3 text-slate-600">{inv.date || '—'}</td>
-                          <td className="py-2 px-3 text-slate-800">{inv.description}</td>
-                          <td className="py-2 px-3">
-                            <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded text-[10px] font-bold">
-                              &check; {inv.paid ? 'PAID IN FULL' : 'ACTIVE'}
-                            </span>
-                          </td>
-                          <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">
-                            ${Number(inv.amount).toFixed(2)}
+                      {invoices.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="py-4 text-center text-slate-400 italic">
+                            No invoices attached. Use the drawer on the left to add or reset invoices.
                           </td>
                         </tr>
-                      ))}
+                      ) : (
+                        invoices.map((inv) => (
+                          <tr key={inv.id} className="hover:bg-slate-50/50">
+                            <td className="py-2 px-3 font-mono font-bold text-indigo-600">{inv.invoiceNumber}</td>
+                            <td className="py-2 px-3 text-slate-600">{inv.date || '—'}</td>
+                            <td className="py-2 px-3 text-slate-800">{inv.description}</td>
+                            <td className="py-2 px-3">
+                              <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded text-[10px] font-bold">
+                                &check; {inv.paid ? 'PAID IN FULL' : 'ACTIVE'}
+                              </span>
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">
+                              ${Number(inv.amount).toFixed(2)}
+                            </td>
+                            <td className="py-2 px-3 text-center print:hidden">
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveInvoice(inv.id)}
+                                className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded transition-colors cursor-pointer"
+                                title="Remove this invoice from letter"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
                       
                       {/* If more than one invoice, explicitly show Grand Total of all invoices combined */}
                       {invoices.length > 1 ? (
@@ -1392,6 +1676,7 @@ Email: ${signerEmail}
                           <td className="py-3 px-3 text-right font-mono text-sm font-black text-indigo-700">
                             ${grandTotalAmount.toFixed(2)} USD
                           </td>
+                          <td className="print:hidden"></td>
                         </tr>
                       ) : (
                         <tr className="bg-slate-50 font-bold border-t border-slate-200">
@@ -1401,6 +1686,7 @@ Email: ${signerEmail}
                           <td className="py-2.5 px-3 text-right font-mono text-xs font-bold text-slate-900">
                             ${grandTotalAmount.toFixed(2)} USD
                           </td>
+                          <td className="print:hidden"></td>
                         </tr>
                       )}
                     </tbody>
@@ -1427,8 +1713,8 @@ Email: ${signerEmail}
                   <div className="font-extrabold text-sm text-slate-900">{signerName}</div>
                   <div className="text-xs text-slate-600">{signerTitle}</div>
                   <div className="text-xs font-bold text-indigo-700">{companyName}</div>
-                  <div className="text-[11px] text-slate-400 pt-1">
-                    Contact: {signerPhone} &bull; {signerEmail}
+                  <div className="text-[11px] text-slate-500 pt-1">
+                    Corporate Verification: {corporatePhone} &bull; {corporateEmail}
                   </div>
                 </div>
 
@@ -1443,7 +1729,7 @@ Email: ${signerEmail}
 
               {/* Bottom Notice */}
               <div className="mt-8 pt-4 border-t border-slate-100 text-[10px] text-slate-400 text-center leading-relaxed">
-                This document is certified for submission to banks, insurance underwriters, and municipal housing administrators. For authentication inquiries, contact administration at {signerEmail}.
+                This document is certified by {companyName} ({corporateAddress}) for submission to banks, insurance underwriters, and municipal housing administrators. For authentication inquiries, contact administration directly at {corporateEmail} or {corporatePhone}.
               </div>
 
             </div>
