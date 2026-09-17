@@ -8,6 +8,7 @@ import { cn } from '../lib/utils';
 import { BlackoutDate, PricingRule, Booking, Property, PropertyManager, PropertyImage, getImageUrl, getImageRoomNumber, DiscountCode } from '../types';
 import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight, RefreshCw, MessageSquare, CheckCircle, Loader2, FileText, XCircle, HelpCircle, MapPin, Upload, Database, Ticket, Send, Clock, Bell, BellRing, FileCheck, RotateCw, CheckSquare, Copy, Search, X, AlertTriangle, Video, Eraser, Pencil, Sparkles, Megaphone } from 'lucide-react';
 import { AdvertisementFlyerModal } from '../components/AdvertisementFlyerModal';
+import { ProofOfResidencyModal } from '../components/ProofOfResidencyModal';
 import { AdminAlarmsBanner, AdminAlarmsModal } from '../components/AdminAlarmsPanel';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -82,6 +83,8 @@ export const AdminDashboard: React.FC = () => {
   const [createPromoVideoUrl, setCreatePromoVideoUrl] = useState<string>('');
   const [editPromoVideoUrl, setEditPromoVideoUrl] = useState<string>('');
   const [showAdvertisementModal, setShowAdvertisementModal] = useState<boolean>(false);
+  const [showProofOfResidencyModal, setShowProofOfResidencyModal] = useState<boolean>(false);
+  const [proofOfResidencyBooking, setProofOfResidencyBooking] = useState<Booking | null>(null);
   const [showAlarmsModal, setShowAlarmsModal] = useState<boolean>(false);
 
   const handleVideoFileUpload = (e: React.ChangeEvent<HTMLInputElement>, isEdit: boolean) => {
@@ -4569,9 +4572,23 @@ C.&S.H. Group Properties, LLC
           </div>         </div>
 
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm mt-8">
-             <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-bold flex items-center gap-2"><CalendarIcon className="text-indigo-600" size={20}/> Booking Management</h2>
-                <div className="flex gap-2 text-xs">
+             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                <div>
+                   <h2 className="text-xl font-bold flex items-center gap-2"><CalendarIcon className="text-indigo-600" size={20}/> Booking Management</h2>
+                   <p className="text-xs text-slate-500 mt-0.5">Manage reservations, keyless codes, billing ledger, and Proof of Residency verification letters.</p>
+                </div>
+                <div className="flex items-center flex-wrap gap-2 text-xs">
+                   <button
+                      type="button"
+                      onClick={() => {
+                         setProofOfResidencyBooking(null);
+                         setShowProofOfResidencyModal(true);
+                      }}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-1.5 rounded-xl font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                      title="Create official Proof of Residency Letter for Guests with >5 consecutive days"
+                   >
+                      <FileCheck size={14} /> Proof of Residency Letter
+                   </button>
                    <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded-md font-bold uppercase">{bookings.filter(b => b.status === 'confirmed').length} Confirmed</span>
                    <span className="bg-red-100 text-red-700 px-2 py-1 rounded-md font-bold uppercase">{bookings.filter(b => b.status === 'cancelled').length} Cancelled</span>
                 </div>
@@ -4595,6 +4612,20 @@ C.&S.H. Group Properties, LLC
                          const prop = properties.find(p => p.id === b.propertyId);
                          const userObj = users.find(u => u.uid === b.userId);
                          const rooms = b.selectedBedrooms ? b.selectedBedrooms.map(r => r.roomNumber).join(", ") : (b.selectedBedroom?.roomNumber || "Full Property");
+                         
+                         const calculateConsecutiveDays = (inStr: string, outStr: string) => {
+                            if (!inStr || !outStr) return 0;
+                            try {
+                               const dIn = new Date(inStr.split('T')[0] + 'T12:00:00');
+                               const dOut = new Date(outStr.split('T')[0] + 'T12:00:00');
+                               const diff = dOut.getTime() - dIn.getTime();
+                               return diff > 0 ? Math.round(diff / (1000 * 60 * 60 * 24)) : 0;
+                            } catch {
+                               return 0;
+                            }
+                         };
+                         const stayDays = calculateConsecutiveDays(b.checkIn, b.checkOut);
+                         const isResidencyEligible = stayDays > 5;
                          
                          return (
                             <tr key={b.id} className="hover:bg-slate-50 transition-colors">
@@ -4719,6 +4750,25 @@ C.&S.H. Group Properties, LLC
                                         )}
                                      </span>
                                   )}
+                                  {/* Proof of Residency Letter Button */}
+                                  <button
+                                     type="button"
+                                     onClick={() => {
+                                        setProofOfResidencyBooking(b);
+                                        setShowProofOfResidencyModal(true);
+                                     }}
+                                     className={cn(
+                                        "text-[10px] font-bold px-2.5 py-1 rounded-lg transition-all inline-flex items-center gap-1 cursor-pointer align-middle mr-2 shadow-2xs",
+                                        isResidencyEligible
+                                           ? "bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 font-extrabold"
+                                           : "bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200"
+                                     )}
+                                     title={isResidencyEligible ? `Generate official Proof of Residency Letter (${stayDays} consecutive days > 5)` : `Generate Residency Letter (${stayDays} days)`}
+                                  >
+                                     <FileCheck size={12} className={isResidencyEligible ? "text-emerald-600" : "text-indigo-600"} />
+                                     {isResidencyEligible ? 'Proof of Residency' : 'Residency Letter'}
+                                  </button>
+
                                   {b.status === 'confirmed' && (
                                      <button 
                                        onClick={() => handleAdminCancelBooking(b.id)}
@@ -7235,6 +7285,20 @@ C.&S.H. Group Properties, LLC
             pricingRules={pricingRules}
             propertyManagers={propertyManagers}
             activePropertyId={activePropertyId}
+          />
+
+          {/* Official Proof of Residency Letter Modal */}
+          <ProofOfResidencyModal
+            isOpen={showProofOfResidencyModal}
+            onClose={() => {
+              setShowProofOfResidencyModal(false);
+              setProofOfResidencyBooking(null);
+            }}
+            initialBooking={proofOfResidencyBooking}
+            bookings={bookings}
+            properties={properties}
+            users={users}
+            currentUser={user}
           />
 
           {/* System Alarms & Incidents Monitoring Modal */}

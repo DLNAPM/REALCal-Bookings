@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Booking, Property } from '../types';
 import { Link } from 'react-router-dom';
-import { X, ArrowUpDown, Calendar as CalendarIcon, Printer } from 'lucide-react';
+import { X, ArrowUpDown, Calendar as CalendarIcon, Printer, FileCheck } from 'lucide-react';
 import { getBookingPriceBreakdown } from '../pages/MyBookings';
+import { ProofOfResidencyModal } from './ProofOfResidencyModal';
 
 interface AdminBookingsProps {
     bookings: (Booking & { propertyName?: string; propertyImage?: string; property?: Property | null })[];
@@ -20,6 +21,20 @@ export const AdminBookings: React.FC<AdminBookingsProps> = ({
     const [adminSortOrder, setAdminSortOrder] = useState<'asc' | 'desc'>('desc');
     const [selectedAdminBookingId, setSelectedAdminBookingId] = useState<string | null>(null);
     const [processingAction, setProcessingAction] = useState<boolean>(false);
+    const [showProofOfResidencyModal, setShowProofOfResidencyModal] = useState<boolean>(false);
+    const [proofBooking, setProofBooking] = useState<Booking | null>(null);
+
+    const calculateStayDays = (inStr: string, outStr: string): number => {
+        if (!inStr || !outStr) return 0;
+        try {
+            const dIn = new Date(inStr.split('T')[0] + 'T12:00:00');
+            const dOut = new Date(outStr.split('T')[0] + 'T12:00:00');
+            const diff = dOut.getTime() - dIn.getTime();
+            return diff > 0 ? Math.round(diff / (1000 * 60 * 60 * 24)) : 0;
+        } catch {
+            return 0;
+        }
+    };
 
     const selectedAdminBooking = selectedAdminBookingId 
         ? bookings.find(b => b.id === selectedAdminBookingId) || null
@@ -65,6 +80,18 @@ export const AdminBookings: React.FC<AdminBookingsProps> = ({
                     Total Bookings found: <span className="text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded border border-indigo-150/40 text-[11px] font-mono">{bookings.length} reservations</span>
                 </div>
                 <div className="flex items-center gap-2 pr-2">
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setProofBooking(null);
+                            setShowProofOfResidencyModal(true);
+                        }}
+                        className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-3 rounded-xl text-xs font-extrabold shadow-sm transition-all uppercase tracking-wider cursor-pointer"
+                        title="Create Proof of Residency Letter for guests staying > 5 consecutive days"
+                    >
+                        <FileCheck size={14} />
+                        Proof of Residency Letter
+                    </button>
                     <span className="text-xs text-slate-500 font-bold uppercase tracking-wider">Sort Check-In:</span>
                     <button
                         type="button"
@@ -347,6 +374,30 @@ export const AdminBookings: React.FC<AdminBookingsProps> = ({
                                             </>
                                         )}
 
+                                        {/* Proof of Residency Letter Button */}
+                                        {(() => {
+                                            const days = calculateStayDays(selectedAdminBooking.checkIn, selectedAdminBooking.checkOut);
+                                            const isOver5 = days > 5;
+                                            return (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setProofBooking(selectedAdminBooking);
+                                                        setShowProofOfResidencyModal(true);
+                                                    }}
+                                                    className={`w-full font-extrabold py-3.5 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-xs uppercase tracking-wider text-center cursor-pointer border ${
+                                                        isOver5
+                                                            ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600'
+                                                            : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200'
+                                                    }`}
+                                                    title={isOver5 ? `Create Proof of Residency Letter (${days} consecutive days > 5)` : `Residency Letter (${days} days)`}
+                                                >
+                                                    <FileCheck size={16} className={isOver5 ? 'text-white' : 'text-indigo-600'} />
+                                                    Proof of Residency Letter ({days} Days{isOver5 ? ' > 5 ⭐' : ''})
+                                                </button>
+                                            );
+                                        })()}
+
                                         <Link 
                                             to={`/itinerary/${selectedAdminBooking.id}`}
                                             className="w-full bg-indigo-600 hover:bg-indigo-750 text-white font-extrabold py-3.5 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-xs uppercase tracking-wider text-center cursor-pointer"
@@ -369,6 +420,18 @@ export const AdminBookings: React.FC<AdminBookingsProps> = ({
                     )}
                 </div>
             </div>
+
+            {/* Official Proof of Residency Letter Modal */}
+            <ProofOfResidencyModal
+                isOpen={showProofOfResidencyModal}
+                onClose={() => {
+                    setShowProofOfResidencyModal(false);
+                    setProofBooking(null);
+                }}
+                initialBooking={proofBooking}
+                bookings={bookings}
+                properties={[]}
+            />
         </>
     );
 };

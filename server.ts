@@ -82,7 +82,7 @@ try {
 }
 
 // SMTP Outgoing Email Helper via Nodemailer
-async function sendSmtpEmail({ to, subject, text, html, attachments }: { to: string; subject: string; text: string; html?: string; attachments?: any[] }) {
+async function sendSmtpEmail({ to, subject, text, html, attachments, cc }: { to: string; subject: string; text: string; html?: string; attachments?: any[]; cc?: string }) {
   const nodemailer = await import("nodemailer");
   
   const host = process.env.SMTP_HOST || "smtp.mailgun.org";
@@ -114,6 +114,10 @@ async function sendSmtpEmail({ to, subject, text, html, attachments }: { to: str
     text,
     html
   };
+
+  if (cc) {
+    mailOptions.cc = cc;
+  }
 
   if (attachments) {
     mailOptions.attachments = attachments;
@@ -1624,6 +1628,44 @@ async function startServer() {
       res.json({ success: true, result, message: `Advertisement flyer successfully emailed to ${to}` });
     } catch (err: any) {
       console.error("[API] Advertisement Email Error:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/send-proof-of-residency-email", async (req, res) => {
+    console.log("[API] Send Proof of Residency Email hit");
+    try {
+      const { to, cc, subject, html, text, guestName } = req.body;
+      const smtpHost = process.env.SMTP_HOST;
+
+      if (!to) {
+        return res.status(400).json({ error: "Recipient email address is required." });
+      }
+
+      if (!smtpHost) {
+        console.warn("[API] SMTP_HOST is not configured. Simulating successful Proof of Residency email dispatch.");
+        return res.json({ 
+          success: true, 
+          simulated: true, 
+          message: `Proof of Residency Letter dispatch simulated to ${to} (SMTP_HOST not set).` 
+        });
+      }
+
+      const emailSubject = subject || `Official Proof of Residency Letter - ${guestName || 'Guest'} - REALCal Luxury Lodging`;
+      const emailText = text || `Please review the attached Official Proof of Residency Letter for ${guestName || 'the guest'}.`;
+
+      const result = await sendSmtpEmail({
+        to,
+        cc,
+        subject: emailSubject,
+        text: emailText,
+        html: html
+      });
+
+      console.log(`[API] Proof of Residency Email successfully sent to ${to}:`, result);
+      res.json({ success: true, result, message: `Proof of Residency Letter successfully emailed to ${to}` });
+    } catch (err: any) {
+      console.error("[API] Proof of Residency Email Error:", err);
       res.status(500).json({ error: err.message });
     }
   });
