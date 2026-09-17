@@ -168,7 +168,10 @@ export const PropertyDetail: React.FC = () => {
                                                href={`https://www.youtube.com/watch?v=${promoYtId}`}
                                                target="_blank"
                                                rel="noopener noreferrer"
-                                               onClick={(e) => e.stopPropagation()}
+                                               onClick={(e) => {
+                                                   e.stopPropagation();
+                                                   setIsVideoModalOpen(false);
+                                               }}
                                                className="text-[10px] font-bold text-red-400 hover:text-red-300 bg-red-950/60 hover:bg-red-900/80 px-2 py-0.5 rounded-full border border-red-800/60 flex items-center gap-1 transition-colors cursor-pointer"
                                                title="Watch directly on YouTube"
                                            >

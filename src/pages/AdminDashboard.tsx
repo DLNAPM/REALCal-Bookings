@@ -87,6 +87,18 @@ export const AdminDashboard: React.FC = () => {
   const [proofOfResidencyBooking, setProofOfResidencyBooking] = useState<Booking | null>(null);
   const [showAlarmsModal, setShowAlarmsModal] = useState<boolean>(false);
 
+  const calculateStayDuration = (inStr: string, outStr: string): number => {
+    if (!inStr || !outStr) return 0;
+    try {
+      const dIn = new Date(inStr.split('T')[0] + 'T12:00:00');
+      const dOut = new Date(outStr.split('T')[0] + 'T12:00:00');
+      const diff = dOut.getTime() - dIn.getTime();
+      return diff > 0 ? Math.round(diff / (1000 * 60 * 60 * 24)) : 0;
+    } catch {
+      return 0;
+    }
+  };
+
   const handleVideoFileUpload = (e: React.ChangeEvent<HTMLInputElement>, isEdit: boolean) => {
       const file = e.target.files?.[0];
       if (!file) return;
@@ -4581,7 +4593,13 @@ C.&S.H. Group Properties, LLC
                    <button
                       type="button"
                       onClick={() => {
-                         setProofOfResidencyBooking(null);
+                         const paidBookings = bookings.filter(b => 
+                            b.status !== 'cancelled' && !b.invoiceDetails?.cancelled && (
+                               b.invoiceDetails ? b.invoiceDetails.paid === true : b.status === 'confirmed'
+                            )
+                         );
+                         const firstEligible = paidBookings.find(b => calculateStayDuration(b.checkIn, b.checkOut) > 5) || paidBookings[0] || null;
+                         setProofOfResidencyBooking(firstEligible);
                          setShowProofOfResidencyModal(true);
                       }}
                       className="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-1.5 rounded-xl font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
@@ -4613,19 +4631,11 @@ C.&S.H. Group Properties, LLC
                          const userObj = users.find(u => u.uid === b.userId);
                          const rooms = b.selectedBedrooms ? b.selectedBedrooms.map(r => r.roomNumber).join(", ") : (b.selectedBedroom?.roomNumber || "Full Property");
                          
-                         const calculateConsecutiveDays = (inStr: string, outStr: string) => {
-                            if (!inStr || !outStr) return 0;
-                            try {
-                               const dIn = new Date(inStr.split('T')[0] + 'T12:00:00');
-                               const dOut = new Date(outStr.split('T')[0] + 'T12:00:00');
-                               const diff = dOut.getTime() - dIn.getTime();
-                               return diff > 0 ? Math.round(diff / (1000 * 60 * 60 * 24)) : 0;
-                            } catch {
-                               return 0;
-                            }
-                         };
-                         const stayDays = calculateConsecutiveDays(b.checkIn, b.checkOut);
-                         const isResidencyEligible = stayDays > 5;
+                         const stayDays = calculateStayDuration(b.checkIn, b.checkOut);
+                         const isPaidBooking = b.status !== 'cancelled' && !b.invoiceDetails?.cancelled && (
+                            b.invoiceDetails ? b.invoiceDetails.paid === true : b.status === 'confirmed'
+                         );
+                         const isResidencyEligible = stayDays > 5 && isPaidBooking;
                          
                          return (
                             <tr key={b.id} className="hover:bg-slate-50 transition-colors">
@@ -4750,24 +4760,26 @@ C.&S.H. Group Properties, LLC
                                         )}
                                      </span>
                                   )}
-                                  {/* Proof of Residency Letter Button */}
-                                  <button
-                                     type="button"
-                                     onClick={() => {
-                                        setProofOfResidencyBooking(b);
-                                        setShowProofOfResidencyModal(true);
-                                     }}
-                                     className={cn(
-                                        "text-[10px] font-bold px-2.5 py-1 rounded-lg transition-all inline-flex items-center gap-1 cursor-pointer align-middle mr-2 shadow-2xs",
-                                        isResidencyEligible
-                                           ? "bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 font-extrabold"
-                                           : "bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200"
-                                     )}
-                                     title={isResidencyEligible ? `Generate official Proof of Residency Letter (${stayDays} consecutive days > 5)` : `Generate Residency Letter (${stayDays} days)`}
-                                  >
-                                     <FileCheck size={12} className={isResidencyEligible ? "text-emerald-600" : "text-indigo-600"} />
-                                     {isResidencyEligible ? 'Proof of Residency' : 'Residency Letter'}
-                                  </button>
+                                  {/* Proof of Residency Letter Button - ONLY for Paid & Non-Cancelled Bookings */}
+                                  {isPaidBooking && (
+                                     <button
+                                        type="button"
+                                        onClick={() => {
+                                           setProofOfResidencyBooking(b);
+                                           setShowProofOfResidencyModal(true);
+                                        }}
+                                        className={cn(
+                                           "text-[10px] font-bold px-2.5 py-1 rounded-lg transition-all inline-flex items-center gap-1 cursor-pointer align-middle mr-2 shadow-2xs",
+                                           isResidencyEligible
+                                              ? "bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 font-extrabold"
+                                              : "bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200"
+                                        )}
+                                        title={isResidencyEligible ? `Generate official Proof of Residency Letter (${stayDays} consecutive days > 5)` : `Generate Residency Letter (${stayDays} days)`}
+                                     >
+                                        <FileCheck size={12} className={isResidencyEligible ? "text-emerald-600" : "text-indigo-600"} />
+                                        {isResidencyEligible ? 'Proof of Residency' : 'Residency Letter'}
+                                     </button>
+                                  )}
 
                                   {b.status === 'confirmed' && (
                                      <button 
@@ -4951,16 +4963,31 @@ C.&S.H. Group Properties, LLC
                                                  )}
                                                  
                                                  {inv.paid ? (
-                                                    <button
-                                                       onClick={() => {
-                                                          setResendingConfirmationBooking(b);
-                                                          setResendNotifyAdmins(true);
-                                                          setResendNotifyGuest(true);
-                                                       }}
-                                                       className="text-[10px] font-bold text-teal-600 hover:text-teal-800 bg-teal-50 hover:bg-teal-100 border border-teal-200 px-2.5 py-1 rounded-lg transition-all inline-flex items-center gap-1 cursor-pointer"
-                                                    >
-                                                       <Mail size={12} /> Resend Paid Receipt
-                                                    </button>
+                                                    <>
+                                                       <button
+                                                          onClick={() => {
+                                                             setResendingConfirmationBooking(b);
+                                                             setResendNotifyAdmins(true);
+                                                             setResendNotifyGuest(true);
+                                                          }}
+                                                          className="text-[10px] font-bold text-teal-600 hover:text-teal-800 bg-teal-50 hover:bg-teal-100 border border-teal-200 px-2.5 py-1 rounded-lg transition-all inline-flex items-center gap-1 cursor-pointer"
+                                                       >
+                                                          <Mail size={12} /> Resend Paid Receipt
+                                                       </button>
+                                                       {!isInvoiceCancelled && (
+                                                          <button
+                                                             type="button"
+                                                             onClick={() => {
+                                                                setProofOfResidencyBooking(b);
+                                                                setShowProofOfResidencyModal(true);
+                                                             }}
+                                                             className="text-[10px] font-bold text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2.5 py-1 rounded-lg transition-all inline-flex items-center gap-1 cursor-pointer"
+                                                             title="Generate official Proof of Residency Letter for this paid reservation"
+                                                          >
+                                                             <FileCheck size={12} className="text-emerald-600" /> Residency Letter
+                                                          </button>
+                                                       )}
+                                                    </>
                                                  ) : (
                                                     <button
                                                        onClick={() => handleResendInvoice(b)}
@@ -7295,7 +7322,13 @@ C.&S.H. Group Properties, LLC
               setProofOfResidencyBooking(null);
             }}
             initialBooking={proofOfResidencyBooking}
-            bookings={bookings}
+            bookings={bookings.filter(b => {
+              if (b.status === 'cancelled' || b.invoiceDetails?.cancelled) return false;
+              if (b.invoiceDetails) {
+                return b.invoiceDetails.paid === true && b.status !== 'cancelled';
+              }
+              return b.status === 'confirmed';
+            })}
             properties={properties}
             users={users}
             currentUser={user}

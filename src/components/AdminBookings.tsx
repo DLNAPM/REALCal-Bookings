@@ -83,7 +83,13 @@ export const AdminBookings: React.FC<AdminBookingsProps> = ({
                     <button
                         type="button"
                         onClick={() => {
-                            setProofBooking(null);
+                            const paidBookings = bookings.filter(b => 
+                                b.status !== 'cancelled' && !b.invoiceDetails?.cancelled && (
+                                    b.invoiceDetails ? b.invoiceDetails.paid === true : b.status === 'confirmed'
+                                )
+                            );
+                            const firstEligible = paidBookings.find(b => calculateStayDays(b.checkIn, b.checkOut) > 5) || paidBookings[0] || null;
+                            setProofBooking(firstEligible);
                             setShowProofOfResidencyModal(true);
                         }}
                         className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-3 rounded-xl text-xs font-extrabold shadow-sm transition-all uppercase tracking-wider cursor-pointer"
@@ -374,8 +380,18 @@ export const AdminBookings: React.FC<AdminBookingsProps> = ({
                                             </>
                                         )}
 
-                                        {/* Proof of Residency Letter Button */}
+                                        {/* Proof of Residency Letter Button - ONLY for Paid and Non-Cancelled Bookings */}
                                         {(() => {
+                                            const isCancelled = selectedAdminBooking.status === 'cancelled' || selectedAdminBooking.invoiceDetails?.cancelled;
+                                            const isPaid = selectedAdminBooking.invoiceDetails 
+                                                ? (selectedAdminBooking.invoiceDetails.paid === true && !selectedAdminBooking.invoiceDetails.cancelled) 
+                                                : (selectedAdminBooking.status === 'confirmed');
+                                            
+                                            // Do NOT include cancelled or unpaid bookings in the verification process
+                                            if (isCancelled || !isPaid) {
+                                                return null;
+                                            }
+
                                             const days = calculateStayDays(selectedAdminBooking.checkIn, selectedAdminBooking.checkOut);
                                             const isOver5 = days > 5;
                                             return (
@@ -429,7 +445,13 @@ export const AdminBookings: React.FC<AdminBookingsProps> = ({
                     setProofBooking(null);
                 }}
                 initialBooking={proofBooking}
-                bookings={bookings}
+                bookings={bookings.filter(b => {
+                    if (b.status === 'cancelled' || b.invoiceDetails?.cancelled) return false;
+                    if (b.invoiceDetails) {
+                        return b.invoiceDetails.paid === true && b.status !== 'cancelled';
+                    }
+                    return b.status === 'confirmed';
+                })}
                 properties={[]}
             />
         </>

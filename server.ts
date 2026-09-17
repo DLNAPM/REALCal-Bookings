@@ -1651,7 +1651,7 @@ async function startServer() {
         });
       }
 
-      const emailSubject = subject || `Official Proof of Residency Letter - ${guestName || 'Guest'} - REALCal Luxury Lodging`;
+      const emailSubject = subject || `Official Proof of Residency Letter - ${guestName || 'Guest'} - C&SH Group Properties, LLC`;
       const emailText = text || `Please review the attached Official Proof of Residency Letter for ${guestName || 'the guest'}.`;
 
       const result = await sendSmtpEmail({

@@ -56,21 +56,25 @@ export const PromotionalVideoModal: React.FC<PromotionalVideoModalProps> = ({
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [isOpen, onClose]);
 
-    // Send stop commands to any active internal player
+    // Send stop commands to any active internal player and blank iframe to instantly kill audio
     const stopInternalPlayback = () => {
-        // Stop YouTube iframe
-        if (iframeRef.current && iframeRef.current.contentWindow) {
+        // Stop YouTube / iframe player
+        if (iframeRef.current) {
             try {
-                iframeRef.current.contentWindow.postMessage(
-                    JSON.stringify({ event: 'command', func: 'pauseVideo', args: '' }),
-                    '*'
-                );
-                iframeRef.current.contentWindow.postMessage(
-                    JSON.stringify({ event: 'command', func: 'stopVideo', args: '' }),
-                    '*'
-                );
+                if (iframeRef.current.contentWindow) {
+                    iframeRef.current.contentWindow.postMessage(
+                        JSON.stringify({ event: 'command', func: 'pauseVideo', args: '' }),
+                        '*'
+                    );
+                    iframeRef.current.contentWindow.postMessage(
+                        JSON.stringify({ event: 'command', func: 'stopVideo', args: '' }),
+                        '*'
+                    );
+                }
+                // Immediately point iframe to about:blank to guarantee audio and video streams terminate
+                iframeRef.current.src = 'about:blank';
             } catch (err) {
-                console.error('[VideoModal] Could not postMessage to iframe:', err);
+                console.error('[VideoModal] Could not stop iframe playback:', err);
             }
         }
         // Stop HTML5 video
@@ -124,10 +128,14 @@ export const PromotionalVideoModal: React.FC<PromotionalVideoModalProps> = ({
         const handleWindowBlur = () => {
             // Check if activeElement is the iframe or user was hovering over the player
             if (isHoveringPlayer || document.activeElement === iframeRef.current) {
-                console.log('[VideoModal] User opened YouTube from embedded player. Stopping internal playback.');
-                stopInternalPlayback();
-                setIsStoppedForExternal(true);
-                setExternalPlatform('youtube');
+                setTimeout(() => {
+                    if (document.hidden || !document.hasFocus()) {
+                        console.log('[VideoModal] User opened YouTube from embedded player. Stopping internal playback.');
+                        stopInternalPlayback();
+                        setIsStoppedForExternal(true);
+                        setExternalPlatform('youtube');
+                    }
+                }, 150);
             }
         };
 

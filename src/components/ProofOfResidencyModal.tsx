@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Booking, Property } from '../types';
 import { 
   X, Printer, Mail, Copy, Check, FileCheck, Building2, Calendar, 
@@ -80,7 +80,7 @@ export const ProofOfResidencyModal: React.FC<ProofOfResidencyModalProps> = ({
     'Property Operations Director & Authorized Corporate Officer'
   );
   const [companyName, setCompanyName] = useState<string>(
-    'REALCal Hospitality & Property Operations LLC'
+    'C&SH Group Properties, LLC'
   );
   const [signerPhone, setSignerPhone] = useState<string>('(404) 555-0199');
   const [signerEmail, setSignerEmail] = useState<string>(
@@ -104,21 +104,41 @@ export const ProofOfResidencyModal: React.FC<ProofOfResidencyModalProps> = ({
 
   const printAreaRef = useRef<HTMLDivElement>(null);
 
+  // Filter ONLY paid and non-cancelled bookings for the verification process
+  const isPaidAndNotCancelled = (b: Booking): boolean => {
+    if (!b) return false;
+    // Strictly exclude cancelled bookings or invoices
+    if (b.status === 'cancelled') return false;
+    if (b.invoiceDetails?.cancelled) return false;
+
+    // Must be verified as paid
+    if (b.invoiceDetails) {
+      return b.invoiceDetails.paid === true;
+    }
+    return b.status === 'confirmed';
+  };
+
+  const eligibleBookings = useMemo(() => {
+    return bookings.filter(isPaidAndNotCancelled);
+  }, [bookings]);
+
   // Set initial selected booking or default to first qualifying booking
   useEffect(() => {
-    if (initialBooking) {
+    if (initialBooking && isPaidAndNotCancelled(initialBooking)) {
       setSelectedBookingId(initialBooking.id);
-    } else if (bookings.length > 0) {
-      // Find first booking with > 5 days, or simply first booking
-      const qualifying = bookings.find(b => calculateDays(b.checkIn, b.checkOut) > 5);
-      setSelectedBookingId(qualifying ? qualifying.id : bookings[0].id);
+    } else if (eligibleBookings.length > 0) {
+      // Find first booking with > 5 days among paid, or simply first paid booking
+      const qualifying = eligibleBookings.find(b => calculateDays(b.checkIn, b.checkOut) > 5);
+      setSelectedBookingId(qualifying ? qualifying.id : eligibleBookings[0].id);
+    } else {
+      setSelectedBookingId('');
     }
-  }, [initialBooking, bookings]);
+  }, [initialBooking, eligibleBookings]);
 
   // When selectedBookingId changes, populate fields
   useEffect(() => {
     if (!selectedBookingId) return;
-    const b = bookings.find(x => x.id === selectedBookingId);
+    const b = eligibleBookings.find(x => x.id === selectedBookingId);
     if (!b) return;
 
     const prop = properties.find(p => p.id === b.propertyId);
@@ -162,28 +182,32 @@ export const ProofOfResidencyModal: React.FC<ProofOfResidencyModalProps> = ({
       setRoomsDescription(`Full Estate / Private Villa Buyout (${prop?.bedrooms?.length || 5} Bedrooms)`);
     }
 
-    // Invoices preparation
+    // Invoices preparation - STRICTLY ONLY PAID & NON-CANCELLED INVOICES
     const invList: InvoiceItem[] = [];
 
-    // 1. Primary invoice from booking
+    // 1. Primary invoice from booking (only if paid and non-cancelled)
     if (b.invoiceDetails) {
-      const invNum = b.invoiceDetails.invoiceNumber || `INV-${b.bookingRef || b.id.substring(0, 6).toUpperCase()}`;
-      const invTotal = b.invoiceDetails.grandTotal !== undefined 
-        ? b.invoiceDetails.grandTotal 
-        : (b.invoiceDetails.baseAmount || (b.totalPrice / 100));
-      const invDate = b.invoiceDetails.sentAt 
-        ? new Date(b.invoiceDetails.sentAt).toISOString().split('T')[0]
-        : (b.checkIn ? b.checkIn.split('T')[0] : new Date().toISOString().split('T')[0]);
+      const isCancelled = b.invoiceDetails.cancelled || b.status === 'cancelled';
+      const isPaid = b.invoiceDetails.paid === true;
+      if (isPaid && !isCancelled) {
+        const invNum = b.invoiceDetails.invoiceNumber || `INV-${b.bookingRef || b.id.substring(0, 6).toUpperCase()}`;
+        const invTotal = b.invoiceDetails.grandTotal !== undefined 
+          ? b.invoiceDetails.grandTotal 
+          : (b.invoiceDetails.baseAmount || (b.totalPrice / 100));
+        const invDate = b.invoiceDetails.sentAt 
+          ? new Date(b.invoiceDetails.sentAt).toISOString().split('T')[0]
+          : (b.checkIn ? b.checkIn.split('T')[0] : new Date().toISOString().split('T')[0]);
 
-      invList.push({
-        id: 'primary-inv',
-        invoiceNumber: invNum,
-        date: invDate,
-        description: `Lodging Accommodations (${b.checkIn} to ${b.checkOut})`,
-        amount: Number(invTotal) || 0,
-        paid: b.invoiceDetails.paid !== false
-      });
-    } else if (b.totalPrice) {
+        invList.push({
+          id: 'primary-inv',
+          invoiceNumber: invNum,
+          date: invDate,
+          description: `Lodging Accommodations (${b.checkIn} to ${b.checkOut})`,
+          amount: Number(invTotal) || 0,
+          paid: true
+        });
+      }
+    } else if (b.status === 'confirmed' && b.totalPrice) {
       invList.push({
         id: 'booking-payment',
         invoiceNumber: `INV-${b.bookingRef || b.id.substring(0, 6).toUpperCase()}`,
@@ -194,31 +218,45 @@ export const ProofOfResidencyModal: React.FC<ProofOfResidencyModalProps> = ({
       });
     }
 
-    // 2. Check for other bookings/invoices by same guest (chained or extension stays)
-    const otherBookings = bookings.filter(other => 
+    // 2. Check for other paid bookings/invoices by same guest (chained or extension stays)
+    // ONLY include paid bookings and non-cancelled invoices
+    const otherBookings = eligibleBookings.filter(other => 
       other.id !== b.id &&
       ((other.userId && other.userId === b.userId) || 
        (other.guestEmail && other.guestEmail.toLowerCase() === gEmail.toLowerCase()) ||
        (other.guestName && other.guestName.toLowerCase() === gName.toLowerCase()))
     );
 
-    otherBookings.forEach((ob, idx) => {
+    otherBookings.forEach((ob) => {
       if (ob.invoiceDetails) {
-        const oNum = ob.invoiceDetails.invoiceNumber || `INV-${ob.bookingRef || ob.id.substring(0, 6).toUpperCase()}`;
-        const oTotal = ob.invoiceDetails.grandTotal !== undefined 
-          ? ob.invoiceDetails.grandTotal 
-          : (ob.invoiceDetails.baseAmount || (ob.totalPrice / 100));
-        const oDate = ob.invoiceDetails.sentAt 
-          ? new Date(ob.invoiceDetails.sentAt).toISOString().split('T')[0]
-          : (ob.checkIn ? ob.checkIn.split('T')[0] : '');
+        const isCancelled = ob.invoiceDetails.cancelled || ob.status === 'cancelled';
+        const isPaid = ob.invoiceDetails.paid === true;
+        if (isPaid && !isCancelled) {
+          const oNum = ob.invoiceDetails.invoiceNumber || `INV-${ob.bookingRef || ob.id.substring(0, 6).toUpperCase()}`;
+          const oTotal = ob.invoiceDetails.grandTotal !== undefined 
+            ? ob.invoiceDetails.grandTotal 
+            : (ob.invoiceDetails.baseAmount || (ob.totalPrice / 100));
+          const oDate = ob.invoiceDetails.sentAt 
+            ? new Date(ob.invoiceDetails.sentAt).toISOString().split('T')[0]
+            : (ob.checkIn ? ob.checkIn.split('T')[0] : '');
 
+          invList.push({
+            id: `linked-inv-${ob.id}`,
+            invoiceNumber: oNum,
+            date: oDate,
+            description: `Stay Extension / Renewal (${ob.checkIn} to ${ob.checkOut})`,
+            amount: Number(oTotal) || 0,
+            paid: true
+          });
+        }
+      } else if (ob.status === 'confirmed' && ob.totalPrice) {
         invList.push({
-          id: `linked-inv-${ob.id}`,
-          invoiceNumber: oNum,
-          date: oDate,
-          description: `Stay Extension / Renewal (${ob.checkIn} to ${ob.checkOut})`,
-          amount: Number(oTotal) || 0,
-          paid: ob.invoiceDetails.paid !== false
+          id: `linked-booking-${ob.id}`,
+          invoiceNumber: `INV-${ob.bookingRef || ob.id.substring(0, 6).toUpperCase()}`,
+          date: ob.checkIn ? ob.checkIn.split('T')[0] : '',
+          description: `Stay Extension / Additional Booking (${ob.checkIn} to ${ob.checkOut})`,
+          amount: ob.totalPrice / 100,
+          paid: true
         });
       }
     });
@@ -231,7 +269,7 @@ export const ProofOfResidencyModal: React.FC<ProofOfResidencyModalProps> = ({
 
     // Default email subject
     setEmailSubject(`Official Proof of Residency Letter - ${gName} - ${pName}`);
-  }, [selectedBookingId, bookings, properties, users]);
+  }, [selectedBookingId, eligibleBookings, properties, users]);
 
   // Recipient preset handler
   const handleRecipientTypeChange = (type: 'bank' | 'insurance' | 'government' | 'general' | 'custom') => {
@@ -730,7 +768,7 @@ export const ProofOfResidencyModal: React.FC<ProofOfResidencyModalProps> = ({
 
       <div class="official-seal">
         <div style="font-size: 8px; color: #6366f1;">&starf; &starf; &starf;</div>
-        <div style="font-size: 10px; margin: 2px 0;">REALCAL</div>
+        <div style="font-size: 9px; font-weight: 900; margin: 2px 0; letter-spacing: 0.05em;">C&amp;SH GROUP</div>
         <div style="font-size: 8px; line-height: 1.1;">OFFICIAL CORPORATE SEAL</div>
         <div style="font-size: 7px; color: #4f46e5; margin-top: 2px;">VERIFIED RESIDENCY</div>
         <div style="font-size: 8px; font-family: monospace; margin-top: 2px;">${docVerificationCode}</div>
@@ -739,7 +777,7 @@ export const ProofOfResidencyModal: React.FC<ProofOfResidencyModalProps> = ({
 
     <!-- Footer Disclaimer -->
     <div class="footer-disclaimer">
-      This document has been issued by REALCal Hospitality Management for official presentation to financial lending institutions, insurance underwriters, and administrative agencies. For instant verification, contact administration directly at ${signerEmail}.
+      This document has been issued by ${companyName} for official presentation to financial lending institutions, insurance underwriters, and administrative agencies. For instant verification, contact administration directly at ${signerEmail}.
     </div>
   </div>
 </body>
@@ -914,25 +952,33 @@ Email: ${signerEmail}
             {/* Booking Selector */}
             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-2">
               <label className="font-bold text-slate-700 uppercase tracking-wider text-[11px] flex items-center justify-between">
-                <span>Select Booking / Guest</span>
-                <span className="text-[10px] text-indigo-600 font-semibold">{bookings.length} reservations</span>
+                <span>Select Paid Reservation</span>
+                <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                  {eligibleBookings.length} paid
+                </span>
               </label>
-              <select
-                value={selectedBookingId}
-                onChange={(e) => setSelectedBookingId(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer"
-              >
-                {bookings.map(b => {
-                  const days = calculateDays(b.checkIn, b.checkOut);
-                  const isOver5 = days > 5;
-                  const gName = b.guestName || b.invoiceDetails?.sponsorName || 'Guest';
-                  return (
-                    <option key={b.id} value={b.id}>
-                      {isOver5 ? '⭐ [>5 Days] ' : ''}{gName} &bull; {days} Days ({b.checkIn} - {b.checkOut})
-                    </option>
-                  );
-                })}
-              </select>
+              {eligibleBookings.length === 0 ? (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-[11px] leading-relaxed">
+                  No qualifying paid reservations found. Cancelled and unpaid reservations are strictly excluded from the verification process.
+                </div>
+              ) : (
+                <select
+                  value={selectedBookingId}
+                  onChange={(e) => setSelectedBookingId(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer"
+                >
+                  {eligibleBookings.map(b => {
+                    const days = calculateDays(b.checkIn, b.checkOut);
+                    const isOver5 = days > 5;
+                    const gName = b.guestName || b.invoiceDetails?.sponsorName || 'Guest';
+                    return (
+                      <option key={b.id} value={b.id}>
+                        {isOver5 ? '⭐ [>5 Days] ' : ''}{gName} &bull; {days} Days ({b.checkIn} - {b.checkOut}) [PAID]
+                      </option>
+                    );
+                  })}
+                </select>
+              )}
             </div>
 
             {/* Recipient Institution */}
@@ -1153,29 +1199,40 @@ Email: ${signerEmail}
               )}
             </div>
 
-            {/* Professional Signer Info */}
+            {/* Professional Signer & Entity Info */}
             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-2">
               <label className="font-bold text-slate-700 uppercase tracking-wider text-[11px] block">
-                Authorized Signer
+                Authorized Signer &amp; Company
               </label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-2">
                 <div>
-                  <span className="text-[10px] text-slate-400 font-bold uppercase">Signer Name:</span>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase">Rental Company Entity:</span>
                   <input
                     type="text"
-                    value={signerName}
-                    onChange={(e) => setSignerName(e.target.value)}
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-slate-800"
                   />
                 </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 font-bold uppercase">Signer Title:</span>
-                  <input
-                    type="text"
-                    value={signerTitle}
-                    onChange={(e) => setSignerTitle(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs text-slate-700"
-                  />
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">Signer Name:</span>
+                    <input
+                      type="text"
+                      value={signerName}
+                      onChange={(e) => setSignerName(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-slate-800"
+                    />
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">Signer Title:</span>
+                    <input
+                      type="text"
+                      value={signerTitle}
+                      onChange={(e) => setSignerTitle(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs text-slate-700"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -1378,7 +1435,7 @@ Email: ${signerEmail}
                 {/* Circular Corporate Seal Graphic */}
                 <div className="w-32 h-32 rounded-full border-2 border-dashed border-indigo-400 bg-indigo-50/50 p-2 flex flex-col items-center justify-center text-center select-none shadow-xs">
                   <ShieldCheck size={20} className="text-indigo-600 mb-1" />
-                  <span className="text-[8px] font-black text-indigo-950 uppercase tracking-wider">REALCal Lodging</span>
+                  <span className="text-[8px] font-black text-indigo-950 uppercase tracking-wider">C&amp;SH Group Properties</span>
                   <span className="text-[7px] font-bold text-indigo-600 uppercase">Corporate Verification</span>
                   <span className="text-[7px] font-mono font-bold text-slate-500 mt-1">{docVerificationCode}</span>
                 </div>
@@ -1469,7 +1526,7 @@ Email: ${signerEmail}
                   type="email"
                   value={emailCc}
                   onChange={(e) => setEmailCc(e.target.value)}
-                  placeholder="e.g. admin@realcal.com"
+                  placeholder="e.g. admin@cshgroupproperties.com"
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 focus:bg-white outline-none"
                 />
               </div>
