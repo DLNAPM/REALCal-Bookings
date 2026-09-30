@@ -28,17 +28,10 @@ export function formatEventDate(date: Date, customTime?: string): string {
   return `${dateStr} • ${timeFormatted}`;
 }
 
-function addDays(baseDate: Date, days: number, hour: number = 19): Date {
-  const result = new Date(baseDate);
-  result.setDate(result.getDate() + days);
-  result.setHours(hour, 0, 0, 0);
-  return result;
-}
-
-// Real, verified sporting events in Atlanta for Fall 2026 matching Ticketmaster and official schedules
-interface VerifiedSportsGame {
+interface VerifiedEventDef {
   id: string;
   title: string;
+  category: 'Family' | 'Kids' | 'Night Life Entertainments' | 'Sporting Events';
   year: number;
   month: number; // 1-12
   day: number;
@@ -51,10 +44,14 @@ interface VerifiedSportsGame {
   ticketUrl: string;
 }
 
-const VERIFIED_SPORTS_GAMES: VerifiedSportsGame[] = [
+// ---------------------------------------------------------------------------
+// 1. SPORTING EVENTS (Verified schedules from Ticketmaster, NBA, NFL, MLS)
+// ---------------------------------------------------------------------------
+const VERIFIED_SPORTS_EVENTS: VerifiedEventDef[] = [
   {
     id: 'sports-hawks-grizzlies',
     title: 'Atlanta Hawks vs. Memphis Grizzlies',
+    category: 'Sporting Events',
     year: 2026,
     month: 10,
     day: 5,
@@ -69,6 +66,7 @@ const VERIFIED_SPORTS_GAMES: VerifiedSportsGame[] = [
   {
     id: 'sports-atlutd-cincinnati',
     title: 'Atlanta United FC vs. FC Cincinnati',
+    category: 'Sporting Events',
     year: 2026,
     month: 10,
     day: 10,
@@ -83,6 +81,7 @@ const VERIFIED_SPORTS_GAMES: VerifiedSportsGame[] = [
   {
     id: 'sports-falcons-ravens',
     title: 'Atlanta Falcons vs. Baltimore Ravens',
+    category: 'Sporting Events',
     year: 2026,
     month: 10,
     day: 11,
@@ -97,6 +96,7 @@ const VERIFIED_SPORTS_GAMES: VerifiedSportsGame[] = [
   {
     id: 'sports-hawks-thunder',
     title: 'Atlanta Hawks vs. Oklahoma City Thunder',
+    category: 'Sporting Events',
     year: 2026,
     month: 10,
     day: 12,
@@ -111,6 +111,7 @@ const VERIFIED_SPORTS_GAMES: VerifiedSportsGame[] = [
   {
     id: 'sports-atlutd-miami',
     title: 'Atlanta United FC vs. Inter Miami CF',
+    category: 'Sporting Events',
     year: 2026,
     month: 10,
     day: 17,
@@ -125,6 +126,7 @@ const VERIFIED_SPORTS_GAMES: VerifiedSportsGame[] = [
   {
     id: 'sports-falcons-bears',
     title: 'Atlanta Falcons vs. Chicago Bears',
+    category: 'Sporting Events',
     year: 2026,
     month: 10,
     day: 18,
@@ -139,6 +141,7 @@ const VERIFIED_SPORTS_GAMES: VerifiedSportsGame[] = [
   {
     id: 'sports-atlutd-chicago',
     title: 'Atlanta United FC vs. Chicago Fire FC',
+    category: 'Sporting Events',
     year: 2026,
     month: 10,
     day: 24,
@@ -153,6 +156,7 @@ const VERIFIED_SPORTS_GAMES: VerifiedSportsGame[] = [
   {
     id: 'sports-hawks-rockets',
     title: 'Atlanta Hawks vs. Houston Rockets',
+    category: 'Sporting Events',
     year: 2026,
     month: 10,
     day: 24,
@@ -167,6 +171,7 @@ const VERIFIED_SPORTS_GAMES: VerifiedSportsGame[] = [
   {
     id: 'sports-falcons-49ers',
     title: 'Atlanta Falcons vs. San Francisco 49ers',
+    category: 'Sporting Events',
     year: 2026,
     month: 10,
     day: 25,
@@ -181,6 +186,7 @@ const VERIFIED_SPORTS_GAMES: VerifiedSportsGame[] = [
   {
     id: 'sports-hawks-heat',
     title: 'Atlanta Hawks vs. Miami Heat',
+    category: 'Sporting Events',
     year: 2026,
     month: 10,
     day: 28,
@@ -195,6 +201,7 @@ const VERIFIED_SPORTS_GAMES: VerifiedSportsGame[] = [
   {
     id: 'sports-hawks-cavaliers',
     title: 'Atlanta Hawks vs. Cleveland Cavaliers',
+    category: 'Sporting Events',
     year: 2026,
     month: 10,
     day: 29,
@@ -209,6 +216,7 @@ const VERIFIED_SPORTS_GAMES: VerifiedSportsGame[] = [
   {
     id: 'sports-gridiron-classic',
     title: 'Atlanta Gridiron Classic: Georgia Bulldogs vs. Florida Gators',
+    category: 'Sporting Events',
     year: 2026,
     month: 10,
     day: 31,
@@ -218,39 +226,12 @@ const VERIFIED_SPORTS_GAMES: VerifiedSportsGame[] = [
     venue: 'Mercedes-Benz Stadium',
     distance: '11.1 miles',
     description: 'Invesco QQQ Atlanta Gridiron Classic! Historic SEC college football rivalry neutral-site spectacle at Mercedes-Benz Stadium for Halloween weekend.',
-    ticketUrl: 'https://www.ticketmaster.com/artist/821763',
-  },
-  {
-    id: 'sports-hawks-wizards',
-    title: 'Atlanta Hawks vs. Washington Wizards',
-    year: 2026,
-    month: 11,
-    day: 6,
-    hour: 19,
-    minute: 30,
-    timeStr: '7:30 PM EST',
-    venue: 'State Farm Arena',
-    distance: '11.4 miles',
-    description: 'Friday night NBA basketball in downtown Atlanta with rapid pace, deep threes, and division standings on the line.',
-    ticketUrl: 'https://www.ticketmaster.com/atlanta-hawks-tickets/artist/805898',
-  },
-  {
-    id: 'sports-hawks-nets',
-    title: 'Atlanta Hawks vs. Brooklyn Nets',
-    year: 2026,
-    month: 11,
-    day: 7,
-    hour: 19,
-    minute: 30,
-    timeStr: '7:30 PM EST',
-    venue: 'State Farm Arena',
-    distance: '11.4 miles',
-    description: 'Saturday night court action downtown as the Hawks defend home court against the visiting Brooklyn Nets at State Farm Arena.',
-    ticketUrl: 'https://www.ticketmaster.com/atlanta-hawks-tickets/artist/805898',
+    ticketUrl: 'https://www.mercedesbenzstadium.com/events',
   },
   {
     id: 'sports-hawks-lakers',
     title: 'Atlanta Hawks vs. Los Angeles Lakers',
+    category: 'Sporting Events',
     year: 2026,
     month: 11,
     day: 9,
@@ -265,6 +246,7 @@ const VERIFIED_SPORTS_GAMES: VerifiedSportsGame[] = [
   {
     id: 'sports-falcons-chiefs',
     title: 'Atlanta Falcons vs. Kansas City Chiefs',
+    category: 'Sporting Events',
     year: 2026,
     month: 11,
     day: 15,
@@ -276,326 +258,604 @@ const VERIFIED_SPORTS_GAMES: VerifiedSportsGame[] = [
     description: 'Blockbuster NFL Week 10 action at Mercedes-Benz Stadium as the Atlanta Falcons host Patrick Mahomes, Travis Kelce, and the Kansas City Chiefs.',
     ticketUrl: 'https://www.ticketmaster.com/atlanta-falcons-tickets/artist/805897',
   },
+];
+
+// ---------------------------------------------------------------------------
+// 2. NIGHT LIFE ENTERTAINMENTS (Verified concerts, theater, symphony & comedy)
+// ---------------------------------------------------------------------------
+const VERIFIED_NIGHTLIFE_EVENTS: VerifiedEventDef[] = [
   {
-    id: 'sports-hawks-hornets',
-    title: 'Atlanta Hawks vs. Charlotte Hornets (Emirates NBA Cup)',
+    id: 'night-ed-sheeran',
+    title: 'Ed Sheeran: The LOOP Tour Live',
+    category: 'Night Life Entertainments',
     year: 2026,
-    month: 11,
-    day: 20,
+    month: 10,
+    day: 3,
     hour: 19,
     minute: 0,
-    timeStr: '7:00 PM EST',
-    venue: 'State Farm Arena',
-    distance: '11.4 miles',
-    description: 'Official Emirates NBA Cup In-Season Tournament group play battle featuring special tournament court graphics and high intensity.',
-    ticketUrl: 'https://www.ticketmaster.com/atlanta-hawks-tickets/artist/805898',
+    timeStr: '7:00 PM EDT',
+    venue: 'Mercedes-Benz Stadium',
+    distance: '11.1 miles',
+    description: 'Global pop superstar Ed Sheeran performs live with in-the-round staging, 360-degree visuals, and chart-topping acoustic and pop anthems.',
+    ticketUrl: 'https://www.mercedesbenzstadium.com/events',
   },
   {
-    id: 'sports-hawks-pistons',
-    title: 'Atlanta Hawks vs. Detroit Pistons (Hawks Kids Day)',
+    id: 'night-smokey-robinson',
+    title: 'Smokey Robinson: Legacy of Love Tour',
+    category: 'Night Life Entertainments',
+    year: 2026,
+    month: 10,
+    day: 3,
+    hour: 20,
+    minute: 0,
+    timeStr: '8:00 PM EDT',
+    venue: 'Fox Theatre Atlanta',
+    distance: '12.5 miles',
+    description: 'Motown icon and Rock & Roll Hall of Famer Smokey Robinson performs his legendary catalog of soul and R&B masterworks at the historic Fox Theatre.',
+    ticketUrl: 'https://www.foxtheatre.org/events/detail/smokey-robinson',
+  },
+  {
+    id: 'night-aso-opening',
+    title: 'Atlanta Symphony Orchestra: Nathalie Stutzmann Conducts Brahms',
+    category: 'Night Life Entertainments',
+    year: 2026,
+    month: 10,
+    day: 8,
+    hour: 20,
+    minute: 0,
+    timeStr: '8:00 PM EDT',
+    venue: 'Atlanta Symphony Hall',
+    distance: '13.9 miles',
+    description: 'Music Director Nathalie Stutzmann leads the Atlanta Symphony Orchestra in Handel\'s Royal Fireworks and Brahms\' majestic Violin Concerto.',
+    ticketUrl: 'https://www.aso.org/events/detail/stutzmann-brahms-violin-concerto',
+  },
+  {
+    id: 'night-outlander-concert',
+    title: 'Outlander in Concert: Echoes Through The Highlands',
+    category: 'Night Life Entertainments',
+    year: 2026,
+    month: 10,
+    day: 18,
+    hour: 19,
+    minute: 0,
+    timeStr: '7:00 PM EDT',
+    venue: 'Fox Theatre Atlanta',
+    distance: '12.5 miles',
+    description: 'The sweeping, emotional musical scores of Outlander performed live with a full orchestra, traditional Scottish bagpipes, and Celtic vocalists.',
+    ticketUrl: 'https://www.foxtheatre.org/',
+  },
+  {
+    id: 'night-brand-new',
+    title: 'Brand New: The Devil and God Anniversary Concert',
+    category: 'Night Life Entertainments',
+    year: 2026,
+    month: 10,
+    day: 22,
+    hour: 19,
+    minute: 30,
+    timeStr: '7:30 PM EDT',
+    venue: 'Fox Theatre Atlanta',
+    distance: '12.5 miles',
+    description: 'Acclaimed alternative rock band Brand New performs their landmark masterpiece album live in an exclusive, high-energy tour stop.',
+    ticketUrl: 'https://www.foxtheatre.org/',
+  },
+  {
+    id: 'night-matt-mccusker',
+    title: 'Matt McCusker: The Healing Frequency Comedy Tour',
+    category: 'Night Life Entertainments',
+    year: 2026,
+    month: 10,
+    day: 23,
+    hour: 20,
+    minute: 0,
+    timeStr: '8:00 PM EDT',
+    venue: 'Atlanta Symphony Hall',
+    distance: '13.9 miles',
+    description: 'Celebrated stand-up comedian and author Matt McCusker takes the stage at Symphony Hall for an evening of sharp wit and hysterical storytelling.',
+    ticketUrl: 'https://www.aso.org/events/detail/matt-mccusker',
+  },
+  {
+    id: 'night-buena-vista',
+    title: 'Broadway in Atlanta: Buena Vista Social Club',
+    category: 'Night Life Entertainments',
+    year: 2026,
+    month: 10,
+    day: 27,
+    hour: 19,
+    minute: 30,
+    timeStr: '7:30 PM EDT',
+    venue: 'Fox Theatre Atlanta',
+    distance: '12.5 miles',
+    description: 'Direct from Broadway! The irresistible story and infectious Grammy-winning music of Havana\'s golden age come to life at the Fox Theatre.',
+    ticketUrl: 'https://www.foxtheatre.org/events/detail/buena-vista-social-club',
+  },
+  {
+    id: 'night-hocus-pocus',
+    title: 'Disney\'s Hocus Pocus in Concert with ASO',
+    category: 'Night Life Entertainments',
+    year: 2026,
+    month: 10,
+    day: 30,
+    hour: 19,
+    minute: 30,
+    timeStr: '7:30 PM EDT',
+    venue: 'Atlanta Symphony Hall',
+    distance: '13.9 miles',
+    description: 'The Halloween cult classic film projected on the big screen while the Atlanta Symphony Orchestra performs John Debney\'s eerie musical score live.',
+    ticketUrl: 'https://www.aso.org/events/detail/disneys-hocus-pocus-in-concert',
+  },
+  {
+    id: 'night-victoria-monet',
+    title: 'Victoria Monét: Frequency Of Love Tour',
+    category: 'Night Life Entertainments',
     year: 2026,
     month: 11,
-    day: 22,
-    hour: 15,
+    day: 4,
+    hour: 20,
+    minute: 0,
+    timeStr: '8:00 PM EST',
+    venue: 'Fox Theatre Atlanta',
+    distance: '12.5 miles',
+    description: 'Three-time Grammy winner Victoria Monét delivers powerhouse vocals, brass horns, and mesmerizing choreography live at the Fox Theatre.',
+    ticketUrl: 'https://www.foxtheatre.org/',
+  },
+  {
+    id: 'night-usher-chris-brown',
+    title: 'The R&B Tour: Usher Raymond & Chris Brown',
+    category: 'Night Life Entertainments',
+    year: 2026,
+    month: 11,
+    day: 5,
+    hour: 19,
     minute: 30,
-    timeStr: '3:30 PM EST',
-    venue: 'State Farm Arena',
-    distance: '11.4 miles',
-    description: 'Sunday afternoon Hawks Kids Day matinee featuring youth fan activities, court challenges, and free Harry The Hawk slippers giveaway.',
-    ticketUrl: 'https://www.ticketmaster.com/atlanta-hawks-tickets/artist/805898',
+    timeStr: '7:30 PM EST',
+    venue: 'Mercedes-Benz Stadium',
+    distance: '11.1 miles',
+    description: 'Atlanta\'s hometown King of R&B Usher Raymond co-headlines a historic stadium concert extravaganza with Chris Brown in downtown Atlanta.',
+    ticketUrl: 'https://www.ticketmaster.com/artist/736393',
   },
 ];
 
+// ---------------------------------------------------------------------------
+// 3. FAMILY EVENTS (Verified museum exhibits, botanical gardens & community arts)
+// ---------------------------------------------------------------------------
+const VERIFIED_FAMILY_EVENTS: VerifiedEventDef[] = [
+  {
+    id: 'family-scarecrows-garden',
+    title: 'Atlanta Botanical Garden: Scarecrows in the Garden',
+    category: 'Family',
+    year: 2026,
+    month: 10,
+    day: 3,
+    hour: 9,
+    minute: 0,
+    timeStr: '9:00 AM EDT',
+    venue: 'Atlanta Botanical Garden',
+    distance: '14.3 miles',
+    description: 'Explore more than 100 imaginative, handcrafted scarecrows designed by Atlanta artists, schools, and families throughout Midtown lush gardens.',
+    ticketUrl: 'https://atlantabg.org/calendar-events/scarecrows-in-the-garden/',
+  },
+  {
+    id: 'family-high-photography',
+    title: 'High Museum of Art: Minor White & American Masters Opening',
+    category: 'Family',
+    year: 2026,
+    month: 10,
+    day: 9,
+    hour: 10,
+    minute: 0,
+    timeStr: '10:00 AM EDT',
+    venue: 'High Museum of Art',
+    distance: '13.6 miles',
+    description: 'Special exhibition opening celebrating postwar American photography pioneers Minor White, Aaron Siskind, and Harry Callahan at the High Museum.',
+    ticketUrl: 'https://high.org/exhibition/photography-as-a-way-of-life/',
+  },
+  {
+    id: 'family-fernbank-woodland',
+    title: 'Fernbank Museum: Woodland Spirits in WildWoods',
+    category: 'Family',
+    year: 2026,
+    month: 10,
+    day: 10,
+    hour: 10,
+    minute: 0,
+    timeStr: '10:00 AM EDT',
+    venue: 'Fernbank Museum of Natural History',
+    distance: '16.1 miles',
+    description: 'Walk elevated tree canopy bridges to discover ghostly, artistic spirit figures hidden among the towering hardwoods of Fernbank Forest.',
+    ticketUrl: 'https://www.fernbankmuseum.org/experiences/exhibitions/woodland-spirits/',
+  },
+  {
+    id: 'family-high-second-sunday',
+    title: 'High Museum UPS Second Sunday: Centennial Celebration',
+    category: 'Family',
+    year: 2026,
+    month: 10,
+    day: 11,
+    hour: 12,
+    minute: 0,
+    timeStr: '12:00 PM EDT',
+    venue: 'High Museum of Art',
+    distance: '13.6 miles',
+    description: 'Free admission family day in Midtown! Live musical performances, hands-on collaborative art projects, and gallery tours celebrating 100 years of the High.',
+    ticketUrl: 'https://high.org/event/ups-second-sunday-centennial/',
+  },
+  {
+    id: 'family-goblins-garden',
+    title: 'Atlanta Botanical Garden: Goblins in the Garden',
+    category: 'Family',
+    year: 2026,
+    month: 10,
+    day: 18,
+    hour: 10,
+    minute: 0,
+    timeStr: '10:00 AM EDT',
+    venue: 'Atlanta Botanical Garden',
+    distance: '14.3 miles',
+    description: 'Beloved annual family tradition featuring the Goblin\'s Runway costume show, miniature garden train rides, and pumpkin decorating in Midtown.',
+    ticketUrl: 'https://atlantabg.org/calendar-events/goblins-in-the-garden/',
+  },
+  {
+    id: 'family-high-block-party',
+    title: 'High Museum of Art Centennial Block Party',
+    category: 'Family',
+    year: 2026,
+    month: 10,
+    day: 18,
+    hour: 13,
+    minute: 0,
+    timeStr: '1:00 PM EDT',
+    venue: 'High Museum of Art / Woodruff Plaza',
+    distance: '13.6 miles',
+    description: 'Midtown outdoor block party with local food trucks, community mural making, outdoor brass ensembles, and all-access gallery admission.',
+    ticketUrl: 'https://high.org/',
+  },
+  {
+    id: 'family-pumpkin-carving',
+    title: 'Atlanta Botanical Garden Great Pumpkin-Carving Festival',
+    category: 'Family',
+    year: 2026,
+    month: 10,
+    day: 22,
+    hour: 17,
+    minute: 0,
+    timeStr: '5:00 PM EDT',
+    venue: 'Atlanta Botanical Garden',
+    distance: '14.3 miles',
+    description: 'Watch master sculptors carve giant 500-pound pumpkins into illuminated marvels under the twilight sky with live folk music and warm cider.',
+    ticketUrl: 'https://atlantabg.org/',
+  },
+  {
+    id: 'family-beltline-lantern',
+    title: 'Atlanta BeltLine Lantern Parade & Eastside Art Walk',
+    category: 'Family',
+    year: 2026,
+    month: 10,
+    day: 24,
+    hour: 18,
+    minute: 30,
+    timeStr: '6:30 PM EDT',
+    venue: 'Atlanta BeltLine (Eastside)',
+    distance: '14.5 miles',
+    description: 'Iconic glowing community parade where thousands march along the Eastside Trail carrying colorful handmade lanterns alongside brass bands.',
+    ticketUrl: 'https://beltline.org/',
+  },
+];
+
+// ---------------------------------------------------------------------------
+// 4. KIDS EVENTS (Verified children's museums, aquariums, zoos & puppet theaters)
+// ---------------------------------------------------------------------------
+const VERIFIED_KIDS_EVENTS: VerifiedEventDef[] = [
+  {
+    id: 'kids-everybody-pirates',
+    title: 'Center for Puppetry Arts: Everybody Loves Pirates',
+    category: 'Kids',
+    year: 2026,
+    month: 10,
+    day: 3,
+    hour: 11,
+    minute: 0,
+    timeStr: '11:00 AM EDT',
+    venue: 'Center for Puppetry Arts',
+    distance: '13.8 miles',
+    description: 'Hilarious swashbuckling puppet theater production on the high seas, followed by a hands-on Create-A-Puppet workshop where kids build pirate puppets.',
+    ticketUrl: 'https://puppet.org/programs/everybody-loves-pirates/',
+  },
+  {
+    id: 'kids-georgia-aquarium',
+    title: 'Georgia Aquarium: Haunted Seas Family Celebration',
+    category: 'Kids',
+    year: 2026,
+    month: 10,
+    day: 10,
+    hour: 10,
+    minute: 0,
+    timeStr: '10:00 AM EDT',
+    venue: 'Georgia Aquarium',
+    distance: '11.8 miles',
+    description: 'Seasonal underwater wonder featuring costumed divers, special sea lion presentations, and trick-or-treat candy stations through the aquarium galleries.',
+    ticketUrl: 'https://www.georgiaaquarium.org/events/event/haunted-seas/',
+  },
+  {
+    id: 'kids-spookhouse-annie',
+    title: 'Center for Puppetry Arts: Spookhouse Annie',
+    category: 'Kids',
+    year: 2026,
+    month: 10,
+    day: 17,
+    hour: 11,
+    minute: 0,
+    timeStr: '11:00 AM EDT',
+    venue: 'Center for Puppetry Arts',
+    distance: '13.8 miles',
+    description: 'A charming, playful puppet show for ages 4+ with singing friendly ghosts and magical surprises. Includes admission to the Jim Henson Collection.',
+    ticketUrl: 'https://puppet.org/programs/spookhouse-annie/',
+  },
+  {
+    id: 'kids-boo-zoo-1',
+    title: 'Zoo Atlanta: Boo at the Zoo Weekend Festival',
+    category: 'Kids',
+    year: 2026,
+    month: 10,
+    day: 18,
+    hour: 9,
+    minute: 0,
+    timeStr: '9:00 AM EDT',
+    venue: 'Zoo Atlanta',
+    distance: '12.4 miles',
+    description: 'Atlanta\'s premier Halloween family festival! Enjoy trick-or-treat booths, costumed characters, carnival games, giant pandas, and elephant encounters.',
+    ticketUrl: 'https://zooatlanta.org/event/boo-at-the-zoo/',
+  },
+  {
+    id: 'kids-puppet-dance',
+    title: 'Center for Puppetry Arts: Monster Mash Kids Dance Party',
+    category: 'Kids',
+    year: 2026,
+    month: 10,
+    day: 24,
+    hour: 10,
+    minute: 0,
+    timeStr: '10:00 AM EDT',
+    venue: 'Center for Puppetry Arts',
+    distance: '13.8 miles',
+    description: 'Costume dance party for children with a live youth DJ, trick-or-treating in the museum galleries, puppet games, and interactive arts workshops.',
+    ticketUrl: 'https://puppet.org/',
+  },
+  {
+    id: 'kids-cma-trick-or-treat',
+    title: 'Children\'s Museum of Atlanta: Trick-or-Treat Spectacular',
+    category: 'Kids',
+    year: 2026,
+    month: 10,
+    day: 24,
+    hour: 17,
+    minute: 30,
+    timeStr: '5:30 PM EDT',
+    venue: 'Children\'s Museum of Atlanta',
+    distance: '11.9 miles',
+    description: 'Costume parade, circus acrobatic performances, live Halloween DJ music, and an all-access trick-or-treat candy trail at every discovery exhibit.',
+    ticketUrl: 'https://childrensmuseumatlanta.org/',
+  },
+  {
+    id: 'kids-fernbank-dino',
+    title: 'Fernbank Museum: Dinosaur Trick-or-Treat',
+    category: 'Kids',
+    year: 2026,
+    month: 10,
+    day: 24,
+    hour: 10,
+    minute: 0,
+    timeStr: '10:00 AM EDT',
+    venue: 'Fernbank Museum of Natural History',
+    distance: '16.1 miles',
+    description: 'Trick-or-treat beneath giant dinosaur skeletons! Children can dress up, meet live animal ambassadors, and craft prehistoric fossil keepsakes.',
+    ticketUrl: 'https://www.fernbankmuseum.org/experiences/events/dinosaur-trick-or-treat/',
+  },
+  {
+    id: 'kids-boo-zoo-halloween',
+    title: 'Zoo Atlanta: Boo at the Zoo Halloween Spectacular',
+    category: 'Kids',
+    year: 2026,
+    month: 10,
+    day: 31,
+    hour: 9,
+    minute: 0,
+    timeStr: '9:00 AM EDT',
+    venue: 'Zoo Atlanta',
+    distance: '12.4 miles',
+    description: 'Halloween grand finale at Zoo Atlanta! Pumpkin enrichment treats for African elephants and lions, costume contests, and trick-or-treating stations.',
+    ticketUrl: 'https://zooatlanta.org/event/boo-at-the-zoo/',
+  },
+];
+
+function defToEventItem(def: VerifiedEventDef, seedMod: number): EventItem {
+  const rawDate = new Date(def.year, def.month - 1, def.day, def.hour, def.minute, 0);
+  return {
+    id: `${def.id}-seed${seedMod}`,
+    title: def.title,
+    category: def.category,
+    rawDate,
+    date: formatEventDate(rawDate, def.timeStr),
+    description: def.description,
+    ticketUrl: def.ticketUrl,
+    venue: def.venue,
+    distance: def.distance,
+  };
+}
+
 export function getEventsForNext30Days(currentDate: Date = new Date(), refreshSeed: number = 0): EventItem[] {
   const seedMod = Math.abs(refreshSeed) % 3;
-  const events: EventItem[] = [];
 
-  // --- 1. SPORTING EVENTS (Real & Ticketmaster Verified) ---
-  // Convert verified games into EventItem objects
-  const verifiedEventItems: EventItem[] = VERIFIED_SPORTS_GAMES.map((game) => {
-    const rawDate = new Date(game.year, game.month - 1, game.day, game.hour, game.minute, 0);
-    return {
-      id: `${game.id}-seed${seedMod}`,
-      title: game.title,
-      category: 'Sporting Events',
-      rawDate,
-      date: formatEventDate(rawDate, game.timeStr),
-      description: game.description,
-      ticketUrl: game.ticketUrl,
-      venue: game.venue,
-      distance: game.distance,
-    };
-  });
-
-  // Curate 5 distinct real games based on seedMod, ensuring Atlanta Hawks vs Miami Heat on Wed, Oct 28
-  // and real NFL/MLS games are properly presented
-  let selectedSportsGames: EventItem[] = [];
-
+  // --- 1. SPORTING EVENTS ---
+  const allSports = VERIFIED_SPORTS_EVENTS.map((def) => defToEventItem(def, seedMod));
+  let sportsItems: EventItem[] = [];
   if (seedMod === 0) {
-    // Seed 0 highlights:
-    // 1. Hawks vs Grizzlies (Oct 5)
-    // 2. Falcons vs Ravens (Oct 11)
-    // 3. Falcons vs Bears (Sun Oct 18 - clarifying the real game on Oct 18!)
-    // 4. Hawks vs Rockets Home Opener (Oct 24)
-    // 5. Hawks vs Heat (Wed Oct 28 - the verified real Hawks vs Heat game!)
-    const targetIds = [
+    const ids = [
       'sports-hawks-grizzlies',
       'sports-falcons-ravens',
       'sports-falcons-bears',
       'sports-hawks-rockets',
       'sports-hawks-heat',
     ];
-    selectedSportsGames = verifiedEventItems.filter((item) =>
-      targetIds.some((tid) => item.id.startsWith(tid))
-    );
+    sportsItems = allSports.filter((s) => ids.some((id) => s.id.startsWith(id)));
   } else if (seedMod === 1) {
-    // Seed 1 highlights:
-    // 1. Atlanta United vs Cincinnati (Oct 10)
-    // 2. Atlanta United vs Miami (Oct 17)
-    // 3. Falcons vs 49ers (Oct 25)
-    // 4. Hawks vs Heat (Wed Oct 28)
-    // 5. Hawks vs Cavaliers (Oct 29)
-    const targetIds = [
+    const ids = [
       'sports-atlutd-cincinnati',
       'sports-atlutd-miami',
       'sports-falcons-49ers',
       'sports-hawks-heat',
       'sports-hawks-cavaliers',
     ];
-    selectedSportsGames = verifiedEventItems.filter((item) =>
-      targetIds.some((tid) => item.id.startsWith(tid))
-    );
+    sportsItems = allSports.filter((s) => ids.some((id) => s.id.startsWith(id)));
   } else {
-    // Seed 2 highlights:
-    // 1. Atlanta United vs Chicago Fire (Oct 24)
-    // 2. Hawks vs Heat (Wed Oct 28)
-    // 3. Georgia Bulldogs vs Florida Gators (Oct 31)
-    // 4. Hawks vs Lakers (Nov 9)
-    // 5. Falcons vs Chiefs (Nov 15)
-    const targetIds = [
+    const ids = [
       'sports-atlutd-chicago',
       'sports-hawks-heat',
       'sports-gridiron-classic',
       'sports-hawks-lakers',
       'sports-falcons-chiefs',
     ];
-    selectedSportsGames = verifiedEventItems.filter((item) =>
-      targetIds.some((tid) => item.id.startsWith(tid))
-    );
+    sportsItems = allSports.filter((s) => ids.some((id) => s.id.startsWith(id)));
   }
-
-  // Fallback in case of missing items: fill to 5 from remaining verified items
-  if (selectedSportsGames.length < 5) {
-    for (const item of verifiedEventItems) {
-      if (!selectedSportsGames.find((s) => s.title === item.title)) {
-        selectedSportsGames.push(item);
-        if (selectedSportsGames.length === 5) break;
+  // Fill to 5 if needed
+  if (sportsItems.length < 5) {
+    for (const item of allSports) {
+      if (!sportsItems.find((s) => s.title === item.title)) {
+        sportsItems.push(item);
+        if (sportsItems.length === 5) break;
       }
     }
   }
 
-  events.push(...selectedSportsGames.slice(0, 5));
+  // --- 2. NIGHT LIFE ENTERTAINMENTS ---
+  const allNight = VERIFIED_NIGHTLIFE_EVENTS.map((def) => defToEventItem(def, seedMod));
+  let nightItems: EventItem[] = [];
+  if (seedMod === 0) {
+    const ids = [
+      'night-ed-sheeran',
+      'night-smokey-robinson',
+      'night-aso-opening',
+      'night-outlander-concert',
+      'night-buena-vista',
+    ];
+    nightItems = allNight.filter((n) => ids.some((id) => n.id.startsWith(id)));
+  } else if (seedMod === 1) {
+    const ids = [
+      'night-brand-new',
+      'night-matt-mccusker',
+      'night-buena-vista',
+      'night-hocus-pocus',
+      'night-victoria-monet',
+    ];
+    nightItems = allNight.filter((n) => ids.some((id) => n.id.startsWith(id)));
+  } else {
+    const ids = [
+      'night-smokey-robinson',
+      'night-aso-opening',
+      'night-hocus-pocus',
+      'night-victoria-monet',
+      'night-usher-chris-brown',
+    ];
+    nightItems = allNight.filter((n) => ids.some((id) => n.id.startsWith(id)));
+  }
+  if (nightItems.length < 5) {
+    for (const item of allNight) {
+      if (!nightItems.find((n) => n.title === item.title)) {
+        nightItems.push(item);
+        if (nightItems.length === 5) break;
+      }
+    }
+  }
 
-  // --- 2. NIGHT LIFE ENTERTAINMENTS (5 Events) ---
-  const nightDate1 = new Date(2026, 9, 3, 19, 0); // Sat, Oct 3, 2026
-  events.push({
-    id: `night-1-seed${seedMod}`,
-    title: 'Ed Sheeran: The LOOP Tour Live at Mercedes-Benz Stadium',
-    category: 'Night Life Entertainments',
-    rawDate: nightDate1,
-    date: formatEventDate(nightDate1, '7:00 PM EDT'),
-    description: 'Global pop superstar Ed Sheeran lights up Mercedes-Benz Stadium with an in-the-round stage setup, massive sound system, and fan-favorite hits.',
-    ticketUrl: 'https://www.mercedesbenzstadium.com/events',
-    venue: 'Mercedes-Benz Stadium',
-    distance: '11.1 miles',
-  });
+  // --- 3. FAMILY ---
+  const allFamily = VERIFIED_FAMILY_EVENTS.map((def) => defToEventItem(def, seedMod));
+  let familyItems: EventItem[] = [];
+  if (seedMod === 0) {
+    const ids = [
+      'family-scarecrows-garden',
+      'family-high-photography',
+      'family-fernbank-woodland',
+      'family-high-second-sunday',
+      'family-goblins-garden',
+    ];
+    familyItems = allFamily.filter((f) => ids.some((id) => f.id.startsWith(id)));
+  } else if (seedMod === 1) {
+    const ids = [
+      'family-scarecrows-garden',
+      'family-fernbank-woodland',
+      'family-high-block-party',
+      'family-pumpkin-carving',
+      'family-beltline-lantern',
+    ];
+    familyItems = allFamily.filter((f) => ids.some((id) => f.id.startsWith(id)));
+  } else {
+    const ids = [
+      'family-high-photography',
+      'family-high-second-sunday',
+      'family-goblins-garden',
+      'family-pumpkin-carving',
+      'family-beltline-lantern',
+    ];
+    familyItems = allFamily.filter((f) => ids.some((id) => f.id.startsWith(id)));
+  }
+  if (familyItems.length < 5) {
+    for (const item of allFamily) {
+      if (!familyItems.find((f) => f.title === item.title)) {
+        familyItems.push(item);
+        if (familyItems.length === 5) break;
+      }
+    }
+  }
 
-  const nightDate2 = new Date(2026, 9, 9, 20, 0); // Fri, Oct 9, 2026
-  events.push({
-    id: `night-2-seed${seedMod}`,
-    title: seedMod === 0 ? 'Live Jazz & Soul Showcase at St. James Live' : seedMod === 1 ? 'St. James Live Contemporary R&B Showcase' : 'St. James Live Smooth Saxophone Experience',
-    category: 'Night Life Entertainments',
-    rawDate: nightDate2,
-    date: formatEventDate(nightDate2, '8:00 PM EDT'),
-    description: 'An intimate evening of premier live contemporary jazz, soul, and R&B music. Exceptional acoustics paired with a refined dinner menu.',
-    ticketUrl: 'https://www.stjamesliveatl.com/',
-    venue: 'St. James Live',
-    distance: '10.8 miles',
-  });
+  // --- 4. KIDS ---
+  const allKids = VERIFIED_KIDS_EVENTS.map((def) => defToEventItem(def, seedMod));
+  let kidsItems: EventItem[] = [];
+  if (seedMod === 0) {
+    const ids = [
+      'kids-everybody-pirates',
+      'kids-georgia-aquarium',
+      'kids-spookhouse-annie',
+      'kids-boo-zoo-1',
+      'kids-cma-trick-or-treat',
+    ];
+    kidsItems = allKids.filter((k) => ids.some((id) => k.id.startsWith(id)));
+  } else if (seedMod === 1) {
+    const ids = [
+      'kids-georgia-aquarium',
+      'kids-boo-zoo-1',
+      'kids-puppet-dance',
+      'kids-fernbank-dino',
+      'kids-boo-zoo-halloween',
+    ];
+    kidsItems = allKids.filter((k) => ids.some((id) => k.id.startsWith(id)));
+  } else {
+    const ids = [
+      'kids-everybody-pirates',
+      'kids-spookhouse-annie',
+      'kids-cma-trick-or-treat',
+      'kids-fernbank-dino',
+      'kids-boo-zoo-halloween',
+    ];
+    kidsItems = allKids.filter((k) => ids.some((id) => k.id.startsWith(id)));
+  }
+  if (kidsItems.length < 5) {
+    for (const item of allKids) {
+      if (!kidsItems.find((k) => k.title === item.title)) {
+        kidsItems.push(item);
+        if (kidsItems.length === 5) break;
+      }
+    }
+  }
 
-  const nightDate3 = new Date(2026, 9, 16, 19, 30); // Fri, Oct 16, 2026
-  events.push({
-    id: `night-3-seed${seedMod}`,
-    title: 'Acoustic Living Room Jazz at The Velvet Note',
-    category: 'Night Life Entertainments',
-    rawDate: nightDate3,
-    date: formatEventDate(nightDate3, '7:30 PM EDT'),
-    description: 'Experience world-class acoustic jazz at The Velvet Note, an acoustic living-room listening space renowned for pristine acoustic clarity.',
-    ticketUrl: 'https://thevelvetnote.com/',
-    venue: 'The Velvet Note (Alpharetta)',
-    distance: '29.5 miles',
-  });
+  // Combine exactly 20 curated verified events across the 4 categories
+  const combined = [
+    ...sportsItems.slice(0, 5),
+    ...nightItems.slice(0, 5),
+    ...familyItems.slice(0, 5),
+    ...kidsItems.slice(0, 5),
+  ];
 
-  const nightDate4 = new Date(2026, 9, 23, 20, 0); // Fri, Oct 23, 2026
-  events.push({
-    id: `night-4-seed${seedMod}`,
-    title: 'City Winery Live Concert & Craft Tasting Series',
-    category: 'Night Life Entertainments',
-    rawDate: nightDate4,
-    date: formatEventDate(nightDate4, '8:00 PM EDT'),
-    description: 'Sip locally made craft wines while enjoying an intimate live performance from touring singer-songwriters at Ponce City Market.',
-    ticketUrl: 'https://www.citywinery.com/atlanta',
-    venue: 'City Winery Atlanta',
-    distance: '14.1 miles',
-  });
-
-  const nightDate5 = new Date(2026, 10, 5, 19, 30); // Thu, Nov 5, 2026
-  events.push({
-    id: `night-5-seed${seedMod}`,
-    title: 'The R&B Tour: Usher Raymond & Chris Brown',
-    category: 'Night Life Entertainments',
-    rawDate: nightDate5,
-    date: formatEventDate(nightDate5, '7:30 PM EST'),
-    description: 'Massive arena spectacle bringing iconic R&B legends Usher Raymond and Chris Brown together on stage at Mercedes-Benz Stadium.',
-    ticketUrl: 'https://www.ticketmaster.com/artist/736393',
-    venue: 'Mercedes-Benz Stadium',
-    distance: '11.1 miles',
-  });
-
-  // --- 3. FAMILY (5 Events) ---
-  const famDate1 = new Date(2026, 9, 6, 10, 0); // Tue, Oct 6, 2026
-  events.push({
-    id: `family-1-seed${seedMod}`,
-    title: 'High Museum of Art Special Exhibition',
-    category: 'Family',
-    rawDate: famDate1,
-    date: formatEventDate(famDate1, '10:00 AM EDT'),
-    description: 'Explore world-class art collections, contemporary photographic galleries, and inspiring interactive installations in Midtown.',
-    ticketUrl: 'https://www.ticketmaster.com/high-museum-of-art-tickets-atlanta/venue/114690',
-    venue: 'High Museum of Art',
-    distance: '13.6 miles',
-  });
-
-  const famDate2 = new Date(2026, 9, 14, 11, 0); // Wed, Oct 14, 2026
-  events.push({
-    id: `family-2-seed${seedMod}`,
-    title: 'Piedmont Park Fall Arts Festival & Food Truck Rally',
-    category: 'Family',
-    rawDate: famDate2,
-    date: formatEventDate(famDate2, '11:00 AM EDT'),
-    description: 'A vibrant community gathering in Atlanta\'s historic green space featuring live music, local artisans, and outdoor family activities.',
-    ticketUrl: 'https://www.piedmontpark.org/',
-    venue: 'Piedmont Park',
-    distance: '14.2 miles',
-  });
-
-  const famDate3 = new Date(2026, 9, 20, 10, 0); // Tue, Oct 20, 2026
-  events.push({
-    id: `family-3-seed${seedMod}`,
-    title: 'Atlanta Botanical Garden Scarecrows & Glass Art',
-    category: 'Family',
-    rawDate: famDate3,
-    date: formatEventDate(famDate3, '10:00 AM EDT'),
-    description: 'Stroll through a stunning wonderland of living plant sculptures and dynamic outdoor glass artwork in Midtown gardens.',
-    ticketUrl: 'https://atlantabg.org/',
-    venue: 'Atlanta Botanical Garden',
-    distance: '14.3 miles',
-  });
-
-  const famDate4 = new Date(2026, 9, 27, 11, 0); // Tue, Oct 27, 2026
-  events.push({
-    id: `family-4-seed${seedMod}`,
-    title: 'Fernbank Museum of Natural History & Outdoor Trails',
-    category: 'Family',
-    rawDate: famDate4,
-    date: formatEventDate(famDate4, '11:00 AM EDT'),
-    description: 'Travel through time from prehistoric dinosaurs to the cosmos. Discover immersive outdoor nature trails and giant 3D films.',
-    ticketUrl: 'https://www.fernbankmuseum.org/',
-    venue: 'Fernbank Museum of Natural History',
-    distance: '16.1 miles',
-  });
-
-  const famDate5 = new Date(2026, 10, 2, 10, 0); // Mon, Nov 2, 2026
-  events.push({
-    id: `family-5-seed${seedMod}`,
-    title: 'Atlanta BeltLine Eastside Art & Sculpture Tour',
-    category: 'Family',
-    rawDate: famDate5,
-    date: formatEventDate(famDate5, '10:00 AM EST'),
-    description: 'A gorgeous family walking tour exploring colorful public murals, sculptures, and vibrant local culinary spots along the Eastside Trail.',
-    ticketUrl: 'https://www.beltline.org/',
-    venue: 'Atlanta BeltLine (Eastside)',
-    distance: '14.5 miles',
-  });
-
-  // --- 4. KIDS (5 Events) ---
-  const kidDate1 = new Date(2026, 9, 4, 13, 0); // Sun, Oct 4, 2026
-  events.push({
-    id: `kids-1-seed${seedMod}`,
-    title: 'Center for Puppetry Arts: Family Puppet Show & Workshop',
-    category: 'Kids',
-    rawDate: kidDate1,
-    date: formatEventDate(kidDate1, '1:00 PM EDT'),
-    description: 'Experience mesmerizing puppet performances followed by a hands-on workshop where kids build and take home custom puppets.',
-    ticketUrl: 'https://puppet.org/',
-    venue: 'Center for Puppetry Arts',
-    distance: '13.8 miles',
-  });
-
-  const kidDate2 = new Date(2026, 9, 13, 10, 0); // Tue, Oct 13, 2026
-  events.push({
-    id: `kids-2-seed${seedMod}`,
-    title: 'Georgia Aquarium: Behind-the-Scenes & Ocean Voyager',
-    category: 'Kids',
-    rawDate: kidDate2,
-    date: formatEventDate(kidDate2, '10:00 AM EDT'),
-    description: 'Inspire young explorers with a journey through the world\'s largest aquatic exhibits, home to whale sharks, manta rays, and sea otters.',
-    ticketUrl: 'https://www.georgiaaquarium.org/',
-    venue: 'Georgia Aquarium',
-    distance: '11.8 miles',
-  });
-
-  const kidDate3 = new Date(2026, 9, 19, 10, 0); // Mon, Oct 19, 2026
-  events.push({
-    id: `kids-3-seed${seedMod}`,
-    title: 'Zoo Atlanta: Wild Encounters & Giant Pandas',
-    category: 'Kids',
-    rawDate: kidDate3,
-    date: formatEventDate(kidDate3, '10:00 AM EDT'),
-    description: 'Get up close with giant pandas, African elephants, and exotic wildlife. Highly educational and memorable for animal lovers.',
-    ticketUrl: 'https://zooatlanta.org/',
-    venue: 'Zoo Atlanta',
-    distance: '12.4 miles',
-  });
-
-  const kidDate4 = new Date(2026, 9, 26, 10, 0); // Mon, Oct 26, 2026
-  events.push({
-    id: `kids-4-seed${seedMod}`,
-    title: 'Children\'s Museum of Atlanta Interactive Discovery',
-    category: 'Kids',
-    rawDate: kidDate4,
-    date: formatEventDate(kidDate4, '10:00 AM EDT'),
-    description: 'Spark child-led discovery with dynamic hands-on scientific experiments, engineering exhibits, and creative arts workshops.',
-    ticketUrl: 'https://childrensmuseumatlanta.org/',
-    venue: 'Children\'s Museum of Atlanta',
-    distance: '11.9 miles',
-  });
-
-  const kidDate5 = new Date(2026, 10, 1, 11, 0); // Sun, Nov 1, 2026
-  events.push({
-    id: `kids-5-seed${seedMod}`,
-    title: 'Chastain Park Kids Art & Outdoor Play Fest',
-    category: 'Kids',
-    rawDate: kidDate5,
-    date: formatEventDate(kidDate5, '11:00 AM EST'),
-    description: 'A joyful weekend event featuring instrument petting zoos, face painting, watercolor tents, and fun outdoor play zones.',
-    ticketUrl: 'https://www.chastainparkconservancy.org/',
-    venue: 'Chastain Park Amphitheatre Grounds',
-    distance: '19.2 miles',
-  });
-
-  // Return the combined 20 highlights sorted chronologically
-  return events.slice(0, 20).sort((a, b) => a.rawDate.getTime() - b.rawDate.getTime());
+  return combined.sort((a, b) => a.rawDate.getTime() - b.rawDate.getTime());
 }
 
 // Backwards compatibility alias
