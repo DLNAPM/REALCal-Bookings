@@ -49,6 +49,66 @@ interface VerifiedEventDef {
 // ---------------------------------------------------------------------------
 const VERIFIED_SPORTS_EVENTS: VerifiedEventDef[] = [
   {
+    id: 'sports-dream-aces',
+    title: 'Atlanta Dream vs. Las Vegas Aces (WNBA)',
+    category: 'Sporting Events',
+    year: 2026,
+    month: 10,
+    day: 6,
+    hour: 19,
+    minute: 30,
+    timeStr: '7:30 PM EDT',
+    venue: 'Gateway Center Arena (College Park)',
+    distance: '9.2 miles',
+    description: 'Fast-paced WNBA court action in College Park! All-Stars Rhyne Howard and Cheyenne Parker lead the Atlanta Dream against A\'ja Wilson and the Las Vegas Aces.',
+    ticketUrl: 'https://www.ticketmaster.com/atlanta-dream-tickets/artist/1283626',
+  },
+  {
+    id: 'sports-dream-liberty',
+    title: 'Atlanta Dream vs. New York Liberty (WNBA)',
+    category: 'Sporting Events',
+    year: 2026,
+    month: 10,
+    day: 9,
+    hour: 19,
+    minute: 30,
+    timeStr: '7:30 PM EDT',
+    venue: 'Gateway Center Arena (College Park)',
+    distance: '9.2 miles',
+    description: 'Marquee WNBA showdown as the Atlanta Dream battle Sabrina Ionescu, Breanna Stewart, and the New York Liberty in front of a capacity crowd.',
+    ticketUrl: 'https://www.ticketmaster.com/atlanta-dream-tickets/artist/1283626',
+  },
+  {
+    id: 'sports-dream-fever',
+    title: 'Atlanta Dream vs. Indiana Fever (WNBA Showcase)',
+    category: 'Sporting Events',
+    year: 2026,
+    month: 10,
+    day: 15,
+    hour: 19,
+    minute: 30,
+    timeStr: '7:30 PM EDT',
+    venue: 'State Farm Arena',
+    distance: '11.4 miles',
+    description: 'Blockbuster primetime WNBA showcase at State Farm Arena in downtown Atlanta. The Atlanta Dream host Caitlin Clark, Aliyah Boston, and the Indiana Fever.',
+    ticketUrl: 'https://www.ticketmaster.com/atlanta-dream-tickets/artist/1283626',
+  },
+  {
+    id: 'sports-dream-lynx',
+    title: 'Atlanta Dream vs. Minnesota Lynx (WNBA)',
+    category: 'Sporting Events',
+    year: 2026,
+    month: 10,
+    day: 21,
+    hour: 19,
+    minute: 30,
+    timeStr: '7:30 PM EDT',
+    venue: 'Gateway Center Arena (College Park)',
+    distance: '9.2 miles',
+    description: 'High-stakes WNBA battle in College Park featuring elite perimeter lockdown defense, physical interior rebounding, and clutch fourth-quarter play.',
+    ticketUrl: 'https://www.ticketmaster.com/atlanta-dream-tickets/artist/1283626',
+  },
+  {
     id: 'sports-hawks-grizzlies',
     title: 'Atlanta Hawks vs. Memphis Grizzlies',
     category: 'Sporting Events',
@@ -691,7 +751,7 @@ export function getEventsForNext30Days(currentDate: Date = new Date(), refreshSe
   let sportsItems: EventItem[] = [];
   if (seedMod === 0) {
     const ids = [
-      'sports-hawks-grizzlies',
+      'sports-dream-aces',
       'sports-falcons-ravens',
       'sports-falcons-bears',
       'sports-hawks-rockets',
@@ -700,7 +760,7 @@ export function getEventsForNext30Days(currentDate: Date = new Date(), refreshSe
     sportsItems = allSports.filter((s) => ids.some((id) => s.id.startsWith(id)));
   } else if (seedMod === 1) {
     const ids = [
-      'sports-atlutd-cincinnati',
+      'sports-dream-liberty',
       'sports-atlutd-miami',
       'sports-falcons-49ers',
       'sports-hawks-heat',
@@ -709,10 +769,10 @@ export function getEventsForNext30Days(currentDate: Date = new Date(), refreshSe
     sportsItems = allSports.filter((s) => ids.some((id) => s.id.startsWith(id)));
   } else {
     const ids = [
+      'sports-dream-fever',
       'sports-atlutd-chicago',
       'sports-hawks-heat',
       'sports-gridiron-classic',
-      'sports-hawks-lakers',
       'sports-falcons-chiefs',
     ];
     sportsItems = allSports.filter((s) => ids.some((id) => s.id.startsWith(id)));
