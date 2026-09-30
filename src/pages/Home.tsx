@@ -449,7 +449,7 @@ export const Home: React.FC = () => {
                                         title="Admin Refresh"
                                     >
                                         <RotateCw size={15} className={cn("text-indigo-600", isRefreshingEvents && "animate-spin")} />
-                                        <span>{isRefreshingEvents ? 'Updating...' : 'Refresh Top 20'}</span>
+                                        <span>{isRefreshingEvents ? 'Updating...' : 'Refresh Highlights'}</span>
                                     </button>
                                 )}
                                 <div className="bg-white/90 backdrop-blur px-5 py-2.5 rounded-2xl border border-indigo-100 text-center flex-shrink-0 shadow-sm">
@@ -467,7 +467,7 @@ export const Home: React.FC = () => {
                                 </div>
                                 <div>
                                     <h3 className="text-xl font-bold text-slate-800">Sporting Events</h3>
-                                    <p className="text-xs text-slate-400 mt-0.5">Top-tier athletic events, championships, and matchups</p>
+                                    <p className="text-xs text-slate-400 mt-0.5">Top-tier athletic events, championships, and matchups across NBA, WNBA, NFL, MLS & College Football</p>
                                 </div>
                                 <span className="ml-auto text-xs bg-amber-50 text-amber-700 px-3 py-1 rounded-full font-bold">
                                     {eventsList.filter(e => e.category === 'Sporting Events').length} Matches

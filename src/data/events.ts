@@ -95,7 +95,7 @@ const VERIFIED_SPORTS_EVENTS: VerifiedEventDef[] = [
   },
   {
     id: 'sports-hawks-grizzlies',
-    title: 'Atlanta Hawks vs. Memphis Grizzlies',
+    title: 'NBA Preseason: Atlanta Hawks vs. Memphis Grizzlies',
     category: 'Sporting Events',
     year: 2026,
     month: 10,
@@ -105,7 +105,7 @@ const VERIFIED_SPORTS_EVENTS: VerifiedEventDef[] = [
     timeStr: '7:00 PM EDT',
     venue: 'State Farm Arena',
     distance: '11.4 miles',
-    description: 'NBA Preseason home opener at State Farm Arena. Trae Young and the Atlanta Hawks host Ja Morant and the Memphis Grizzlies in downtown Atlanta.',
+    description: 'NBA Preseason home opener at State Farm Arena! Trae Young and the Atlanta Hawks host Ja Morant and the Memphis Grizzlies in downtown Atlanta.',
     ticketUrl: 'https://www.ticketmaster.com/atlanta-hawks-tickets/artist/805898',
   },
   {
@@ -140,7 +140,7 @@ const VERIFIED_SPORTS_EVENTS: VerifiedEventDef[] = [
   },
   {
     id: 'sports-hawks-thunder',
-    title: 'Atlanta Hawks vs. Oklahoma City Thunder',
+    title: 'NBA Preseason: Atlanta Hawks vs. Oklahoma City Thunder',
     category: 'Sporting Events',
     year: 2026,
     month: 10,
@@ -289,6 +289,51 @@ const VERIFIED_SPORTS_EVENTS: VerifiedEventDef[] = [
     ticketUrl: 'https://www.ticketmaster.com/atlanta-hawks-tickets/artist/805898',
   },
   {
+    id: 'sports-hawks-wizards',
+    title: 'Atlanta Hawks vs. Washington Wizards',
+    category: 'Sporting Events',
+    year: 2026,
+    month: 11,
+    day: 6,
+    hour: 19,
+    minute: 30,
+    timeStr: '7:30 PM EST',
+    venue: 'State Farm Arena',
+    distance: '11.4 miles',
+    description: 'Friday night NBA basketball in downtown Atlanta with rapid pace, deep threes, and Southeast Division standings on the line.',
+    ticketUrl: 'https://www.ticketmaster.com/atlanta-hawks-tickets/artist/805898',
+  },
+  {
+    id: 'sports-hawks-nets',
+    title: 'Atlanta Hawks vs. Brooklyn Nets',
+    category: 'Sporting Events',
+    year: 2026,
+    month: 11,
+    day: 7,
+    hour: 19,
+    minute: 30,
+    timeStr: '7:30 PM EST',
+    venue: 'State Farm Arena',
+    distance: '11.4 miles',
+    description: 'Saturday night court action downtown as Trae Young and the Hawks defend home court against the visiting Brooklyn Nets at State Farm Arena.',
+    ticketUrl: 'https://www.ticketmaster.com/atlanta-hawks-tickets/artist/805898',
+  },
+  {
+    id: 'sports-hawks-lakers',
+    title: 'Atlanta Hawks vs. Los Angeles Lakers',
+    category: 'Sporting Events',
+    year: 2026,
+    month: 11,
+    day: 9,
+    hour: 19,
+    minute: 30,
+    timeStr: '7:30 PM EST',
+    venue: 'State Farm Arena',
+    distance: '11.4 miles',
+    description: 'Sold-out marquee NBA showdown! LeBron James, Anthony Davis, and the Los Angeles Lakers visit Atlanta to clash with Trae Young and the Hawks.',
+    ticketUrl: 'https://www.ticketmaster.com/atlanta-hawks-tickets/artist/805898',
+  },
+  {
     id: 'sports-falcons-chiefs',
     title: 'Atlanta Falcons vs. Kansas City Chiefs',
     category: 'Sporting Events',
@@ -302,6 +347,36 @@ const VERIFIED_SPORTS_EVENTS: VerifiedEventDef[] = [
     distance: '11.1 miles',
     description: 'Blockbuster NFL Week 10 action at Mercedes-Benz Stadium as the Atlanta Falcons host Patrick Mahomes, Travis Kelce, and the Kansas City Chiefs.',
     ticketUrl: 'https://www.ticketmaster.com/atlanta-falcons-tickets/artist/805897',
+  },
+  {
+    id: 'sports-hawks-hornets',
+    title: 'Atlanta Hawks vs. Charlotte Hornets (Emirates NBA Cup)',
+    category: 'Sporting Events',
+    year: 2026,
+    month: 11,
+    day: 20,
+    hour: 19,
+    minute: 0,
+    timeStr: '7:00 PM EST',
+    venue: 'State Farm Arena',
+    distance: '11.4 miles',
+    description: 'Official Emirates NBA Cup In-Season Tournament group play battle with custom tournament court design and high stakes.',
+    ticketUrl: 'https://www.ticketmaster.com/atlanta-hawks-tickets/artist/805898',
+  },
+  {
+    id: 'sports-hawks-pistons',
+    title: 'Atlanta Hawks vs. Detroit Pistons (Hawks Kids Day)',
+    category: 'Sporting Events',
+    year: 2026,
+    month: 11,
+    day: 22,
+    hour: 15,
+    minute: 30,
+    timeStr: '3:30 PM EST',
+    venue: 'State Farm Arena',
+    distance: '11.4 miles',
+    description: 'Sunday afternoon Hawks Kids Day matinee featuring youth fan activities, court challenges, and free Harry The Hawk slippers giveaway.',
+    ticketUrl: 'https://www.ticketmaster.com/atlanta-hawks-tickets/artist/805898',
   },
 ];
 
@@ -737,37 +812,67 @@ export function getEventsForNext30Days(currentDate: Date = new Date(), refreshSe
   if (seedMod === 0) {
     const ids = [
       'sports-dream-game3',
+      'sports-dream-semifinals',
+      'sports-hawks-grizzlies',
+      'sports-atlutd-cincinnati',
       'sports-falcons-ravens',
+      'sports-hawks-thunder',
+      'sports-atlutd-miami',
+      'sports-dream-finals',
       'sports-falcons-bears',
+      'sports-atlutd-chicago',
       'sports-hawks-rockets',
+      'sports-falcons-49ers',
       'sports-hawks-heat',
+      'sports-hawks-cavaliers',
+      'sports-gridiron-classic',
     ];
     sportsItems = allSports.filter((s) => ids.some((id) => s.id.startsWith(id)));
   } else if (seedMod === 1) {
     const ids = [
-      'sports-dream-semifinals',
+      'sports-dream-game3',
+      'sports-hawks-grizzlies',
+      'sports-atlutd-cincinnati',
+      'sports-hawks-thunder',
       'sports-atlutd-miami',
+      'sports-falcons-bears',
+      'sports-hawks-rockets',
       'sports-falcons-49ers',
       'sports-hawks-heat',
       'sports-hawks-cavaliers',
+      'sports-gridiron-classic',
+      'sports-hawks-wizards',
+      'sports-hawks-nets',
+      'sports-hawks-lakers',
+      'sports-falcons-chiefs',
     ];
     sportsItems = allSports.filter((s) => ids.some((id) => s.id.startsWith(id)));
   } else {
     const ids = [
+      'sports-dream-semifinals',
+      'sports-hawks-grizzlies',
+      'sports-falcons-ravens',
+      'sports-hawks-thunder',
       'sports-dream-finals',
+      'sports-falcons-bears',
       'sports-atlutd-chicago',
+      'sports-hawks-rockets',
       'sports-hawks-heat',
       'sports-gridiron-classic',
+      'sports-hawks-nets',
+      'sports-hawks-lakers',
       'sports-falcons-chiefs',
+      'sports-hawks-hornets',
+      'sports-hawks-pistons',
     ];
     sportsItems = allSports.filter((s) => ids.some((id) => s.id.startsWith(id)));
   }
-  // Fill to 5 if needed
-  if (sportsItems.length < 5) {
+  // Fill to 15 if needed
+  if (sportsItems.length < 15) {
     for (const item of allSports) {
       if (!sportsItems.find((s) => s.title === item.title)) {
         sportsItems.push(item);
-        if (sportsItems.length === 5) break;
+        if (sportsItems.length === 15) break;
       }
     }
   }
@@ -892,9 +997,9 @@ export function getEventsForNext30Days(currentDate: Date = new Date(), refreshSe
     }
   }
 
-  // Combine exactly 20 curated verified events across the 4 categories
+  // Combine 30 curated verified events across the 4 categories (15 sports + 5 night life + 5 family + 5 kids)
   const combined = [
-    ...sportsItems.slice(0, 5),
+    ...sportsItems.slice(0, 15),
     ...nightItems.slice(0, 5),
     ...familyItems.slice(0, 5),
     ...kidsItems.slice(0, 5),
