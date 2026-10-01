@@ -6,7 +6,7 @@ import { Navigate, useNavigate, Link } from 'react-router-dom';
 import { format, eachDayOfInterval, parseISO, addDays } from 'date-fns';
 import { cn } from '../lib/utils';
 import { BlackoutDate, PricingRule, Booking, Property, PropertyManager, PropertyImage, getImageUrl, getImageRoomNumber, DiscountCode } from '../types';
-import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight, RefreshCw, MessageSquare, CheckCircle, Loader2, FileText, XCircle, HelpCircle, MapPin, Upload, Database, Ticket, Send, Clock, Bell, BellRing, FileCheck, RotateCw, CheckSquare, Copy, Search, X, AlertTriangle, Video, Eraser, Pencil, Sparkles, Megaphone } from 'lucide-react';
+import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight, RefreshCw, MessageSquare, CheckCircle, Loader2, FileText, XCircle, HelpCircle, MapPin, Upload, Database, Ticket, Send, Clock, Bell, BellRing, FileCheck, RotateCw, CheckSquare, Copy, Search, X, AlertTriangle, Video, Eraser, Pencil, Sparkles, Megaphone, Building } from 'lucide-react';
 import { AdvertisementFlyerModal } from '../components/AdvertisementFlyerModal';
 import { ProofOfResidencyModal } from '../components/ProofOfResidencyModal';
 import { AdminAlarmsBanner, AdminAlarmsModal } from '../components/AdminAlarmsPanel';
@@ -192,6 +192,24 @@ export const AdminDashboard: React.FC = () => {
   const [invoiceCancelNotifyGuest, setInvoiceCancelNotifyGuest] = useState<boolean>(true);
   const [invoiceCancelNotifyManagers, setInvoiceCancelNotifyManagers] = useState<boolean>(true);
   const [cancellingInvoiceLoading, setCancellingInvoiceLoading] = useState<boolean>(false);
+
+  // Pending Invoice Edit States
+  const [editingInvoiceBooking, setEditingInvoiceBooking] = useState<any | null>(null);
+  const [editInvGuestName, setEditInvGuestName] = useState<string>('');
+  const [editInvGuestEmail, setEditInvGuestEmail] = useState<string>('');
+  const [editInvGuestPhone, setEditInvGuestPhone] = useState<string>('');
+  const [editInvSponsorName, setEditInvSponsorName] = useState<string>('');
+  const [editInvSponsorEmail, setEditInvSponsorEmail] = useState<string>('');
+  const [editInvSponsorPhone, setEditInvSponsorPhone] = useState<string>('');
+  const [editInvSponsorAddress, setEditInvSponsorAddress] = useState<string>('');
+  const [editInvCheckIn, setEditInvCheckIn] = useState<string>('');
+  const [editInvCheckOut, setEditInvCheckOut] = useState<string>('');
+  const [editInvDueDate, setEditInvDueDate] = useState<string>('');
+  const [editInvInvoiceNumber, setEditInvInvoiceNumber] = useState<string>('');
+  const [editInvBaseAmount, setEditInvBaseAmount] = useState<number>(0);
+  const [editInvCustomNotes, setEditInvCustomNotes] = useState<string>('');
+  const [editInvSaving, setEditInvSaving] = useState<boolean>(false);
+  const [editInvResending, setEditInvResending] = useState<boolean>(false);
 
   // Paid confirmation resend states
   const [resendingConfirmationBooking, setResendingConfirmationBooking] = useState<Booking | null>(null);
@@ -2347,16 +2365,18 @@ C.&S.H. Group Properties, LLC
     }
   };
 
-  const handleResendInvoice = async (b: Booking) => {
+  const handleResendInvoice = async (b: any, skipConfirm: boolean = false, silentAlert: boolean = false) => {
     if (!b.invoiceDetails) return alert("Booking does not have invoice details associated.");
     
-    const confirmResend = window.confirm(`Are you sure you want to resend Invoice #${b.invoiceDetails.invoiceNumber || 'Manual'} to ${b.invoiceDetails.sponsorEmail}?`);
-    if (!confirmResend) return;
+    if (!skipConfirm) {
+      const confirmResend = window.confirm(`Are you sure you want to resend Invoice #${b.invoiceDetails.invoiceNumber || 'Manual'} to ${b.invoiceDetails.sponsorEmail}?`);
+      if (!confirmResend) return;
+    }
 
     setSendingInvoiceId(b.id);
     try {
       const prop = properties.find(p => p.id === b.propertyId);
-      const propertyName = prop ? prop.name : 'Unknown Property';
+      const propertyName = prop ? (prop.name || prop.title) : (b.propertyTitle || 'Unknown Property');
 
       let totalNights = 1;
       try {
@@ -2366,7 +2386,7 @@ C.&S.H. Group Properties, LLC
         totalNights = Math.max(1, Math.round(diff / (1000 * 60 * 60 * 24)));
       } catch(e) {}
 
-      const manualBookingRooms = b.selectedBedrooms ? b.selectedBedrooms.map(r => r.roomNumber) : (b.selectedBedroom ? [b.selectedBedroom.roomNumber] : []);
+      const manualBookingRooms = b.selectedBedrooms ? b.selectedBedrooms.map((r: any) => r.roomNumber) : (b.selectedBedroom ? [b.selectedBedroom.roomNumber] : []);
       const totalAmountStr = (b.totalPrice / 100).toFixed(2);
       const baseAmountVal = b.invoiceDetails.baseAmount !== undefined ? b.invoiceDetails.baseAmount : (b.totalPrice / 100);
       const stripeFeeVal = b.invoiceDetails.stripeFee !== undefined ? b.invoiceDetails.stripeFee : 0;
@@ -2559,11 +2579,169 @@ C.&S.H. Group Properties, LLC
          throw new Error(`Failed to send invoice email: ${errText}`);
       }
 
-      alert("Invoice resent successfully to " + invoiceSponsorEmail);
+      if (!silentAlert) {
+        alert("Invoice resent successfully to " + invoiceSponsorEmail);
+      }
     } catch (err: any) {
       alert("Error resending invoice: " + err.message);
+      throw err;
     } finally {
       setSendingInvoiceId(null);
+    }
+  };
+
+  const handleOpenEditInvoiceModal = (booking: any) => {
+    const inv = booking.invoiceDetails || {};
+    setEditingInvoiceBooking(booking);
+    setEditInvGuestName(booking.guestName || inv.sponsorName || '');
+    setEditInvGuestEmail(booking.guestEmail || inv.sponsorEmail || '');
+    setEditInvGuestPhone(booking.guestPhone || inv.sponsorPhone || '');
+    setEditInvSponsorName(inv.sponsorName || booking.guestName || '');
+    setEditInvSponsorEmail(inv.sponsorEmail || booking.guestEmail || '');
+    setEditInvSponsorPhone(inv.sponsorPhone || booking.guestPhone || '');
+    setEditInvSponsorAddress(inv.sponsorAddress || '');
+    setEditInvCheckIn(booking.checkIn || '');
+    setEditInvCheckOut(booking.checkOut || '');
+    setEditInvDueDate(inv.dueDate || booking.checkIn || '');
+    setEditInvInvoiceNumber(inv.invoiceNumber || `INV-${booking.bookingRef || Math.floor(100000 + Math.random() * 900000)}`);
+    const baseAmt = inv.baseAmount !== undefined 
+      ? Number(inv.baseAmount) 
+      : (booking.totalPrice ? Number(booking.totalPrice) / 100 : 0);
+    setEditInvBaseAmount(baseAmt);
+    setEditInvCustomNotes(inv.customNotes || '');
+  };
+
+  const handleSaveEditInvoice = async (andResend: boolean = false) => {
+    if (!editingInvoiceBooking) return;
+
+    if (!editInvGuestName.trim()) {
+      alert("Please enter the Guest's Name.");
+      return;
+    }
+    if (!editInvSponsorEmail.trim()) {
+      alert("Please enter a valid Sponsor / Billing Email address.");
+      return;
+    }
+    if (!editInvCheckIn || !editInvCheckOut) {
+      alert("Please specify both Check-in and Check-out dates.");
+      return;
+    }
+    if (new Date(editInvCheckOut) <= new Date(editInvCheckIn)) {
+      alert("Check-out date must be strictly after the Check-in date.");
+      return;
+    }
+    if (editInvBaseAmount <= 0) {
+      alert("Please enter a valid base amount greater than $0.");
+      return;
+    }
+
+    if (andResend) {
+      setEditInvResending(true);
+    } else {
+      setEditInvSaving(true);
+    }
+
+    try {
+      const calculatedStripeFee = editInvBaseAmount > 0 
+        ? Math.round((((editInvBaseAmount + 0.30) / (1 - 0.029)) * (1 + 0.004) - editInvBaseAmount) * 100) / 100 
+        : 0;
+      const calculatedGrandTotal = Math.round((editInvBaseAmount + calculatedStripeFee) * 100) / 100;
+
+      const currentInv = editingInvoiceBooking.invoiceDetails || {};
+      const updatedInvoiceDetails = {
+        ...currentInv,
+        invoiceNumber: editInvInvoiceNumber.trim(),
+        dueDate: editInvDueDate,
+        sponsorName: editInvSponsorName.trim() || editInvGuestName.trim(),
+        sponsorEmail: editInvSponsorEmail.trim(),
+        sponsorPhone: editInvSponsorPhone.trim(),
+        sponsorAddress: editInvSponsorAddress.trim(),
+        baseAmount: editInvBaseAmount,
+        stripeFee: calculatedStripeFee,
+        grandTotal: calculatedGrandTotal,
+        customNotes: editInvCustomNotes.trim(),
+        lastEditedAt: new Date().toISOString(),
+      };
+
+      const updatedBooking = {
+        ...editingInvoiceBooking,
+        guestName: editInvGuestName.trim(),
+        guestEmail: editInvGuestEmail.trim() || editInvSponsorEmail.trim(),
+        guestPhone: editInvGuestPhone.trim(),
+        checkIn: editInvCheckIn,
+        checkOut: editInvCheckOut,
+        totalPrice: Math.round(calculatedGrandTotal * 100),
+        invoiceDetails: updatedInvoiceDetails,
+      };
+
+      // 1. Update Firestore booking document
+      await updateDoc(doc(db, 'bookings', editingInvoiceBooking.id), {
+        guestName: editInvGuestName.trim(),
+        guestEmail: editInvGuestEmail.trim() || editInvSponsorEmail.trim(),
+        guestPhone: editInvGuestPhone.trim(),
+        checkIn: editInvCheckIn,
+        checkOut: editInvCheckOut,
+        totalPrice: Math.round(calculatedGrandTotal * 100),
+        invoiceDetails: updatedInvoiceDetails,
+      });
+
+      // 2. Also update cleaning blackout date if necessary
+      try {
+        const checkOutDate = new Date(editInvCheckOut + 'T12:00:00');
+        const dayAfterDate = new Date(checkOutDate);
+        dayAfterDate.setDate(dayAfterDate.getDate() + 1);
+        const blackoutDateString = dayAfterDate.toISOString().split('T')[0];
+        const manualBookingRooms = editingInvoiceBooking.selectedBedrooms 
+          ? editingInvoiceBooking.selectedBedrooms.map((r: any) => r.roomNumber) 
+          : (editingInvoiceBooking.selectedBedroom ? [editingInvoiceBooking.selectedBedroom.roomNumber] : []);
+        
+        if (manualBookingRooms.length > 0) {
+          const batch = writeBatch(db);
+          manualBookingRooms.forEach((roomNum: any) => {
+            batch.set(doc(db, 'blackout_dates', `maint-${editingInvoiceBooking.id}-${roomNum}`), {
+              propertyId: editingInvoiceBooking.propertyId,
+              date: blackoutDateString,
+              targetType: 'room',
+              roomNumber: roomNum,
+              reason: `Maintenance/Cleaning for Booking Override (Room ${roomNum})`,
+              updatedAt: serverTimestamp()
+            }, { merge: true });
+          });
+          await batch.commit();
+        } else if (editingInvoiceBooking.propertyId) {
+          await setDoc(doc(db, 'blackout_dates', `maint-${editingInvoiceBooking.id}`), {
+            propertyId: editingInvoiceBooking.propertyId,
+            date: blackoutDateString,
+            targetType: 'property',
+            reason: 'Maintenance/Cleaning for Booking Override',
+            updatedAt: serverTimestamp()
+          }, { merge: true });
+        }
+      } catch (blackoutErr) {
+        console.warn("Could not update blackout date for edited invoice:", blackoutErr);
+      }
+
+      // 3. Update local state
+      setBookings(prev => prev.map(b => b.id === editingInvoiceBooking.id ? updatedBooking : b));
+      if (viewingInvoiceBooking && viewingInvoiceBooking.id === editingInvoiceBooking.id) {
+        setViewingInvoiceBooking(updatedBooking);
+      }
+
+      // 4. If andResend is true, send email immediately
+      if (andResend) {
+        await handleResendInvoice(updatedBooking, true, true);
+        alert(`Pending Invoice #${updatedInvoiceDetails.invoiceNumber} changes saved and email successfully resent to ${updatedInvoiceDetails.sponsorEmail}!`);
+      } else {
+        alert(`Pending Invoice #${updatedInvoiceDetails.invoiceNumber} updated successfully.`);
+      }
+
+      setEditingInvoiceBooking(null);
+    } catch (err: any) {
+      console.error("Error saving pending invoice edits:", err);
+      alert("Failed to save invoice edits: " + (err.message || 'Unknown error'));
+    } finally {
+      setEditInvSaving(false);
+      setEditInvResending(false);
     }
   };
 
@@ -4750,14 +4928,23 @@ C.&S.H. Group Properties, LLC
                                                </button>
                                             </div>
                                          ) : (
-                                           <button
-                                              onClick={() => handleResendInvoice(b)}
-                                              disabled={sendingInvoiceId === b.id}
-                                              className="text-[10px] font-bold text-indigo-600 hover:text-indigo-805 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1 rounded-lg transition-all inline-flex items-center gap-1 disabled:opacity-50 cursor-pointer"
-                                           >
-                                              {sendingInvoiceId === b.id ? 'Sending...' : 'Resend Invoice'}
-                                           </button>
-                                        )}
+                                            <div className="inline-flex gap-1 items-center">
+                                               <button
+                                                  onClick={() => handleOpenEditInvoiceModal(b)}
+                                                  className="text-[10px] font-bold text-amber-700 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-300 px-2 py-1 rounded-lg transition-all inline-flex items-center gap-1 cursor-pointer shadow-2xs"
+                                                  title="Edit pending invoice name, addresses, dates, and amounts"
+                                               >
+                                                  <Pencil size={11} /> Edit
+                                               </button>
+                                               <button
+                                                  onClick={() => handleResendInvoice(b)}
+                                                  disabled={sendingInvoiceId === b.id}
+                                                  className="text-[10px] font-bold text-indigo-600 hover:text-indigo-805 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1 rounded-lg transition-all inline-flex items-center gap-1 disabled:opacity-50 cursor-pointer"
+                                               >
+                                                  {sendingInvoiceId === b.id ? 'Sending...' : 'Resend'}
+                                               </button>
+                                            </div>
+                                         )}
                                      </span>
                                   )}
                                   {/* Proof of Residency Letter Button - ONLY for Paid & Non-Cancelled Bookings */}
@@ -4989,13 +5176,23 @@ C.&S.H. Group Properties, LLC
                                                        )}
                                                     </>
                                                  ) : (
-                                                    <button
-                                                       onClick={() => handleResendInvoice(b)}
-                                                       disabled={sendingInvoiceId === b.id}
-                                                       className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1 rounded-lg transition-all inline-flex items-center gap-1 disabled:opacity-50 cursor-pointer"
-                                                    >
-                                                       {sendingInvoiceId === b.id ? "Sending..." : "Resend Email"}
-                                                    </button>
+                                                    <>
+                                                       <button
+                                                          onClick={() => handleOpenEditInvoiceModal(b)}
+                                                          className="text-[10px] font-bold text-amber-700 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-300 px-2.5 py-1 rounded-lg transition-all inline-flex items-center gap-1 cursor-pointer shadow-2xs"
+                                                          title="Edit name, addresses, stay dates, and amounts for this pending invoice"
+                                                       >
+                                                          <Pencil size={11} /> Edit Invoice
+                                                       </button>
+                                                       <button
+                                                          onClick={() => handleResendInvoice(b)}
+                                                          disabled={sendingInvoiceId === b.id}
+                                                          className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1 rounded-lg transition-all inline-flex items-center gap-1 disabled:opacity-50 cursor-pointer"
+                                                          title="Resend invoice email with latest saved details"
+                                                       >
+                                                          {sendingInvoiceId === b.id ? "Sending..." : "Resend Email"}
+                                                       </button>
+                                                    </>
                                                  )}
 
                                                  <button
@@ -6373,13 +6570,25 @@ C.&S.H. Group Properties, LLC
                                Ref Reference ID: <span className="font-mono font-bold text-indigo-600 bg-indigo-50 px-1 py-0.5 rounded">{liveBooking.bookingRef || '—'}</span>
                             </p>
                          </div>
-                         <button 
-                            onClick={() => setViewingInvoiceBooking(null)} 
-                            className="text-slate-400 hover:text-slate-600 transition-colors bg-white border border-slate-200 hover:border-slate-300 p-2 rounded-full cursor-pointer flex items-center justify-center"
-                            title="Close modal"
-                         >
-                            <XCircle size={20} />
-                         </button>
+                         <div className="flex items-center gap-2">
+                            {!inv.paid && !inv.cancelled && liveBooking.status !== 'cancelled' && (
+                               <button
+                                  type="button"
+                                  onClick={() => handleOpenEditInvoiceModal(liveBooking)}
+                                  className="text-xs font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 px-3 py-1.5 rounded-xl transition-all inline-flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                                  title="Edit pending invoice name, addresses, dates, and amounts"
+                               >
+                                  <Pencil size={13} /> Edit Pending Invoice
+                               </button>
+                            )}
+                            <button 
+                               onClick={() => setViewingInvoiceBooking(null)} 
+                               className="text-slate-400 hover:text-slate-600 transition-colors bg-white border border-slate-200 hover:border-slate-300 p-2 rounded-full cursor-pointer flex items-center justify-center"
+                               title="Close modal"
+                            >
+                               <XCircle size={20} />
+                            </button>
+                         </div>
                       </div>
 
                       {/* Content area */}
@@ -6656,6 +6865,16 @@ C.&S.H. Group Properties, LLC
                             </button>
                          )}
                          
+                         {!inv.paid && !inv.cancelled && liveBooking.status !== 'cancelled' && (
+                            <button
+                               type="button"
+                               onClick={() => handleOpenEditInvoiceModal(liveBooking)}
+                               className="text-sm font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 px-5 py-2.5 rounded-xl transition-all inline-flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                               title="Edit name, addresses, stay dates, and amounts for this pending invoice"
+                            >
+                               <Pencil size={14} /> Edit Invoice
+                            </button>
+                         )}
                          <button
                             type="button"
                             onClick={() => handleResendInvoice(liveBooking)}
@@ -6672,6 +6891,319 @@ C.&S.H. Group Properties, LLC
                          >
                             <RotateCw size={14} /> Renew Invoice
                          </button>
+                      </div>
+                   </div>
+                </div>
+             );
+          })()}
+
+          {editingInvoiceBooking && (() => {
+             let calculatedNights = 1;
+             try {
+                if (editInvCheckIn && editInvCheckOut) {
+                   const d1 = new Date(editInvCheckIn);
+                   const d2 = new Date(editInvCheckOut);
+                   const diff = d2.getTime() - d1.getTime();
+                   calculatedNights = Math.max(1, Math.round(diff / (1000 * 60 * 60 * 24)));
+                }
+             } catch(e) {}
+
+             const stripeFeeCalc = editInvBaseAmount > 0 
+                ? Math.round((((editInvBaseAmount + 0.30) / (1 - 0.029)) * (1 + 0.004) - editInvBaseAmount) * 100) / 100 
+                : 0;
+             const grandTotalCalc = Math.round((editInvBaseAmount + stripeFeeCalc) * 100) / 100;
+             const prop = properties.find(p => p.id === editingInvoiceBooking.propertyId);
+
+             return (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+                   <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 text-left">
+                      {/* Header */}
+                      <div className="px-8 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                         <div>
+                            <div className="flex items-center gap-2">
+                               <span className="p-1.5 bg-amber-100 text-amber-800 rounded-lg flex items-center justify-center">
+                                  <Pencil size={18} />
+                               </span>
+                               <h3 className="text-xl font-bold text-slate-900">
+                                  Edit Pending Invoice #{editInvInvoiceNumber || 'Manual'}
+                               </h3>
+                               <span className="text-[10px] font-extrabold uppercase tracking-wide bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full">
+                                  Pending / Unpaid
+                               </span>
+                            </div>
+                            <p className="text-xs text-slate-500 mt-1">
+                               Modify guest name, billing sponsor, contact addresses, dates, or lodging rates. You can save changes or save &amp; resend the invoice immediately.
+                            </p>
+                         </div>
+                         <button 
+                            onClick={() => setEditingInvoiceBooking(null)} 
+                            disabled={editInvSaving || editInvResending}
+                            className="text-slate-400 hover:text-slate-600 transition-colors bg-white border border-slate-200 hover:border-slate-300 p-2 rounded-full cursor-pointer flex items-center justify-center disabled:opacity-50"
+                            title="Close edit modal"
+                         >
+                            <XCircle size={20} />
+                         </button>
+                      </div>
+
+                      {/* Form Body */}
+                      <div className="flex-1 overflow-y-auto p-8 space-y-6 bg-slate-50/40">
+                         {/* 1. Invoice Identifier & Due Date */}
+                         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs space-y-4">
+                            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5 border-b border-slate-100 pb-2">
+                               <FileText size={14} className="text-indigo-600" /> Invoice Information
+                            </h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                               <div>
+                                  <label className="block text-xs font-semibold text-slate-700 mb-1">Invoice Number</label>
+                                  <input 
+                                     type="text" 
+                                     value={editInvInvoiceNumber}
+                                     onChange={(e) => setEditInvInvoiceNumber(e.target.value)}
+                                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                     placeholder="e.g. INV-60021"
+                                  />
+                               </div>
+                               <div>
+                                  <label className="block text-xs font-semibold text-slate-700 mb-1">Payment Due Date</label>
+                                  <input 
+                                     type="date" 
+                                     value={editInvDueDate}
+                                     onChange={(e) => setEditInvDueDate(e.target.value)}
+                                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                  />
+                               </div>
+                            </div>
+                         </div>
+
+                         {/* 2. Guest Information */}
+                         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs space-y-4">
+                            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5 border-b border-slate-100 pb-2">
+                               <Users size={14} className="text-indigo-600" /> Guest Details (Resident)
+                            </h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                               <div>
+                                  <label className="block text-xs font-semibold text-slate-700 mb-1">Guest Full Name *</label>
+                                  <input 
+                                     type="text" 
+                                     value={editInvGuestName}
+                                     onChange={(e) => setEditInvGuestName(e.target.value)}
+                                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
+                                     placeholder="Guest name"
+                                     required
+                                  />
+                               </div>
+                               <div>
+                                  <label className="block text-xs font-semibold text-slate-700 mb-1">Guest Email</label>
+                                  <input 
+                                     type="email" 
+                                     value={editInvGuestEmail}
+                                     onChange={(e) => setEditInvGuestEmail(e.target.value)}
+                                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                     placeholder="guest@example.com"
+                                  />
+                               </div>
+                               <div>
+                                  <label className="block text-xs font-semibold text-slate-700 mb-1">Guest Phone</label>
+                                  <input 
+                                     type="tel" 
+                                     value={editInvGuestPhone}
+                                     onChange={(e) => setEditInvGuestPhone(e.target.value)}
+                                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                     placeholder="+1 (404) 555-0199"
+                                  />
+                               </div>
+                            </div>
+                         </div>
+
+                         {/* 3. Sponsor / Bill To Entity & Address */}
+                         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs space-y-4">
+                            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5 border-b border-slate-100 pb-2">
+                               <Building size={14} className="text-indigo-600" /> Bill To / Sponsor Entity &amp; Address
+                            </h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                               <div>
+                                  <label className="block text-xs font-semibold text-slate-700 mb-1">Sponsor / Company Name</label>
+                                  <input 
+                                     type="text" 
+                                     value={editInvSponsorName}
+                                     onChange={(e) => setEditInvSponsorName(e.target.value)}
+                                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
+                                     placeholder="Agency or Sponsor Name"
+                                  />
+                               </div>
+                               <div>
+                                  <label className="block text-xs font-semibold text-slate-700 mb-1">Sponsor Billing Email * (Sent Here)</label>
+                                  <input 
+                                     type="email" 
+                                     value={editInvSponsorEmail}
+                                     onChange={(e) => setEditInvSponsorEmail(e.target.value)}
+                                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-semibold"
+                                     placeholder="sponsor@agency.org"
+                                     required
+                                  />
+                               </div>
+                               <div>
+                                  <label className="block text-xs font-semibold text-slate-700 mb-1">Sponsor Phone</label>
+                                  <input 
+                                     type="tel" 
+                                     value={editInvSponsorPhone}
+                                     onChange={(e) => setEditInvSponsorPhone(e.target.value)}
+                                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                     placeholder="+1 (404) 555-0100"
+                                  />
+                               </div>
+                            </div>
+                            <div>
+                               <label className="block text-xs font-semibold text-slate-700 mb-1">
+                                  Sponsor / Billing Physical or Mailing Address (Street, City, State, Zip)
+                               </label>
+                               <textarea 
+                                  rows={2}
+                                  value={editInvSponsorAddress}
+                                  onChange={(e) => setEditInvSponsorAddress(e.target.value)}
+                                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                  placeholder="123 Peachtree St NE, Suite 400&#10;Atlanta, GA 30303"
+                               />
+                            </div>
+                         </div>
+
+                         {/* 4. Stay Dates & Lodging */}
+                         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs space-y-4">
+                            <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                                  <CalendarIcon size={14} className="text-indigo-600" /> Lodging Dates &amp; Property
+                               </h4>
+                               <span className="text-xs font-semibold text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-full">
+                                  {prop ? (prop.name || prop.title) : 'Atlanta Luxury Suite'}
+                               </span>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+                               <div>
+                                  <label className="block text-xs font-semibold text-slate-700 mb-1">Check-in Date *</label>
+                                  <input 
+                                     type="date" 
+                                     value={editInvCheckIn}
+                                     onChange={(e) => setEditInvCheckIn(e.target.value)}
+                                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                     required
+                                  />
+                               </div>
+                               <div>
+                                  <label className="block text-xs font-semibold text-slate-700 mb-1">Check-out Date *</label>
+                                  <input 
+                                     type="date" 
+                                     value={editInvCheckOut}
+                                     onChange={(e) => setEditInvCheckOut(e.target.value)}
+                                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                     required
+                                  />
+                               </div>
+                               <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-center">
+                                  <div className="text-[10px] uppercase font-bold text-slate-400">Total Stay Duration</div>
+                                  <div className="text-sm font-extrabold text-indigo-600">
+                                     {calculatedNights} Night{calculatedNights !== 1 ? 's' : ''}
+                                  </div>
+                               </div>
+                            </div>
+                         </div>
+
+                         {/* 5. Financial Charges & Live Calculation */}
+                         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs space-y-4">
+                            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5 border-b border-slate-100 pb-2">
+                               <DollarSign size={14} className="text-indigo-600" /> Charges &amp; Stripe Processing
+                            </h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
+                               <div>
+                                  <label className="block text-xs font-semibold text-slate-700 mb-1">Base Rental / Override Amount ($ USD) *</label>
+                                  <div className="relative">
+                                     <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
+                                     <input 
+                                        type="number" 
+                                        step="0.01"
+                                        min="1"
+                                        value={editInvBaseAmount || ''}
+                                        onChange={(e) => setEditInvBaseAmount(parseFloat(e.target.value) || 0)}
+                                        className="w-full pl-8 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                        placeholder="0.00"
+                                        required
+                                     />
+                                  </div>
+                               </div>
+                               <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                                  <div className="text-[10px] uppercase font-bold text-slate-400">Stripe Fee (2.9% + $0.30)</div>
+                                  <div className="text-sm font-bold text-slate-700 font-mono mt-0.5">
+                                     +${stripeFeeCalc.toFixed(2)}
+                                  </div>
+                               </div>
+                               <div className="bg-indigo-50/70 p-3 rounded-xl border border-indigo-150 text-right">
+                                  <div className="text-[10px] uppercase font-bold text-indigo-600">Grand Total Due</div>
+                                  <div className="text-xl font-black text-indigo-700 font-mono mt-0.5">
+                                     ${grandTotalCalc.toFixed(2)}
+                                  </div>
+                               </div>
+                            </div>
+                         </div>
+
+                         {/* 6. Custom Notes */}
+                         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs space-y-2">
+                            <label className="block text-xs font-semibold text-slate-700">Special Administrator Notes &amp; Terms (Optional)</label>
+                            <textarea 
+                               rows={2}
+                               value={editInvCustomNotes}
+                               onChange={(e) => setEditInvCustomNotes(e.target.value)}
+                               className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                               placeholder="e.g. Includes parking pass and high-speed executive internet access..."
+                            />
+                         </div>
+                      </div>
+
+                      {/* Footer Actions */}
+                      <div className="px-8 py-5 border-t border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-3 bg-slate-50">
+                         <div className="text-xs text-slate-500">
+                            Invoice payments update automatically once completed by the sponsor.
+                         </div>
+                         <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+                            <button 
+                               type="button"
+                               disabled={editInvSaving || editInvResending}
+                               onClick={() => setEditingInvoiceBooking(null)} 
+                               className="px-5 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold text-xs transition-all cursor-pointer disabled:opacity-50"
+                            >
+                               Cancel
+                            </button>
+                            <button 
+                               type="button"
+                               disabled={editInvSaving || editInvResending}
+                               onClick={() => handleSaveEditInvoice(false)} 
+                               className="px-5 py-2.5 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-800 font-bold text-xs transition-all inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                            >
+                               {editInvSaving ? (
+                                  <>
+                                     <Loader2 size={13} className="animate-spin" /> Saving...
+                                  </>
+                               ) : (
+                                  <>
+                                     <CheckCircle size={13} /> Save Changes
+                                  </>
+                               )}
+                            </button>
+                            <button 
+                               type="button"
+                               disabled={editInvSaving || editInvResending}
+                               onClick={() => handleSaveEditInvoice(true)} 
+                               className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-all inline-flex items-center gap-1.5 cursor-pointer shadow-md shadow-indigo-100 disabled:opacity-50"
+                            >
+                               {editInvResending ? (
+                                  <>
+                                     <Loader2 size={13} className="animate-spin" /> Saving &amp; Resending...
+                                  </>
+                               ) : (
+                                  <>
+                                     <Send size={13} /> Save &amp; Resend Invoice
+                                  </>
+                               )}
+                            </button>
+                         </div>
                       </div>
                    </div>
                 </div>
