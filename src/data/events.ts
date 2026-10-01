@@ -45,9 +45,54 @@ interface VerifiedEventDef {
 }
 
 // ---------------------------------------------------------------------------
-// 1. SPORTING EVENTS (Verified schedules from Ticketmaster, NBA, NFL, MLS)
+// 1. SPORTING EVENTS (Verified schedules from Ticketmaster, MLB, NBA, NFL, MLS)
 // ---------------------------------------------------------------------------
 const VERIFIED_SPORTS_EVENTS: VerifiedEventDef[] = [
+  {
+    id: 'sports-braves-wildcard3',
+    title: 'MLB NL Wild Card Series: Atlanta Braves vs. Philadelphia Phillies (Game 3)',
+    category: 'Sporting Events',
+    year: 2026,
+    month: 10,
+    day: 1,
+    hour: 20,
+    minute: 0,
+    timeStr: '8:00 PM EDT',
+    venue: 'Truist Park',
+    distance: '16.5 miles',
+    description: 'TODAY! Decisive MLB National League Wild Card elimination showdown live at Truist Park at The Battery! The Atlanta Braves host the Philadelphia Phillies in a thrilling winner-take-all Game 3.',
+    ticketUrl: 'https://www.ticketmaster.com/atlanta-braves-tickets/artist/805896',
+  },
+  {
+    id: 'sports-braves-nlds3',
+    title: 'MLB NLDS Game 3: Atlanta Braves vs. Los Angeles Dodgers',
+    category: 'Sporting Events',
+    year: 2026,
+    month: 10,
+    day: 6,
+    hour: 19,
+    minute: 0,
+    timeStr: '7:00 PM EDT',
+    venue: 'Truist Park',
+    distance: '16.5 miles',
+    description: 'National League Division Series postseason baseball at Truist Park! The Atlanta Braves battle the Los Angeles Dodgers before 41,000+ tomahawk-chopping fans at The Battery.',
+    ticketUrl: 'https://www.ticketmaster.com/atlanta-braves-tickets/artist/805896',
+  },
+  {
+    id: 'sports-braves-nlds4',
+    title: 'MLB NLDS Game 4: Atlanta Braves vs. Los Angeles Dodgers',
+    category: 'Sporting Events',
+    year: 2026,
+    month: 10,
+    day: 7,
+    hour: 19,
+    minute: 0,
+    timeStr: '7:00 PM EDT',
+    venue: 'Truist Park',
+    distance: '16.5 miles',
+    description: 'High-voltage National League Division Series showdown under the lights at Truist Park as the Atlanta Braves clash with the Dodgers in Game 4 postseason action.',
+    ticketUrl: 'https://www.ticketmaster.com/atlanta-braves-tickets/artist/805896',
+  },
   {
     id: 'sports-dream-game3',
     title: 'WNBA Playoffs: Atlanta Dream vs. TBA (Round 1 - Game 3)',
@@ -811,9 +856,12 @@ export function getEventsForNext30Days(currentDate: Date = new Date(), refreshSe
   let sportsItems: EventItem[] = [];
   if (seedMod === 0) {
     const ids = [
+      'sports-braves-wildcard3',
       'sports-dream-game3',
       'sports-dream-semifinals',
       'sports-hawks-grizzlies',
+      'sports-braves-nlds3',
+      'sports-braves-nlds4',
       'sports-atlutd-cincinnati',
       'sports-falcons-ravens',
       'sports-hawks-thunder',
@@ -826,12 +874,17 @@ export function getEventsForNext30Days(currentDate: Date = new Date(), refreshSe
       'sports-hawks-heat',
       'sports-hawks-cavaliers',
       'sports-gridiron-classic',
+      'sports-hawks-wizards',
+      'sports-hawks-lakers',
     ];
     sportsItems = allSports.filter((s) => ids.some((id) => s.id.startsWith(id)));
   } else if (seedMod === 1) {
     const ids = [
+      'sports-braves-wildcard3',
       'sports-dream-game3',
       'sports-hawks-grizzlies',
+      'sports-braves-nlds3',
+      'sports-braves-nlds4',
       'sports-atlutd-cincinnati',
       'sports-hawks-thunder',
       'sports-atlutd-miami',
@@ -845,12 +898,16 @@ export function getEventsForNext30Days(currentDate: Date = new Date(), refreshSe
       'sports-hawks-nets',
       'sports-hawks-lakers',
       'sports-falcons-chiefs',
+      'sports-hawks-hornets',
+      'sports-falcons-ravens',
     ];
     sportsItems = allSports.filter((s) => ids.some((id) => s.id.startsWith(id)));
   } else {
     const ids = [
+      'sports-braves-wildcard3',
       'sports-dream-semifinals',
       'sports-hawks-grizzlies',
+      'sports-braves-nlds3',
       'sports-falcons-ravens',
       'sports-hawks-thunder',
       'sports-dream-finals',
@@ -864,15 +921,18 @@ export function getEventsForNext30Days(currentDate: Date = new Date(), refreshSe
       'sports-falcons-chiefs',
       'sports-hawks-hornets',
       'sports-hawks-pistons',
+      'sports-hawks-cavaliers',
+      'sports-atlutd-miami',
+      'sports-braves-nlds4',
     ];
     sportsItems = allSports.filter((s) => ids.some((id) => s.id.startsWith(id)));
   }
-  // Fill to 15 if needed
-  if (sportsItems.length < 15) {
+  // Fill to 20 if needed
+  if (sportsItems.length < 20) {
     for (const item of allSports) {
       if (!sportsItems.find((s) => s.title === item.title)) {
         sportsItems.push(item);
-        if (sportsItems.length === 15) break;
+        if (sportsItems.length === 20) break;
       }
     }
   }
@@ -997,9 +1057,9 @@ export function getEventsForNext30Days(currentDate: Date = new Date(), refreshSe
     }
   }
 
-  // Combine 30 curated verified events across the 4 categories (15 sports + 5 night life + 5 family + 5 kids)
+  // Combine 35 curated verified events across the 4 categories (20 sports + 5 night life + 5 family + 5 kids)
   const combined = [
-    ...sportsItems.slice(0, 15),
+    ...sportsItems.slice(0, 20),
     ...nightItems.slice(0, 5),
     ...familyItems.slice(0, 5),
     ...kidsItems.slice(0, 5),
