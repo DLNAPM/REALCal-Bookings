@@ -12,6 +12,21 @@ export interface AuthUser {
   tollFreeAccept?: boolean;
 }
 
+export const ADMIN_EMAILS = [
+  'dlaniger.napm.consulting@gmail.com',
+  'monnib30228@gmail.com',
+  'reach_dlaniger@hotmail.com',
+  'billing@cashgroupproperties.com',
+  'support@cshproperties.com',
+  'cynthia@cshproperties.com',
+  'markus@cshproperties.com'
+];
+
+export const isAdminEmail = (email?: string | null): boolean => {
+  if (!email) return false;
+  return ADMIN_EMAILS.includes(email.toLowerCase().trim());
+};
+
 interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
@@ -50,7 +65,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const userSnap = await getDoc(userRef);
           
           let role: 'user' | 'admin' = 'user';
-          if (firebaseUser.email === 'dlaniger.napm.consulting@gmail.com' || firebaseUser.email === 'monnib30228@gmail.com') {
+          if (isAdminEmail(firebaseUser.email)) {
             role = 'admin';
             console.log("Detected admin email, assigning admin role in creation/sync");
           }
@@ -76,7 +91,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               console.log("User document data update:", data);
               
               let currentRole = data.role || 'user';
-              if (firebaseUser.email === 'dlaniger.napm.consulting@gmail.com' || firebaseUser.email === 'monnib30228@gmail.com') {
+              if (isAdminEmail(firebaseUser.email)) {
                 currentRole = 'admin';
               }
 
@@ -102,7 +117,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                email: firebaseUser.email || '',
                displayName: firebaseUser.displayName || 'Guest',
                photoURL: firebaseUser.photoURL || '',
-               role: (firebaseUser.email === 'dlaniger.napm.consulting@gmail.com' || firebaseUser.email === 'monnib30228@gmail.com' ? 'admin' : 'user') as 'user' | 'admin',
+               role: isAdminEmail(firebaseUser.email) ? 'admin' : 'user',
             });
             setLoading(false);
           });
@@ -114,7 +129,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             email: firebaseUser.email || '',
             displayName: firebaseUser.displayName || 'Guest',
             photoURL: firebaseUser.photoURL || '',
-            role: (firebaseUser.email === 'dlaniger.napm.consulting@gmail.com' || firebaseUser.email === 'monnib30228@gmail.com' ? 'admin' : 'user') as 'user' | 'admin',
+            role: isAdminEmail(firebaseUser.email) ? 'admin' : 'user',
           });
           setLoading(false);
         }

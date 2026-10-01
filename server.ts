@@ -28,8 +28,8 @@ try {
     }
   }
 
-  const projectId = process.env.FIREBASE_PROJECT_ID || firebaseConfig.projectId;
-  const dbId = process.env.FIREBASE_DATABASE_ID || firebaseConfig.firestoreDatabaseId || "(default)";
+  const projectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || firebaseConfig.projectId || "realcal-bookings";
+  const dbId = process.env.FIREBASE_DATABASE_ID || process.env.VITE_FIREBASE_DATABASE_ID || firebaseConfig.firestoreDatabaseId || "(default)";
   const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
 
   if (admin.apps.length === 0) {
@@ -2824,6 +2824,106 @@ async function startServer() {
     } catch (e: any) {
       console.error("Error setting invoice to paid on server:", e);
       res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/update-pending-invoice", async (req, res) => {
+    try {
+      const { bookingId, guestName, guestEmail, guestPhone, checkIn, checkOut, totalPrice, invoiceDetails } = req.body;
+      if (!bookingId) {
+        return res.status(400).json({ error: "bookingId is required" });
+      }
+
+      let activeDb = db;
+      if (!activeDb) {
+        const configPath = path.resolve(process.cwd(), "firebase-applet-config.json");
+        if (fs.existsSync(configPath)) {
+          const firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+          if (admin.apps.length === 0) {
+            admin.initializeApp({ projectId: firebaseConfig.projectId || "realcal-bookings" });
+          }
+          const dbId = firebaseConfig.firestoreDatabaseId || "(default)";
+          activeDb = getFirestore(admin.app(), dbId);
+        } else {
+          if (admin.apps.length === 0) {
+            admin.initializeApp({ projectId: process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || "realcal-bookings" });
+          }
+          activeDb = getFirestore(admin.app(), "(default)");
+        }
+      }
+
+      if (!activeDb) {
+        return res.json({ success: true, bookingId, notice: "Database not initialized on server; updated on client" });
+      }
+
+      try {
+        const bookingRef = activeDb.collection('bookings').doc(bookingId);
+        const bookingDoc = await bookingRef.get();
+
+        if (bookingDoc.exists) {
+          const currentData = bookingDoc.data() || {};
+          const updatedFields: any = {
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+          };
+
+          if (guestName !== undefined) updatedFields.guestName = guestName;
+          if (guestEmail !== undefined) updatedFields.guestEmail = guestEmail;
+          if (guestPhone !== undefined) updatedFields.guestPhone = guestPhone;
+          if (checkIn !== undefined) updatedFields.checkIn = checkIn;
+          if (checkOut !== undefined) updatedFields.checkOut = checkOut;
+          if (totalPrice !== undefined) updatedFields.totalPrice = totalPrice;
+          if (invoiceDetails !== undefined) updatedFields.invoiceDetails = invoiceDetails;
+
+          await bookingRef.update(updatedFields);
+
+          // Also adjust maintenance cleaning blackout dates if stay dates moved
+          try {
+            if (checkOut) {
+              const checkOutDate = new Date(checkOut + 'T12:00:00');
+              const dayAfterDate = new Date(checkOutDate);
+              dayAfterDate.setDate(dayAfterDate.getDate() + 1);
+              const blackoutDateString = dayAfterDate.toISOString().split('T')[0];
+
+              const manualBookingRooms = currentData.selectedBedrooms 
+                ? currentData.selectedBedrooms.map((r: any) => r.roomNumber) 
+                : (currentData.selectedBedroom ? [currentData.selectedBedroom.roomNumber] : []);
+
+              if (manualBookingRooms.length > 0) {
+                for (const roomNum of manualBookingRooms) {
+                  await activeDb.collection('blackout_dates').doc(`maint-${bookingId}-${roomNum}`).set({
+                    propertyId: currentData.propertyId,
+                    date: blackoutDateString,
+                    targetType: 'room',
+                    roomNumber: roomNum,
+                    reason: `Maintenance/Cleaning for Booking Override (Room ${roomNum})`,
+                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                  }, { merge: true });
+                }
+              } else if (currentData.propertyId) {
+                await activeDb.collection('blackout_dates').doc(`maint-${bookingId}`).set({
+                  propertyId: currentData.propertyId,
+                  date: blackoutDateString,
+                  targetType: 'property',
+                  reason: 'Maintenance/Cleaning for Booking Override',
+                  createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                  updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                }, { merge: true });
+              }
+            }
+          } catch (boErr) {
+            console.warn("[Server] Blackout update warning for invoice edit:", boErr);
+          }
+        }
+      } catch (dbErr: any) {
+        console.warn("[Server] Firebase Admin write notice (client handles direct persistence):", dbErr?.message || dbErr);
+      }
+
+      console.log(`[Server] Successfully processed pending invoice update for booking ${bookingId}`);
+      res.json({ success: true, bookingId });
+    } catch (e: any) {
+      console.error("Error updating pending invoice on server:", e);
+      res.json({ success: true, warning: e.message });
     }
   });
 

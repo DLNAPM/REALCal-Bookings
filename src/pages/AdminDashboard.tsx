@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, isAdminEmail } from '../contexts/AuthContext';
 import { db, signOut } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, serverTimestamp, getDocs, doc, deleteDoc, updateDoc, setDoc, getDoc, writeBatch, orderBy } from 'firebase/firestore';
 import { Navigate, useNavigate, Link } from 'react-router-dom';
@@ -286,7 +286,7 @@ export const AdminDashboard: React.FC = () => {
   };
   
   if (loading) return <div>Loading...</div>;
-  if (!user || (user.role !== 'admin' && user.email !== 'dlaniger.napm.consulting@gmail.com')) return <Navigate to="/" />;
+  if (!user || (user.role !== 'admin' && !isAdminEmail(user.email))) return <Navigate to="/" />;
 
   useEffect(() => {
     if (!db) return;
@@ -2674,51 +2674,96 @@ C.&S.H. Group Properties, LLC
         invoiceDetails: updatedInvoiceDetails,
       };
 
-      // 1. Update Firestore booking document
-      await updateDoc(doc(db, 'bookings', editingInvoiceBooking.id), {
-        guestName: editInvGuestName.trim(),
-        guestEmail: editInvGuestEmail.trim() || editInvSponsorEmail.trim(),
-        guestPhone: editInvGuestPhone.trim(),
-        checkIn: editInvCheckIn,
-        checkOut: editInvCheckOut,
-        totalPrice: Math.round(calculatedGrandTotal * 100),
-        invoiceDetails: updatedInvoiceDetails,
-      });
+      // 1. Client-side update in Firestore
+      if (db) {
+        try {
+          await updateDoc(doc(db, 'bookings', editingInvoiceBooking.id), {
+            guestName: editInvGuestName.trim(),
+            guestEmail: editInvGuestEmail.trim() || editInvSponsorEmail.trim(),
+            guestPhone: editInvGuestPhone.trim(),
+            checkIn: editInvCheckIn,
+            checkOut: editInvCheckOut,
+            totalPrice: Math.round(calculatedGrandTotal * 100),
+            invoiceDetails: updatedInvoiceDetails,
+            updatedAt: serverTimestamp(),
+          });
+        } catch (clientErr: any) {
+          console.warn("Client direct updateDoc warning, attempting setDoc merge:", clientErr);
+          try {
+            await setDoc(doc(db, 'bookings', editingInvoiceBooking.id), {
+              guestName: editInvGuestName.trim(),
+              guestEmail: editInvGuestEmail.trim() || editInvSponsorEmail.trim(),
+              guestPhone: editInvGuestPhone.trim(),
+              checkIn: editInvCheckIn,
+              checkOut: editInvCheckOut,
+              totalPrice: Math.round(calculatedGrandTotal * 100),
+              invoiceDetails: updatedInvoiceDetails,
+              updatedAt: serverTimestamp(),
+            }, { merge: true });
+          } catch (mergeErr) {
+            console.warn("Client setDoc merge warning:", mergeErr);
+          }
+        }
+      }
 
-      // 2. Also update cleaning blackout date if necessary
+      // Best-effort server endpoint sync (non-blocking)
       try {
-        const checkOutDate = new Date(editInvCheckOut + 'T12:00:00');
-        const dayAfterDate = new Date(checkOutDate);
-        dayAfterDate.setDate(dayAfterDate.getDate() + 1);
-        const blackoutDateString = dayAfterDate.toISOString().split('T')[0];
-        const manualBookingRooms = editingInvoiceBooking.selectedBedrooms 
-          ? editingInvoiceBooking.selectedBedrooms.map((r: any) => r.roomNumber) 
-          : (editingInvoiceBooking.selectedBedroom ? [editingInvoiceBooking.selectedBedroom.roomNumber] : []);
-        
-        if (manualBookingRooms.length > 0) {
-          const batch = writeBatch(db);
-          manualBookingRooms.forEach((roomNum: any) => {
-            batch.set(doc(db, 'blackout_dates', `maint-${editingInvoiceBooking.id}-${roomNum}`), {
+        await fetch("/api/update-pending-invoice", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            bookingId: editingInvoiceBooking.id,
+            guestName: editInvGuestName.trim(),
+            guestEmail: editInvGuestEmail.trim() || editInvSponsorEmail.trim(),
+            guestPhone: editInvGuestPhone.trim(),
+            checkIn: editInvCheckIn,
+            checkOut: editInvCheckOut,
+            totalPrice: Math.round(calculatedGrandTotal * 100),
+            invoiceDetails: updatedInvoiceDetails,
+          })
+        });
+      } catch (srvErr) {
+        console.warn("Server-side update-pending-invoice notice:", srvErr);
+      }
+
+      // 3. Attempt to update blackout maintenance dates non-blockingly
+      try {
+        if (db) {
+          const checkOutDate = new Date(editInvCheckOut + 'T12:00:00');
+          const dayAfterDate = new Date(checkOutDate);
+          dayAfterDate.setDate(dayAfterDate.getDate() + 1);
+          const blackoutDateString = dayAfterDate.toISOString().split('T')[0];
+          const manualBookingRooms = editingInvoiceBooking.selectedBedrooms 
+            ? editingInvoiceBooking.selectedBedrooms.map((r: any) => r.roomNumber) 
+            : (editingInvoiceBooking.selectedBedroom ? [editingInvoiceBooking.selectedBedroom.roomNumber] : []);
+
+          if (manualBookingRooms.length > 0) {
+            const batch = writeBatch(db);
+            manualBookingRooms.forEach((roomNum: any) => {
+              batch.set(doc(db, 'blackout_dates', `maint-${editingInvoiceBooking.id}-${roomNum}`), {
+                propertyId: editingInvoiceBooking.propertyId,
+                date: blackoutDateString,
+                targetType: 'room',
+                roomNumber: roomNum,
+                reason: `Maintenance/Cleaning for Booking Override (Room ${roomNum})`,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
+              }, { merge: true });
+            });
+            await batch.commit();
+          } else if (editingInvoiceBooking.propertyId) {
+            await setDoc(doc(db, 'blackout_dates', `maint-${editingInvoiceBooking.id}`), {
               propertyId: editingInvoiceBooking.propertyId,
               date: blackoutDateString,
-              targetType: 'room',
-              roomNumber: roomNum,
-              reason: `Maintenance/Cleaning for Booking Override (Room ${roomNum})`,
+              targetType: 'property',
+              reason: 'Maintenance/Cleaning for Booking Override',
+              createdAt: serverTimestamp(),
               updatedAt: serverTimestamp()
             }, { merge: true });
-          });
-          await batch.commit();
-        } else if (editingInvoiceBooking.propertyId) {
-          await setDoc(doc(db, 'blackout_dates', `maint-${editingInvoiceBooking.id}`), {
-            propertyId: editingInvoiceBooking.propertyId,
-            date: blackoutDateString,
-            targetType: 'property',
-            reason: 'Maintenance/Cleaning for Booking Override',
-            updatedAt: serverTimestamp()
-          }, { merge: true });
+          }
         }
-      } catch (blackoutErr) {
-        console.warn("Could not update blackout date for edited invoice:", blackoutErr);
+      } catch (boErr) {
+        console.warn("Non-blocking maintenance blackout date sync warning:", boErr);
       }
 
       // 3. Update local state

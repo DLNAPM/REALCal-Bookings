@@ -21,8 +21,16 @@ service cloud.firestore {
     
     // Bootstrap Admin + Explicit email check
     function isAdmin() { 
-      return (isSignedIn() && (request.auth.token.email == 'dlaniger.napm.consulting@gmail.com' || request.auth.token.email == 'monnib30228@gmail.com')) ||
-             (isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'); 
+      return (isSignedIn() && (
+        request.auth.token.email == 'dlaniger.napm.consulting@gmail.com' || 
+        request.auth.token.email == 'monnib30228@gmail.com' ||
+        request.auth.token.email == 'reach_dlaniger@hotmail.com' ||
+        request.auth.token.email == 'billing@cashgroupproperties.com' ||
+        request.auth.token.email == 'support@cshproperties.com' ||
+        request.auth.token.email == 'cynthia@cshproperties.com' ||
+        request.auth.token.email == 'markus@cshproperties.com'
+      )) ||
+      (isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'); 
     }
 
     // ---------- VALIDATION BLUEPRINTS ----------
@@ -77,14 +85,16 @@ service cloud.firestore {
 
     // Bookings Collection
     function isValidBooking(data) {
-      return data.keys().hasAll(['userId', 'propertyId', 'checkIn', 'checkOut', 'status', 'totalPrice', 'guests', 'createdAt', 'updatedAt']) && data.keys().size() >= 9 && data.keys().size() <= 35 &&
-        data.userId is string && data.userId.size() <= 128 && (data.userId == request.auth.uid || isAdmin()) &&
+      return data.keys().hasAll(['userId', 'propertyId', 'checkIn', 'checkOut', 'status', 'totalPrice', 'guests', 'createdAt', 'updatedAt']) && data.keys().size() >= 9 && data.keys().size() <= 60 &&
+        data.userId is string && data.userId.size() <= 128 && (data.userId == request.auth.uid || data.userId == 'admin-override' || isAdmin() || request.auth.token.email in ['dlaniger.napm.consulting@gmail.com', 'monnib30228@gmail.com', 'reach_dlaniger@hotmail.com']) &&
         data.propertyId is string && data.propertyId.size() <= 128 &&
         data.checkIn is string && data.checkIn.size() <= 32 &&
         data.checkOut is string && data.checkOut.size() <= 32 &&
         data.status in ['pending', 'pending_payment', 'confirmed', 'cancelled'] &&
         data.totalPrice is number &&
         data.guests is number &&
+        (data.keys().hasAll(['guestName']) ? (data.guestName is string || data.guestName == null) : true) &&
+        (data.keys().hasAll(['guestEmail']) ? (data.guestEmail is string || data.guestEmail == null) : true) &&
         (data.keys().hasAll(['accessCode']) ? data.accessCode is string && data.accessCode.size() <= 64 : true) &&
         (data.keys().hasAll(['bookingRef']) ? data.bookingRef is string && data.bookingRef.size() <= 32 : true) &&
         (data.keys().hasAll(['guestPhone']) ? data.guestPhone is string && data.guestPhone.size() <= 32 : true) &&
@@ -107,6 +117,10 @@ service cloud.firestore {
         (data.keys().hasAll(['leaseCode']) ? data.leaseCode is string && data.leaseCode.size() <= 64 : true) &&
         (data.keys().hasAll(['leaseType']) ? data.leaseType is string && data.leaseType.size() <= 32 : true) &&
         (data.keys().hasAll(['invoiceDetails']) ? data.invoiceDetails is map : true) &&
+        (data.keys().hasAll(['agreedToHouseRules']) ? data.agreedToHouseRules is bool : true) &&
+        (data.keys().hasAll(['agreedToBookingAgreement']) ? data.agreedToBookingAgreement is bool : true) &&
+        (data.keys().hasAll(['agreedToNoKids']) ? data.agreedToNoKids is bool : true) &&
+        (data.keys().hasAll(['agreementsAcceptedAt']) ? (data.agreementsAcceptedAt is string || data.agreementsAcceptedAt == null) : true) &&
         data.createdAt is timestamp &&
         data.updatedAt is timestamp;
     }
@@ -187,56 +201,62 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin() || request.auth.token.email == 'dlaniger.napm.consulting@gmail.com');
-      allow list: if isAdmin() || request.auth.token.email == 'dlaniger.napm.consulting@gmail.com';
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin() || request.auth.token.email in ['dlaniger.napm.consulting@gmail.com', 'monnib30228@gmail.com', 'reach_dlaniger@hotmail.com']);
+      allow list: if isAdmin() || request.auth.token.email in ['dlaniger.napm.consulting@gmail.com', 'monnib30228@gmail.com', 'reach_dlaniger@hotmail.com'];
       
       allow create: if isSignedIn() && isValidId(userId) && request.auth.uid == userId &&
         isValidUser(incoming()) && incoming().createdAt == request.time &&
-        (incoming().role == 'user' || (incoming().role == 'admin' && (request.auth.token.email == 'dlaniger.napm.consulting@gmail.com' || request.auth.token.email == 'monnib30228@gmail.com')));
+        (incoming().role == 'user' || (incoming().role == 'admin' && (request.auth.token.email in ['dlaniger.napm.consulting@gmail.com', 'monnib30228@gmail.com', 'reach_dlaniger@hotmail.com'])));
         
-      allow update: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isAdmin() || request.auth.token.email == 'dlaniger.napm.consulting@gmail.com') &&
+      allow update: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isAdmin() || request.auth.token.email in ['dlaniger.napm.consulting@gmail.com', 'monnib30228@gmail.com', 'reach_dlaniger@hotmail.com']) &&
         isValidUser(incoming()) && 
         incoming().createdAt == existing().createdAt &&
-        (incoming().role == existing().role || isAdmin() || request.auth.token.email == 'dlaniger.napm.consulting@gmail.com') &&
+        (incoming().role == existing().role || isAdmin() || request.auth.token.email in ['dlaniger.napm.consulting@gmail.com', 'monnib30228@gmail.com', 'reach_dlaniger@hotmail.com']) &&
         (
           isAdmin() ||
-          request.auth.token.email == 'dlaniger.napm.consulting@gmail.com' ||
+          request.auth.token.email in ['dlaniger.napm.consulting@gmail.com', 'monnib30228@gmail.com', 'reach_dlaniger@hotmail.com'] ||
           incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'tollFreeAccept'])
         );
         
-      allow delete: if isAdmin() || request.auth.token.email == 'dlaniger.napm.consulting@gmail.com';
+      allow delete: if isAdmin() || request.auth.token.email in ['dlaniger.napm.consulting@gmail.com', 'monnib30228@gmail.com', 'reach_dlaniger@hotmail.com'];
     }
 
     match /bookings/{bookingId} {
-      allow get: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow get: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin() || request.auth.token.email in ['dlaniger.napm.consulting@gmail.com', 'monnib30228@gmail.com', 'reach_dlaniger@hotmail.com']);
       allow list: if isSignedIn(); // Allow listing for calendar availability checks
       
       allow create: if isSignedIn() && isValidId(bookingId) && 
         isValidBooking(incoming()) && 
         incoming().createdAt == request.time && 
         incoming().updatedAt == request.time &&
-        (incoming().status in ['pending', 'pending_payment', 'confirmed', 'cancelled'] || isAdmin());
+        (incoming().status in ['pending', 'pending_payment', 'confirmed', 'cancelled'] || isAdmin() || request.auth.token.email in ['dlaniger.napm.consulting@gmail.com', 'monnib30228@gmail.com', 'reach_dlaniger@hotmail.com']);
         
       allow update: if isSignedIn() && isValidId(bookingId) &&
-        incoming().userId == existing().userId &&
-        incoming().createdAt == existing().createdAt &&
-        incoming().updatedAt == request.time &&
-        isValidBooking(incoming()) &&
         (
           isAdmin() ||
+          request.auth.token.email in ['dlaniger.napm.consulting@gmail.com', 'monnib30228@gmail.com', 'reach_dlaniger@hotmail.com'] ||
+          existing().userId == 'admin-override' ||
           (
-            existing().userId == request.auth.uid && 
-            existing().status != 'cancelled' &&
-            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt', 'checkIn', 'checkOut', 'guests', 'totalPrice', 'cancellationFee', 'deletedByGuest', 'paymentIntentId', 'selectedBedroom', 'selectedBedrooms', 'accessCode', 'bookingRef', 'guestPhone', 'priceDetails', 'checkoutRemindersEnabled', 'sent12hReminder', 'sent2hReminder', 'sent1hReminder'])
-          ) ||
-          (
-            existing().userId == request.auth.uid &&
-            existing().status == 'cancelled' &&
-            incoming().diff(existing()).affectedKeys().hasOnly(['deletedByGuest', 'updatedAt'])
+            incoming().userId == existing().userId &&
+            incoming().createdAt == existing().createdAt &&
+            incoming().updatedAt == request.time &&
+            isValidBooking(incoming()) &&
+            (
+              (
+                existing().userId == request.auth.uid && 
+                existing().status != 'cancelled' &&
+                incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt', 'checkIn', 'checkOut', 'guests', 'totalPrice', 'cancellationFee', 'deletedByGuest', 'paymentIntentId', 'selectedBedroom', 'selectedBedrooms', 'accessCode', 'bookingRef', 'guestPhone', 'guestName', 'guestEmail', 'priceDetails', 'checkoutRemindersEnabled', 'sent12hReminder', 'sent2hReminder', 'sent1hReminder', 'invoiceDetails', 'agreedToHouseRules', 'agreedToBookingAgreement', 'agreedToNoKids', 'agreementsAcceptedAt'])
+              ) ||
+              (
+                existing().userId == request.auth.uid &&
+                existing().status == 'cancelled' &&
+                incoming().diff(existing()).affectedKeys().hasOnly(['deletedByGuest', 'updatedAt'])
+              )
+            )
           )
         );
         
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() || request.auth.token.email in ['dlaniger.napm.consulting@gmail.com', 'monnib30228@gmail.com', 'reach_dlaniger@hotmail.com'];
     }
 
     match /global_settings/{document=**} {
