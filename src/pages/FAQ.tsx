@@ -65,12 +65,20 @@ export const FAQ: React.FC = () => {
       answer: "You can modify or cancel your booking directly by logging into your account and visiting the My Bookings page. Under each reservation, you will find options to edit dates or cancel. Please note that modifications or cancellations are subject to our cancellation rules and penalty thresholds based on the scheduled check-in date."
     },
     {
+      question: "Is REALCal Bookings responsible for guest personal property, valuables, or vehicles?",
+      answer: "REALCal Bookings is not responsible for any loss, theft, damage, or destruction of a guest’s personal property, cash, valuables, or vehicle during the stay. Guests acknowledge that they occupy the property at their own risk. The Host does not provide personal property insurance for guests. Guests are advised to obtain independent travel or renter's insurance to cover their personal belongings."
+    },
+    {
       question: "What are the check-in and check-out times at your Properties?",
       answer: "Standard check-in time begins at 4:00 PM on your check-in date, and check-out time is by 11:00 AM on your check-out date. These times ensure our cleaning staff has adequate time to prepare the property for the next guest."
     },
     {
       question: "What is the cancellation policy at your Properties?",
       answer: "At our Properties, cancellations can be made via the My Bookings section. Cancellations made outside of the late-cancellation window (typically 48 hours prior to check-in) are fully refundable. Late cancellations or same-day cancellations forfeit the cancellation option or are subject to fee penalties according to global policy settings."
+    },
+    {
+      question: "What is your liability policy regarding personal property and insurance?",
+      answer: "REALCal Bookings is not responsible for any loss, theft, damage, or destruction of a guest’s personal property, cash, valuables, or vehicle during the stay. Guests acknowledge that they occupy the property at their own risk. The Host does not provide personal property insurance for guests. Guests are advised to obtain independent travel or renter's insurance to cover their personal belongings."
     }
   ];
 

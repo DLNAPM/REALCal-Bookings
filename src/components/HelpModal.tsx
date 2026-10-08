@@ -67,6 +67,7 @@ export const HelpModal: React.FC = () => {
                                     <li><strong>Production Environment:</strong> Payments, guest records, and smart-lock physical integrations are live and fully active. Real charges will occur on standard transactions, and actual YAMIRY smart locks will be provisioned.</li>
                                     <li><strong>Security & Verification:</strong> Ensure all direct bookings go through proper identification and guest screening, as smart-lock authorization is automatically completed on successful checkout.</li>
                                     <li><strong>Liability & Support:</strong> The operators and hosting platform are not liable for property damage, unauthorized access incidents, or financial processing disputes resulting from improper manual overrides or IoT hardware disconnects.</li>
+                                    <li><strong>Personal Property & Guest Liability:</strong> REALCal Bookings is not responsible for any loss, theft, damage, or destruction of a guest’s personal property, cash, valuables, or vehicle during the stay. Guests acknowledge that they occupy the property at their own risk. The Host does not provide personal property insurance for guests. Guests are advised to obtain independent travel or renter's insurance to cover their personal belongings.</li>
                                 </ul>
                             </section>
                         </div>

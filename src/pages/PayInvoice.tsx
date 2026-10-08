@@ -350,7 +350,7 @@ export const PayInvoice: React.FC = () => {
                     BOOKING AGREEMENT
                   </span>
                   <span className="text-slate-300 text-xs sm:text-sm">
-                    In consideration of being allowed to stay at this property, the guest agrees to release and hold harmless the Property from any and all liability for injuries, including falls, cuts, and burns. Guest uses all facilities at their own risk.
+                    In consideration of being allowed to stay at this property, the guest agrees to release and hold harmless the Property from any and all liability for injuries, including falls, cuts, and burns. Guest uses all facilities at their own risk. REALCal Bookings is not responsible for any loss, theft, damage, or destruction of a guest’s personal property, cash, valuables, or vehicle during the stay. Guests acknowledge that they occupy the property at their own risk. The Host does not provide personal property insurance for guests. Guests are advised to obtain independent travel or renter's insurance to cover their personal belongings.
                   </span>
                 </div>
               </label>

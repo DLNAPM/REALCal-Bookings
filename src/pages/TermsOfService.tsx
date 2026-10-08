@@ -78,11 +78,16 @@ export const TermsOfService: React.FC = () => {
             <section>
               <h3 className="text-2xl font-bold text-slate-900 mb-4 flex items-center gap-3">
                 <span className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center text-sm font-black">4</span>
-                Liability
+                Liability & Personal Property
               </h3>
-              <p className="text-slate-600 leading-relaxed font-medium">
-                REALCal Bookings is not liable for data delivery failures or interruptions caused by mobile carrier networks. Property access is contingent upon successful identity verification and payment.
-              </p>
+              <div className="space-y-3 text-slate-600 leading-relaxed font-medium">
+                <p>
+                  REALCal Bookings is not responsible for any loss, theft, damage, or destruction of a guest’s personal property, cash, valuables, or vehicle during the stay. Guests acknowledge that they occupy the property at their own risk. The Host does not provide personal property insurance for guests. Guests are advised to obtain independent travel or renter's insurance to cover their personal belongings.
+                </p>
+                <p>
+                  REALCal Bookings is not liable for data delivery failures or interruptions caused by mobile carrier networks. Property access is contingent upon successful identity verification and payment.
+                </p>
+              </div>
             </section>
 
             <section className="pt-8 border-t border-slate-100">
