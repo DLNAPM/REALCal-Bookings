@@ -3728,47 +3728,58 @@ async function startServer() {
     }
   });
 
-  // Manually trigger or resend Stay Survey Email (e.g. from Admin Dashboard)
+  // Manually trigger or resend Stay Survey & Review Reminder Email (e.g. from Admin Dashboard)
   app.post("/api/send-survey-email", async (req, res) => {
     console.log("[API] Send Survey Email hit");
     try {
-      const { bookingId, leaseId, guestEmail, guestName, propertyName } = req.body;
+      const { bookingId, leaseId, guestEmail, guestName, guestPhone, propertyName, sendSms = false, customNote } = req.body;
       const appUrl = `${req.protocol}://${req.get('host')}`;
 
       let targetEmail = guestEmail;
       let targetName = guestName || "Guest";
+      let targetPhone = guestPhone || "";
       let targetProperty = propertyName || "Stonewall Villa";
       let targetRef = bookingId || leaseId || "";
       let stayType = bookingId ? "booking" : (leaseId ? "lease" : "manual_booking");
 
       if (db && bookingId) {
-        const bDoc = await db.collection("bookings").doc(bookingId).get();
-        if (bDoc.exists) {
-          const b = bDoc.data() || {};
-          targetEmail = targetEmail || b.guestEmail;
-          targetName = targetName === "Guest" ? (b.guestName || "Guest") : targetName;
-          targetRef = b.bookingRef || bookingId;
-          if (!propertyName && b.propertyId) {
-            const pDoc = await db.collection("properties").doc(b.propertyId).get();
-            if (pDoc.exists) targetProperty = pDoc.data()?.name || targetProperty;
+        try {
+          const bDoc = await db.collection("bookings").doc(bookingId).get();
+          if (bDoc.exists) {
+            const b = bDoc.data() || {};
+            targetEmail = targetEmail || b.guestEmail;
+            targetName = targetName === "Guest" ? (b.guestName || "Guest") : targetName;
+            targetPhone = targetPhone || b.guestPhone || "";
+            targetRef = b.bookingRef || bookingId;
+            if (!propertyName && b.propertyId) {
+              const pDoc = await db.collection("properties").doc(b.propertyId).get();
+              if (pDoc.exists) targetProperty = pDoc.data()?.name || targetProperty;
+            }
+            await db.collection("bookings").doc(bookingId).update({
+              sentSurveyEmail: true,
+              sentSurveyEmailAt: admin.firestore.FieldValue.serverTimestamp()
+            });
           }
-          await db.collection("bookings").doc(bookingId).update({
-            sentSurveyEmail: true,
-            sentSurveyEmailAt: admin.firestore.FieldValue.serverTimestamp()
-          });
+        } catch (dbErr: any) {
+          console.warn("[API] DB read/update warning for survey email:", dbErr.message);
         }
       } else if (db && leaseId) {
-        const lDoc = await db.collection("leases").doc(leaseId).get();
-        if (lDoc.exists) {
-          const l = lDoc.data() || {};
-          targetEmail = targetEmail || l.tenantEmail;
-          targetName = targetName === "Guest" ? (l.tenantName || "Resident") : targetName;
-          targetRef = l.leaseCode || leaseId;
-          targetProperty = l.propertyNameOrRoom || targetProperty;
-          await db.collection("leases").doc(leaseId).update({
-            sentSurveyEmail: true,
-            sentSurveyEmailAt: admin.firestore.FieldValue.serverTimestamp()
-          });
+        try {
+          const lDoc = await db.collection("leases").doc(leaseId).get();
+          if (lDoc.exists) {
+            const l = lDoc.data() || {};
+            targetEmail = targetEmail || l.tenantEmail;
+            targetName = targetName === "Guest" ? (l.tenantName || "Resident") : targetName;
+            targetPhone = targetPhone || l.tenantPhone || "";
+            targetRef = l.leaseCode || leaseId;
+            targetProperty = l.propertyNameOrRoom || targetProperty;
+            await db.collection("leases").doc(leaseId).update({
+              sentSurveyEmail: true,
+              sentSurveyEmailAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+          }
+        } catch (dbErr: any) {
+          console.warn("[API] DB lease update warning for survey email:", dbErr.message);
         }
       }
 
@@ -3785,9 +3796,120 @@ async function startServer() {
         stayType
       });
 
-      res.json({ success: sent, guestEmail: targetEmail });
+      // Optional SMS dispatch if enabled and phone number available
+      let smsSent = false;
+      const phoneToUse = targetPhone ? formatPhoneToE164(targetPhone) : "";
+      if (sendSms && phoneToUse) {
+        const tSid = process.env.TWILIO_ACCOUNT_SID;
+        const tTok = process.env.TWILIO_AUTH_TOKEN;
+        const tFrom = process.env.TWILIO_PHONE_NUMBER;
+        if (tSid && tTok && tSid.startsWith('AC') && !tSid.includes('PROVIDE_REAL') && tFrom) {
+          try {
+            const twilioPkg = await import('twilio');
+            const twilio = twilioPkg.default || twilioPkg;
+            const twilioClient = (twilio as any)(tSid, tTok);
+            const normalizedBase = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl;
+            const surveyUrl = `${normalizedBase}/survey?ref=${encodeURIComponent(targetRef)}&property=${encodeURIComponent(targetProperty)}&guest=${encodeURIComponent(targetName)}&email=${encodeURIComponent(targetEmail)}&stayType=${encodeURIComponent(stayType)}`;
+            const reviewsUrl = `${normalizedBase}/reviews?prop=${encodeURIComponent(targetProperty)}&ref=${encodeURIComponent(targetRef)}`;
+            
+            const smsText = `Hi ${targetName}, thank you for staying at ${targetProperty}! We'd love your feedback: please take our 5-question survey (${surveyUrl}) or leave a quick review (${reviewsUrl}). Thank you! RealCal Bookings`;
+            await twilioClient.messages.create({ body: smsText, from: tFrom, to: phoneToUse });
+            smsSent = true;
+          } catch (smsErr: any) {
+            console.warn("[API] SMS survey reminder dispatch warning:", smsErr.message);
+          }
+        }
+      }
+
+      res.json({ success: sent, guestEmail: targetEmail, smsSent });
     } catch (err: any) {
       console.error("[API] Error sending survey email:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Batch send Survey & Review Reminders to multiple past guests
+  app.post("/api/send-batch-survey-reminders", async (req, res) => {
+    console.log("[API] Send Batch Survey Reminders hit");
+    try {
+      const { items, sendSms = false } = req.body;
+      if (!Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ error: "items array is required with at least one recipient." });
+      }
+
+      const appUrl = `${req.protocol}://${req.get('host')}`;
+      const results: Array<{ id: string; email: string; success: boolean; error?: string; smsSent?: boolean }> = [];
+
+      for (const item of items) {
+        const { bookingId, leaseId, guestEmail, guestName, guestPhone, propertyName, bookingRef } = item;
+        const targetEmail = guestEmail?.trim();
+        const targetName = guestName?.trim() || "Guest";
+        const targetProperty = propertyName || "Stonewall Villa";
+        const targetRef = bookingRef || bookingId || leaseId || "";
+        const stayType = bookingId ? "booking" : (leaseId ? "lease" : "manual_booking");
+
+        if (!targetEmail) {
+          results.push({ id: bookingId || leaseId || "unknown", email: "", success: false, error: "Missing email" });
+          continue;
+        }
+
+        try {
+          const sent = await sendStaySurveyEmail({
+            guestName: targetName,
+            guestEmail: targetEmail,
+            propertyName: targetProperty,
+            bookingRef: targetRef,
+            appUrl,
+            stayType
+          });
+
+          let smsSent = false;
+          const phoneToUse = guestPhone ? formatPhoneToE164(guestPhone) : "";
+          if (sendSms && phoneToUse) {
+            const tSid = process.env.TWILIO_ACCOUNT_SID;
+            const tTok = process.env.TWILIO_AUTH_TOKEN;
+            const tFrom = process.env.TWILIO_PHONE_NUMBER;
+            if (tSid && tTok && tSid.startsWith('AC') && !tSid.includes('PROVIDE_REAL') && tFrom) {
+              try {
+                const twilioPkg = await import('twilio');
+                const twilio = twilioPkg.default || twilioPkg;
+                const twilioClient = (twilio as any)(tSid, tTok);
+                const normalizedBase = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl;
+                const surveyUrl = `${normalizedBase}/survey?ref=${encodeURIComponent(targetRef)}&property=${encodeURIComponent(targetProperty)}&guest=${encodeURIComponent(targetName)}&email=${encodeURIComponent(targetEmail)}&stayType=${encodeURIComponent(stayType)}`;
+                const reviewsUrl = `${normalizedBase}/reviews?prop=${encodeURIComponent(targetProperty)}&ref=${encodeURIComponent(targetRef)}`;
+                const smsText = `Hi ${targetName}, thank you for staying at ${targetProperty}! We'd love your feedback: please take our 5-question survey (${surveyUrl}) or leave a quick review (${reviewsUrl}). Thank you! RealCal Bookings`;
+                await twilioClient.messages.create({ body: smsText, from: tFrom, to: phoneToUse });
+                smsSent = true;
+              } catch (smsErr) {}
+            }
+          }
+
+          if (db && bookingId) {
+            try {
+              await db.collection("bookings").doc(bookingId).update({
+                sentSurveyEmail: true,
+                sentSurveyEmailAt: admin.firestore.FieldValue.serverTimestamp()
+              });
+            } catch (e) {}
+          } else if (db && leaseId) {
+            try {
+              await db.collection("leases").doc(leaseId).update({
+                sentSurveyEmail: true,
+                sentSurveyEmailAt: admin.firestore.FieldValue.serverTimestamp()
+              });
+            } catch (e) {}
+          }
+
+          results.push({ id: bookingId || leaseId || targetRef, email: targetEmail, success: !!sent, smsSent });
+        } catch (itemErr: any) {
+          results.push({ id: bookingId || leaseId || targetRef, email: targetEmail, success: false, error: itemErr.message });
+        }
+      }
+
+      const sentCount = results.filter(r => r.success).length;
+      res.json({ success: true, count: sentCount, total: items.length, results });
+    } catch (err: any) {
+      console.error("[API] Error processing batch survey reminders:", err);
       res.status(500).json({ error: err.message });
     }
   });

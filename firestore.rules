@@ -318,5 +318,17 @@ service cloud.firestore {
       allow create: if true;
       allow update, delete: if isAdmin();
     }
+
+    match /surveys/{surveyId} {
+      allow read: if isAdmin();
+      allow create: if true;
+      allow update, delete: if isAdmin();
+    }
+
+    match /reviews/{reviewId} {
+      allow get, list: if true;
+      allow create: if true;
+      allow update, delete: if isAdmin();
+    }
   }
 }

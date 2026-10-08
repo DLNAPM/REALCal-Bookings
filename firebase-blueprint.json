@@ -118,6 +118,48 @@
         "createdAt": { "type": "string" }
       },
       "required": ["propertyId", "propertyNameOrRoom", "startDate", "endDate", "tenantName", "tenantEmail", "status", "createdAt"]
+    },
+    "survey": {
+      "title": "Survey",
+      "description": "5-question stay surveys submitted by guests.",
+      "type": "object",
+      "properties": {
+        "guestName": { "type": "string" },
+        "guestEmail": { "type": "string" },
+        "guestPhone": { "type": "string" },
+        "propertyName": { "type": "string" },
+        "bookingRef": { "type": "string" },
+        "stayType": { "type": "string" },
+        "comfort": { "type": "string" },
+        "comfortRating": { "type": "number" },
+        "amenities": { "type": "string" },
+        "cleanliness": { "type": "string" },
+        "operations": { "type": "string" },
+        "futureIdeas": { "type": "string" },
+        "wouldStayAgain": { "type": "string" },
+        "overallRating": { "type": "number" },
+        "publicReviewComment": { "type": "string" },
+        "publishAsReview": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["guestName", "guestEmail", "propertyName", "createdAt"]
+    },
+    "review": {
+      "title": "Review",
+      "description": "Verified guest stay reviews and ratings.",
+      "type": "object",
+      "properties": {
+        "author": { "type": "string" },
+        "role": { "type": "string" },
+        "rating": { "type": "number" },
+        "title": { "type": "string" },
+        "comment": { "type": "string" },
+        "propertyName": { "type": "string" },
+        "bookingRef": { "type": "string" },
+        "verified": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["author", "rating", "comment", "propertyName", "createdAt"]
     }
   },
   "firestore": {
@@ -148,6 +190,14 @@
     "/lease_requests/{requestId}": {
       "schema": { "$ref": "#/entities/lease_request" },
       "description": "Store client lease request forms."
+    },
+    "/surveys/{surveyId}": {
+      "schema": { "$ref": "#/entities/survey" },
+      "description": "Store guest survey feedback."
+    },
+    "/reviews/{reviewId}": {
+      "schema": { "$ref": "#/entities/review" },
+      "description": "Store public guest reviews."
     }
   }
 }

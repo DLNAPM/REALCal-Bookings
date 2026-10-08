@@ -1,15 +1,17 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useAuth, isAdminEmail } from '../contexts/AuthContext';
 import { db, signOut } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, serverTimestamp, getDocs, doc, deleteDoc, updateDoc, setDoc, getDoc, writeBatch, orderBy } from 'firebase/firestore';
 import { Navigate, useNavigate, Link } from 'react-router-dom';
 import { format, eachDayOfInterval, parseISO, addDays } from 'date-fns';
 import { cn } from '../lib/utils';
-import { BlackoutDate, PricingRule, Booking, Property, PropertyManager, PropertyImage, getImageUrl, getImageRoomNumber, DiscountCode } from '../types';
+import { BlackoutDate, PricingRule, Booking, Property, PropertyManager, PropertyImage, getImageUrl, getImageRoomNumber, DiscountCode, SurveyResponse, Review, Lease } from '../types';
 import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight, RefreshCw, MessageSquare, CheckCircle, Loader2, FileText, XCircle, HelpCircle, MapPin, Upload, Database, Ticket, Send, Clock, Bell, BellRing, FileCheck, RotateCw, CheckSquare, Copy, Search, X, AlertTriangle, Video, Eraser, Pencil, Sparkles, Megaphone, Building } from 'lucide-react';
 import { AdvertisementFlyerModal } from '../components/AdvertisementFlyerModal';
 import { ProofOfResidencyModal } from '../components/ProofOfResidencyModal';
 import { AdminAlarmsBanner, AdminAlarmsModal } from '../components/AdminAlarmsPanel';
+import { AdminSurveyReminders } from '../components/AdminSurveyReminders';
+import { INITIAL_REVIEWS } from '../data/initialReviews';
 import { v4 as uuidv4 } from 'uuid';
 
 const formatPhoneE164 = (phone: string) => {
@@ -56,6 +58,8 @@ export const AdminDashboard: React.FC = () => {
   const [properties, setProperties] = useState<Property[]>([]);
   const [leaseRequests, setLeaseRequests] = useState<any[]>([]);
   const [leases, setLeases] = useState<any[]>([]);
+  const [surveys, setSurveys] = useState<SurveyResponse[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
   const [approvingLeaseId, setApprovingLeaseId] = useState<string | null>(null);
   const [leaseGenerationError, setLeaseGenerationError] = useState<string | null>(null);
   const [leaseCodes, setLeaseCodes] = useState<Record<string, string>>({});
@@ -350,6 +354,26 @@ export const AdminDashboard: React.FC = () => {
         if (props.length > 0 && !activePropertyId) setActivePropertyId(props[0].id);
     }, (error) => {
       console.error("Admin properties snapshot error:", error);
+    });
+
+    onSnapshot(query(collection(db, 'surveys')), (snap) => {
+      setSurveys(snap.docs.map(d => ({ id: d.id, ...d.data() } as SurveyResponse)));
+    }, (error) => {
+      console.error("Admin surveys snapshot error:", error);
+    });
+
+    onSnapshot(query(collection(db, 'reviews')), (snap) => {
+      const dbReviews = snap.docs.map(d => ({ id: d.id, ...d.data() } as Review));
+      const allReviews = [...dbReviews];
+      INITIAL_REVIEWS.forEach(ir => {
+        if (!allReviews.some(r => r.id === ir.id)) {
+          allReviews.push(ir);
+        }
+      });
+      setReviews(allReviews);
+    }, (error) => {
+      console.error("Admin reviews snapshot error:", error);
+      setReviews(INITIAL_REVIEWS);
     });
   }, []);
 
@@ -3369,6 +3393,69 @@ C.&S.H. Group Properties, LLC
     .filter(b => b.propertyId === activePropertyId)
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
+  const pendingSurveyRemindersCount = useMemo(() => {
+    const now = new Date();
+    const isPastDate = (dateStr: string) => {
+      try {
+        const d = new Date(dateStr.split('T')[0] + 'T23:59:59');
+        return !isNaN(d.getTime()) && d < now;
+      } catch {
+        return false;
+      }
+    };
+
+    let count = 0;
+    bookings.forEach((b) => {
+      if (b.status === 'cancelled') return;
+      const hasEnded = b.checkedOut === true || (b as any).status === 'completed' || (b as any).status === 'checked_out' || (b.checkOut && isPastDate(b.checkOut));
+      if (!hasEnded) return;
+      const email = (b.guestEmail || '').trim().toLowerCase();
+      const hasSurvey = surveys.some(s => (s.bookingRef && (s.bookingRef === b.id || s.bookingRef === b.bookingRef)) || (email && s.guestEmail && s.guestEmail.trim().toLowerCase() === email)) || (b as any).surveyCompleted;
+      const hasReview = reviews.some(r => (r.bookingRef && (r.bookingRef === b.id || r.bookingRef === b.bookingRef)) || (email && (r as any).email && (r as any).email.trim().toLowerCase() === email));
+      if (!hasSurvey || !hasReview) count++;
+    });
+
+    leases.forEach((l) => {
+      if (l.status === 'revoked') return;
+      const hasEnded = l.status === 'terminating' || (l.endDate && isPastDate(l.endDate));
+      if (!hasEnded) return;
+      const email = (l.tenantEmail || '').trim().toLowerCase();
+      const hasSurvey = surveys.some(s => (s.bookingRef && (s.bookingRef === l.id || s.bookingRef === l.leaseCode)) || (email && s.guestEmail && s.guestEmail.trim().toLowerCase() === email));
+      const hasReview = reviews.some(r => (r.bookingRef && (r.bookingRef === l.id || r.bookingRef === l.leaseCode)) || (email && (r as any).email && (r as any).email.trim().toLowerCase() === email));
+      if (!hasSurvey || !hasReview) count++;
+    });
+
+    return count;
+  }, [bookings, leases, surveys, reviews]);
+
+  const handleUpdateBookingFromReminders = async (bookingId: string, updates: Partial<Booking>) => {
+    setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, ...updates } : b));
+    if (db) {
+      try {
+        await updateDoc(doc(db, 'bookings', bookingId), {
+          ...updates,
+          updatedAt: serverTimestamp(),
+        });
+      } catch (e) {
+        console.warn("Client booking reminder update warning:", e);
+      }
+    }
+  };
+
+  const handleUpdateLeaseFromReminders = async (leaseId: string, updates: Partial<Lease>) => {
+    setLeases(prev => prev.map(l => l.id === leaseId ? { ...l, ...updates } : l));
+    if (db) {
+      try {
+        await updateDoc(doc(db, 'leases', leaseId), {
+          ...updates,
+          updatedAt: serverTimestamp(),
+        });
+      } catch (e) {
+        console.warn("Client lease reminder update warning:", e);
+      }
+    }
+  };
+
   return (
     <div className="bg-slate-50 min-h-screen p-6 font-sans text-slate-900 overflow-hidden">
        <div className="max-w-7xl mx-auto space-y-5">
@@ -3416,6 +3503,21 @@ C.&S.H. Group Properties, LLC
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="text-lg font-bold text-indigo-900">Admin Quick Stats</h3>
                     <div className="flex gap-2 flex-wrap items-center">
+                        <button
+                          onClick={() => {
+                            const el = document.getElementById('admin-survey-reminders-section');
+                            if (el) el.scrollIntoView({ behavior: 'smooth' });
+                          }}
+                          className="text-xs bg-amber-50 text-amber-900 hover:bg-amber-100 border border-amber-300 font-bold px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
+                          title="Target & follow up with past guests who have not completed a Stay Survey or Review"
+                        >
+                          <MessageSquare size={14} className="text-amber-600" /> Survey & Review Reminders
+                          {pendingSurveyRemindersCount > 0 && (
+                            <span className="bg-amber-500 text-white text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ml-0.5">
+                              {pendingSurveyRemindersCount}
+                            </span>
+                          )}
+                        </button>
                         <button
                           onClick={() => setShowAlarmsModal(true)}
                           className="text-xs bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 font-bold px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
@@ -5013,6 +5115,29 @@ C.&S.H. Group Properties, LLC
                                      </button>
                                   )}
 
+                                  {/* Survey & Review Reminder Shortcut */}
+                                  {b.status !== 'cancelled' && (
+                                     <button
+                                        type="button"
+                                        onClick={() => {
+                                           const el = document.getElementById('admin-survey-reminders-section');
+                                           if (el) el.scrollIntoView({ behavior: 'smooth' });
+                                        }}
+                                        className={cn(
+                                           "text-[10px] font-bold px-2 py-1 rounded-lg transition-all inline-flex items-center gap-1 cursor-pointer align-middle mr-2 shadow-2xs",
+                                           b.surveyCompleted
+                                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                              : b.sentSurveyEmail
+                                                 ? "bg-indigo-50 text-indigo-700 border border-indigo-200"
+                                                 : "bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300"
+                                        )}
+                                        title={b.surveyCompleted ? "Survey completed by guest" : b.sentSurveyEmail ? "Survey reminder sent (Click to view Survey Hub)" : "Send Survey & Review reminder to guest"}
+                                     >
+                                        <MessageSquare size={11} className={b.surveyCompleted ? "text-emerald-600" : b.sentSurveyEmail ? "text-indigo-600" : "text-amber-600"} />
+                                        {b.surveyCompleted ? 'Survey Done' : b.sentSurveyEmail ? 'Reminded' : 'Remind Survey'}
+                                     </button>
+                                  )}
+
                                   {b.status === 'confirmed' && (
                                      <button 
                                        onClick={() => handleAdminCancelBooking(b.id)}
@@ -5262,6 +5387,36 @@ C.&S.H. Group Properties, LLC
                    </div>
                 </div>
              </div>
+          </div>
+
+          {/* Dedicated Survey & Review Reminders Automation Panel */}
+          <div id="admin-survey-reminders-section" className="mt-8">
+             <AdminSurveyReminders
+               bookings={bookings}
+               leases={leases}
+               properties={properties}
+               surveys={surveys}
+               reviews={reviews}
+               onRefreshData={() => {
+                 if (db) {
+                   getDocs(collection(db, 'surveys'))
+                     .then(snap => setSurveys(snap.docs.map(d => ({ id: d.id, ...d.data() } as SurveyResponse))))
+                     .catch(console.error);
+                   getDocs(collection(db, 'reviews'))
+                     .then(snap => {
+                       const dbReviews = snap.docs.map(d => ({ id: d.id, ...d.data() } as Review));
+                       const allReviews = [...dbReviews];
+                       INITIAL_REVIEWS.forEach(ir => {
+                         if (!allReviews.some(r => r.id === ir.id)) allReviews.push(ir);
+                       });
+                       setReviews(allReviews);
+                     })
+                     .catch(console.error);
+                 }
+               }}
+               onUpdateBooking={handleUpdateBookingFromReminders}
+               onUpdateLease={handleUpdateLeaseFromReminders}
+             />
           </div>
 
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm mt-8">

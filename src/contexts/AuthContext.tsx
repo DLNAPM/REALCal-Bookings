@@ -82,6 +82,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.log("User record created successfully.");
           } else {
             console.log("User record found. Setting up real-time listener.");
+            if (isAdminEmail(firebaseUser.email) && userSnap.data()?.role !== 'admin') {
+              console.log("Upgrading user record to admin role in Firestore...");
+              await setDoc(userRef, { role: 'admin' }, { merge: true });
+            }
           }
 
           // Set up real-time listener for the user record
