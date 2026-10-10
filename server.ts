@@ -1195,7 +1195,23 @@ async function createInvoicePDF(booking: any, propertyName: string, priceDetails
 
 async function startServer() {
   const app = express();
-  const PORT = process.env.PORT || 3000;
+
+  // Parse CLI arguments for port
+  let cliPort: number | null = null;
+  const argv = process.argv;
+  for (let i = 0; i < argv.length; i++) {
+    if ((argv[i] === '--port' || argv[i] === '-p') && argv[i + 1]) {
+      const p = parseInt(argv[i + 1], 10);
+      if (!isNaN(p)) cliPort = p;
+    } else if (argv[i].startsWith('--port=')) {
+      const p = parseInt(argv[i].split('=')[1], 10);
+      if (!isNaN(p)) cliPort = p;
+    }
+  }
+
+  const isProd = process.env.NODE_ENV === "production";
+  // In development, dev server must run on port 3000 (or CLI specified port). In production, respect process.env.PORT.
+  const PORT = cliPort || (isProd ? (process.env.PORT || 3000) : 3000);
 
   // Trust proxy for accurate protocol & host recognition behind reverse proxies
   app.set('trust proxy', true);
@@ -1206,10 +1222,9 @@ async function startServer() {
     next();
   });
 
-  const isProd = process.env.NODE_ENV === "production";
   const rootDir = process.cwd();
   const distPath = path.resolve(rootDir, "dist");
-  console.log(`[Server] Starting in ${isProd ? "production" : "development"} mode.`);
+  console.log(`[Server] Starting in ${isProd ? "production" : "development"} mode on port ${PORT}.`);
   console.log(`[Server] Root: ${rootDir}, Dist: ${distPath}`);
 
   // Base Middlewares
@@ -4133,7 +4148,7 @@ async function startServer() {
     console.log("[Server] Mounting Vite middleware for development");
     const { createServer } = await import("vite");
     const vite = await createServer({
-      server: { middlewareMode: true },
+      server: { middlewareMode: true, hmr: false },
       appType: "spa",
     });
     app.use(vite.middlewares);

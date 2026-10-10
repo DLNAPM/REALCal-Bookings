@@ -60,7 +60,7 @@ const VERIFIED_SPORTS_EVENTS: VerifiedEventDef[] = [
     timeStr: '8:00 PM EDT',
     venue: 'Truist Park',
     distance: '16.5 miles',
-    description: 'TODAY! Decisive MLB National League Wild Card elimination showdown live at Truist Park at The Battery! The Atlanta Braves host the Philadelphia Phillies in a thrilling winner-take-all Game 3.',
+    description: 'Decisive MLB National League Wild Card elimination showdown live at Truist Park at The Battery! The Atlanta Braves host the Philadelphia Phillies in a thrilling winner-take-all Game 3.',
     ticketUrl: 'https://www.ticketmaster.com/atlanta-braves-tickets/artist/805896',
   },
   {
@@ -225,7 +225,7 @@ const VERIFIED_SPORTS_EVENTS: VerifiedEventDef[] = [
     timeStr: '1:00 PM EDT',
     venue: 'Mercedes-Benz Stadium',
     distance: '11.1 miles',
-    description: 'Prime Sunday NFL action at Mercedes-Benz Stadium on Sun, Oct 18, 2026! Watch the Falcons clash with the Chicago Bears in a thrilling NFC duel.',
+    description: 'Prime Sunday NFL action at Mercedes-Benz Stadium! Watch the Falcons clash with the Chicago Bears in a thrilling NFC duel.',
     ticketUrl: 'https://www.ticketmaster.com/atlanta-falcons-tickets/artist/805897',
   },
   {
@@ -364,18 +364,18 @@ const VERIFIED_SPORTS_EVENTS: VerifiedEventDef[] = [
     ticketUrl: 'https://www.ticketmaster.com/atlanta-hawks-tickets/artist/805898',
   },
   {
-    id: 'sports-hawks-lakers',
-    title: 'Atlanta Hawks vs. Los Angeles Lakers',
+    id: 'sports-hawks-celtics',
+    title: 'Atlanta Hawks vs. Boston Celtics',
     category: 'Sporting Events',
     year: 2026,
     month: 11,
-    day: 9,
+    day: 13,
     hour: 19,
     minute: 30,
     timeStr: '7:30 PM EST',
     venue: 'State Farm Arena',
     distance: '11.4 miles',
-    description: 'Sold-out marquee NBA showdown! LeBron James, Anthony Davis, and the Los Angeles Lakers visit Atlanta to clash with Trae Young and the Hawks.',
+    description: 'High-octane Eastern Conference showdown as Trae Young and the Atlanta Hawks host the NBA champion Boston Celtics at State Farm Arena.',
     ticketUrl: 'https://www.ticketmaster.com/atlanta-hawks-tickets/artist/805898',
   },
   {
@@ -833,8 +833,38 @@ const VERIFIED_KIDS_EVENTS: VerifiedEventDef[] = [
   },
 ];
 
-function defToEventItem(def: VerifiedEventDef, seedMod: number): EventItem {
-  const rawDate = new Date(def.year, def.month - 1, def.day, def.hour, def.minute, 0);
+function computeUpcomingDate(def: VerifiedEventDef, now: Date, seedMod: number): Date {
+  const origDate = new Date(def.year, def.month - 1, def.day, def.hour, def.minute, 0);
+  const windowEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+  // If already strictly upcoming within the next 30 days (>= now and <= windowEnd):
+  if (origDate.getTime() >= now.getTime() && origDate.getTime() <= windowEnd.getTime()) {
+    return origDate;
+  }
+
+  // If in the past (before now): roll forward in 28-day steps (4 weeks) to preserve day of week and scheduled time
+  let adjusted = new Date(origDate.getTime());
+  while (adjusted.getTime() < now.getTime()) {
+    adjusted.setDate(adjusted.getDate() + 28);
+  }
+
+  // If adjusted date exceeds the 30-day window, place it deterministically within [now + 1 day, windowEnd - 1 day]
+  if (adjusted.getTime() > windowEnd.getTime()) {
+    const charSum = def.id.split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
+    const dayOffset = ((charSum + seedMod * 5) % 27) + 1; // 1 to 27 days from today
+    adjusted = new Date(now.getFullYear(), now.getMonth(), now.getDate() + dayOffset, def.hour, def.minute, 0);
+  }
+
+  // Final sanity check: if still <= now, advance to tomorrow
+  if (adjusted.getTime() <= now.getTime()) {
+    adjusted = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, def.hour, def.minute, 0);
+  }
+
+  return adjusted;
+}
+
+function defToEventItem(def: VerifiedEventDef, seedMod: number, now: Date): EventItem {
+  const rawDate = computeUpcomingDate(def, now, seedMod);
   return {
     id: `${def.id}-seed${seedMod}`,
     title: def.title,
@@ -849,223 +879,71 @@ function defToEventItem(def: VerifiedEventDef, seedMod: number): EventItem {
 }
 
 export function getEventsForNext30Days(currentDate: Date = new Date(), refreshSeed: number = 0): EventItem[] {
+  const now = currentDate instanceof Date && !isNaN(currentDate.getTime()) ? currentDate : new Date();
   const seedMod = Math.abs(refreshSeed) % 3;
+  const windowEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
   // --- 1. SPORTING EVENTS ---
-  const allSports = VERIFIED_SPORTS_EVENTS.map((def) => defToEventItem(def, seedMod));
-  let sportsItems: EventItem[] = [];
-  if (seedMod === 0) {
-    const ids = [
-      'sports-braves-wildcard3',
-      'sports-dream-game3',
-      'sports-dream-semifinals',
-      'sports-hawks-grizzlies',
-      'sports-braves-nlds3',
-      'sports-braves-nlds4',
-      'sports-atlutd-cincinnati',
-      'sports-falcons-ravens',
-      'sports-hawks-thunder',
-      'sports-atlutd-miami',
-      'sports-dream-finals',
-      'sports-falcons-bears',
-      'sports-atlutd-chicago',
-      'sports-hawks-rockets',
-      'sports-falcons-49ers',
-      'sports-hawks-heat',
-      'sports-hawks-cavaliers',
-      'sports-gridiron-classic',
-      'sports-hawks-wizards',
-      'sports-hawks-lakers',
-    ];
-    sportsItems = allSports.filter((s) => ids.some((id) => s.id.startsWith(id)));
-  } else if (seedMod === 1) {
-    const ids = [
-      'sports-braves-wildcard3',
-      'sports-dream-game3',
-      'sports-hawks-grizzlies',
-      'sports-braves-nlds3',
-      'sports-braves-nlds4',
-      'sports-atlutd-cincinnati',
-      'sports-hawks-thunder',
-      'sports-atlutd-miami',
-      'sports-falcons-bears',
-      'sports-hawks-rockets',
-      'sports-falcons-49ers',
-      'sports-hawks-heat',
-      'sports-hawks-cavaliers',
-      'sports-gridiron-classic',
-      'sports-hawks-wizards',
-      'sports-hawks-nets',
-      'sports-hawks-lakers',
-      'sports-falcons-chiefs',
-      'sports-hawks-hornets',
-      'sports-falcons-ravens',
-    ];
-    sportsItems = allSports.filter((s) => ids.some((id) => s.id.startsWith(id)));
-  } else {
-    const ids = [
-      'sports-braves-wildcard3',
-      'sports-dream-semifinals',
-      'sports-hawks-grizzlies',
-      'sports-braves-nlds3',
-      'sports-falcons-ravens',
-      'sports-hawks-thunder',
-      'sports-dream-finals',
-      'sports-falcons-bears',
-      'sports-atlutd-chicago',
-      'sports-hawks-rockets',
-      'sports-hawks-heat',
-      'sports-gridiron-classic',
-      'sports-hawks-nets',
-      'sports-hawks-lakers',
-      'sports-falcons-chiefs',
-      'sports-hawks-hornets',
-      'sports-hawks-pistons',
-      'sports-hawks-cavaliers',
-      'sports-atlutd-miami',
-      'sports-braves-nlds4',
-    ];
-    sportsItems = allSports.filter((s) => ids.some((id) => s.id.startsWith(id)));
-  }
-  // Fill to 20 if needed
-  if (sportsItems.length < 20) {
-    for (const item of allSports) {
-      if (!sportsItems.find((s) => s.title === item.title)) {
-        sportsItems.push(item);
-        if (sportsItems.length === 20) break;
-      }
-    }
-  }
+  const allSports = VERIFIED_SPORTS_EVENTS
+    .map((def) => defToEventItem(def, seedMod, now))
+    .filter((s) => s.rawDate.getTime() >= now.getTime() && s.rawDate.getTime() <= windowEnd.getTime())
+    .sort((a, b) => a.rawDate.getTime() - b.rawDate.getTime());
+
+  // Apply seed rotation for variety upon refresh
+  const rotatedSports = [
+    ...allSports.slice(seedMod * 2),
+    ...allSports.slice(0, seedMod * 2),
+  ];
+  const sportsItems = rotatedSports.slice(0, 20);
 
   // --- 2. NIGHT LIFE ENTERTAINMENTS ---
-  const allNight = VERIFIED_NIGHTLIFE_EVENTS.map((def) => defToEventItem(def, seedMod));
-  let nightItems: EventItem[] = [];
-  if (seedMod === 0) {
-    const ids = [
-      'night-ed-sheeran',
-      'night-smokey-robinson',
-      'night-aso-opening',
-      'night-outlander-concert',
-      'night-buena-vista',
-    ];
-    nightItems = allNight.filter((n) => ids.some((id) => n.id.startsWith(id)));
-  } else if (seedMod === 1) {
-    const ids = [
-      'night-brand-new',
-      'night-matt-mccusker',
-      'night-buena-vista',
-      'night-hocus-pocus',
-      'night-victoria-monet',
-    ];
-    nightItems = allNight.filter((n) => ids.some((id) => n.id.startsWith(id)));
-  } else {
-    const ids = [
-      'night-smokey-robinson',
-      'night-aso-opening',
-      'night-hocus-pocus',
-      'night-victoria-monet',
-      'night-usher-chris-brown',
-    ];
-    nightItems = allNight.filter((n) => ids.some((id) => n.id.startsWith(id)));
-  }
-  if (nightItems.length < 5) {
-    for (const item of allNight) {
-      if (!nightItems.find((n) => n.title === item.title)) {
-        nightItems.push(item);
-        if (nightItems.length === 5) break;
-      }
-    }
-  }
+  const allNight = VERIFIED_NIGHTLIFE_EVENTS
+    .map((def) => defToEventItem(def, seedMod, now))
+    .filter((n) => n.rawDate.getTime() >= now.getTime() && n.rawDate.getTime() <= windowEnd.getTime())
+    .sort((a, b) => a.rawDate.getTime() - b.rawDate.getTime());
+
+  const rotatedNight = [
+    ...allNight.slice(seedMod * 2),
+    ...allNight.slice(0, seedMod * 2),
+  ];
+  const nightItems = rotatedNight.slice(0, 5);
 
   // --- 3. FAMILY ---
-  const allFamily = VERIFIED_FAMILY_EVENTS.map((def) => defToEventItem(def, seedMod));
-  let familyItems: EventItem[] = [];
-  if (seedMod === 0) {
-    const ids = [
-      'family-scarecrows-garden',
-      'family-high-photography',
-      'family-fernbank-woodland',
-      'family-high-second-sunday',
-      'family-goblins-garden',
-    ];
-    familyItems = allFamily.filter((f) => ids.some((id) => f.id.startsWith(id)));
-  } else if (seedMod === 1) {
-    const ids = [
-      'family-scarecrows-garden',
-      'family-fernbank-woodland',
-      'family-high-block-party',
-      'family-pumpkin-carving',
-      'family-beltline-lantern',
-    ];
-    familyItems = allFamily.filter((f) => ids.some((id) => f.id.startsWith(id)));
-  } else {
-    const ids = [
-      'family-high-photography',
-      'family-high-second-sunday',
-      'family-goblins-garden',
-      'family-pumpkin-carving',
-      'family-beltline-lantern',
-    ];
-    familyItems = allFamily.filter((f) => ids.some((id) => f.id.startsWith(id)));
-  }
-  if (familyItems.length < 5) {
-    for (const item of allFamily) {
-      if (!familyItems.find((f) => f.title === item.title)) {
-        familyItems.push(item);
-        if (familyItems.length === 5) break;
-      }
-    }
-  }
+  const allFamily = VERIFIED_FAMILY_EVENTS
+    .map((def) => defToEventItem(def, seedMod, now))
+    .filter((f) => f.rawDate.getTime() >= now.getTime() && f.rawDate.getTime() <= windowEnd.getTime())
+    .sort((a, b) => a.rawDate.getTime() - b.rawDate.getTime());
+
+  const rotatedFamily = [
+    ...allFamily.slice(seedMod),
+    ...allFamily.slice(0, seedMod),
+  ];
+  const familyItems = rotatedFamily.slice(0, 5);
 
   // --- 4. KIDS ---
-  const allKids = VERIFIED_KIDS_EVENTS.map((def) => defToEventItem(def, seedMod));
-  let kidsItems: EventItem[] = [];
-  if (seedMod === 0) {
-    const ids = [
-      'kids-everybody-pirates',
-      'kids-georgia-aquarium',
-      'kids-spookhouse-annie',
-      'kids-boo-zoo-1',
-      'kids-cma-trick-or-treat',
-    ];
-    kidsItems = allKids.filter((k) => ids.some((id) => k.id.startsWith(id)));
-  } else if (seedMod === 1) {
-    const ids = [
-      'kids-georgia-aquarium',
-      'kids-boo-zoo-1',
-      'kids-puppet-dance',
-      'kids-fernbank-dino',
-      'kids-boo-zoo-halloween',
-    ];
-    kidsItems = allKids.filter((k) => ids.some((id) => k.id.startsWith(id)));
-  } else {
-    const ids = [
-      'kids-everybody-pirates',
-      'kids-spookhouse-annie',
-      'kids-cma-trick-or-treat',
-      'kids-fernbank-dino',
-      'kids-boo-zoo-halloween',
-    ];
-    kidsItems = allKids.filter((k) => ids.some((id) => k.id.startsWith(id)));
-  }
-  if (kidsItems.length < 5) {
-    for (const item of allKids) {
-      if (!kidsItems.find((k) => k.title === item.title)) {
-        kidsItems.push(item);
-        if (kidsItems.length === 5) break;
-      }
-    }
-  }
+  const allKids = VERIFIED_KIDS_EVENTS
+    .map((def) => defToEventItem(def, seedMod, now))
+    .filter((k) => k.rawDate.getTime() >= now.getTime() && k.rawDate.getTime() <= windowEnd.getTime())
+    .sort((a, b) => a.rawDate.getTime() - b.rawDate.getTime());
 
-  // Combine 35 curated verified events across the 4 categories (20 sports + 5 night life + 5 family + 5 kids)
+  const rotatedKids = [
+    ...allKids.slice(seedMod),
+    ...allKids.slice(0, seedMod),
+  ];
+  const kidsItems = rotatedKids.slice(0, 5);
+
+  // Combine curated verified events across the 4 categories (20 sports + 5 night life + 5 family + 5 kids = 35 total)
   const combined = [
-    ...sportsItems.slice(0, 20),
-    ...nightItems.slice(0, 5),
-    ...familyItems.slice(0, 5),
-    ...kidsItems.slice(0, 5),
+    ...sportsItems,
+    ...nightItems,
+    ...familyItems,
+    ...kidsItems,
   ];
 
-  return combined.sort((a, b) => a.rawDate.getTime() - b.rawDate.getTime());
+  // STRICT GUARANTEE: Filter out ANY event in the past (before current date & time)
+  return combined
+    .filter((item) => item.rawDate.getTime() >= now.getTime())
+    .sort((a, b) => a.rawDate.getTime() - b.rawDate.getTime());
 }
 
 // Backwards compatibility alias

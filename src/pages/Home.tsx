@@ -28,14 +28,39 @@ export const Home: React.FC = () => {
 
     const isAdmin = user?.role === 'admin';
 
+    // Automatic Events Refresh: automatically recalculate events on mount, whenever the tab is switched to 'events',
+    // when visibility changes, and periodically every 5 minutes so no events can ever be shown in the past
+    useEffect(() => {
+        const refreshNow = () => {
+            const now = new Date();
+            setEventsList(getEventsForNext30Days(now, refreshSeed));
+        };
+
+        refreshNow();
+
+        const interval = setInterval(refreshNow, 5 * 60 * 1000);
+        const onVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                refreshNow();
+            }
+        };
+        document.addEventListener('visibilitychange', onVisibilityChange);
+
+        return () => {
+            clearInterval(interval);
+            document.removeEventListener('visibilitychange', onVisibilityChange);
+        };
+    }, [activeTab, refreshSeed]);
+
     const handleRefreshEvents = () => {
-        if (!isAdmin) return;
         setIsRefreshingEvents(true);
         setTimeout(() => {
-            const nextSeed = refreshSeed + 1;
-            const now = new Date();
-            setRefreshSeed(nextSeed);
-            setEventsList(getEventsForNext30Days(now, nextSeed));
+            setRefreshSeed(prev => {
+                const nextSeed = prev + 1;
+                const now = new Date();
+                setEventsList(getEventsForNext30Days(now, nextSeed));
+                return nextSeed;
+            });
             setIsRefreshingEvents(false);
         }, 450);
     };
@@ -347,17 +372,22 @@ export const Home: React.FC = () => {
                     </div>
 
                     <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap">
-                        {activeTab === 'events' && isAdmin && (
-                            <button
-                                type="button"
-                                onClick={handleRefreshEvents}
-                                disabled={isRefreshingEvents}
-                                className="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white shadow-md hover:shadow-lg transition-all duration-200 cursor-pointer flex items-center gap-2 border border-indigo-500/30 disabled:opacity-75"
-                                title="Refresh top 20 curated Atlanta events for the next 30 days (Admin)"
-                            >
-                                <RotateCw size={15} className={cn("transition-transform", isRefreshingEvents && "animate-spin")} />
-                                <span>{isRefreshingEvents ? 'Refreshing...' : 'Refresh Events'}</span>
-                            </button>
+                        {activeTab === 'events' && (
+                            <>
+                                <span className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 text-xs font-semibold border border-emerald-200/60 shadow-xs">
+                                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Auto-Refreshed Live
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={handleRefreshEvents}
+                                    disabled={isRefreshingEvents}
+                                    className="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white shadow-md hover:shadow-lg transition-all duration-200 cursor-pointer flex items-center gap-2 border border-indigo-500/30 disabled:opacity-75"
+                                    title="Refresh curated Atlanta events for the next 30 days"
+                                >
+                                    <RotateCw size={15} className={cn("transition-transform", isRefreshingEvents && "animate-spin")} />
+                                    <span>{isRefreshingEvents ? 'Refreshing...' : 'Refresh Events'}</span>
+                                </button>
+                            </>
                         )}
 
                         {/* Tab Selector */}
@@ -440,18 +470,16 @@ export const Home: React.FC = () => {
                                 </p>
                             </div>
                             <div className="flex items-center gap-3 shrink-0">
-                                {isAdmin && (
-                                    <button
-                                        type="button"
-                                        onClick={handleRefreshEvents}
-                                        disabled={isRefreshingEvents}
-                                        className="bg-white hover:bg-indigo-50 active:bg-indigo-100 text-indigo-700 border border-indigo-200/80 px-4 py-2.5 rounded-2xl font-bold text-xs sm:text-sm shadow-sm hover:shadow transition-all flex items-center gap-2 cursor-pointer disabled:opacity-60"
-                                        title="Admin Refresh"
-                                    >
-                                        <RotateCw size={15} className={cn("text-indigo-600", isRefreshingEvents && "animate-spin")} />
-                                        <span>{isRefreshingEvents ? 'Updating...' : 'Refresh Highlights'}</span>
-                                    </button>
-                                )}
+                                <button
+                                    type="button"
+                                    onClick={handleRefreshEvents}
+                                    disabled={isRefreshingEvents}
+                                    className="bg-white hover:bg-indigo-50 active:bg-indigo-100 text-indigo-700 border border-indigo-200/80 px-4 py-2.5 rounded-2xl font-bold text-xs sm:text-sm shadow-sm hover:shadow transition-all flex items-center gap-2 cursor-pointer disabled:opacity-60"
+                                    title="Refresh Highlights"
+                                >
+                                    <RotateCw size={15} className={cn("text-indigo-600", isRefreshingEvents && "animate-spin")} />
+                                    <span>{isRefreshingEvents ? 'Updating...' : 'Refresh Highlights'}</span>
+                                </button>
                                 <div className="bg-white/90 backdrop-blur px-5 py-2.5 rounded-2xl border border-indigo-100 text-center flex-shrink-0 shadow-sm">
                                     <span className="block text-xl font-extrabold text-indigo-600">{eventsList.length}</span>
                                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Highlights</span>
