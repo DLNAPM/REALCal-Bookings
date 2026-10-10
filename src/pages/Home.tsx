@@ -23,32 +23,42 @@ export const Home: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'properties' | 'events'>('properties');
     const [refreshSeed, setRefreshSeed] = useState<number>(0);
     const [isRefreshingEvents, setIsRefreshingEvents] = useState<boolean>(false);
+    const [lastRefreshedAt, setLastRefreshedAt] = useState<Date>(() => new Date());
     const [eventsList, setEventsList] = useState<EventItem[]>(() => getEventsForNext30Days(new Date(), 0));
     const navigate = useNavigate();
 
     const isAdmin = user?.role === 'admin';
 
     // Automatic Events Refresh: automatically recalculate events on mount, whenever the tab is switched to 'events',
-    // when visibility changes, and periodically every 5 minutes so no events can ever be shown in the past
+    // when visibility changes, on window focus, and periodically every 60 seconds so no events can ever be shown in the past
     useEffect(() => {
         const refreshNow = () => {
             const now = new Date();
+            setLastRefreshedAt(now);
             setEventsList(getEventsForNext30Days(now, refreshSeed));
         };
 
         refreshNow();
 
-        const interval = setInterval(refreshNow, 5 * 60 * 1000);
+        // 60-second auto-refresh interval
+        const interval = setInterval(refreshNow, 60 * 1000);
+        
         const onVisibilityChange = () => {
             if (document.visibilityState === 'visible') {
                 refreshNow();
             }
         };
+        const onFocus = () => {
+            refreshNow();
+        };
+
         document.addEventListener('visibilitychange', onVisibilityChange);
+        window.addEventListener('focus', onFocus);
 
         return () => {
             clearInterval(interval);
             document.removeEventListener('visibilitychange', onVisibilityChange);
+            window.removeEventListener('focus', onFocus);
         };
     }, [activeTab, refreshSeed]);
 
@@ -58,6 +68,7 @@ export const Home: React.FC = () => {
             setRefreshSeed(prev => {
                 const nextSeed = prev + 1;
                 const now = new Date();
+                setLastRefreshedAt(now);
                 setEventsList(getEventsForNext30Days(now, nextSeed));
                 return nextSeed;
             });
@@ -65,9 +76,8 @@ export const Home: React.FC = () => {
         }, 450);
     };
 
-    const startDateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    const endDate = new Date();
-    endDate.setDate(endDate.getDate() + 30);
+    const startDateStr = lastRefreshedAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const endDate = new Date(lastRefreshedAt.getTime() + 30 * 24 * 60 * 60 * 1000);
     const endDateStr = endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
     const checkOptInAndNavigate = (path: string) => {
@@ -375,7 +385,7 @@ export const Home: React.FC = () => {
                         {activeTab === 'events' && (
                             <>
                                 <span className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 text-xs font-semibold border border-emerald-200/60 shadow-xs">
-                                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Auto-Refreshed Live
+                                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Auto-Refreshed Live (Upcoming Events Only)
                                 </span>
                                 <button
                                     type="button"

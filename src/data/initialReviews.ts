@@ -1,3 +1,5 @@
+import { ReviewSurveyAnswers } from '../types';
+
 export interface SeedReview {
   id: string;
   author: string;
@@ -8,11 +10,42 @@ export interface SeedReview {
   propertyName: string;
   stayDates: string;
   verified: boolean;
+  bookingRef?: string;
+  email?: string;
+  phone?: string;
   venueMentioned?: string;
+  surveyAnswers?: ReviewSurveyAnswers;
   createdAt: string;
 }
 
 export const INITIAL_REVIEWS: SeedReview[] = [
+  {
+    id: 'seed-kiwanis-lyons',
+    author: 'Kiwanis Lyons',
+    role: 'Verified Guest',
+    rating: 5,
+    title: 'Peaceful, immaculate home with seamless smart-lock access',
+    comment: 'We completed our stay at 2844 Stonewall Villa and had an extraordinary experience! The property was spotless, comfortable, and beautifully maintained. The keyless digital smart lock code worked seamlessly upon arrival, and property management was courteous and attentive to every detail. Highly recommended for visiting Atlanta!',
+    propertyName: '2844 Stonewall Villa',
+    stayDates: 'October 2026',
+    verified: true,
+    bookingRef: 'd96e53b5-320f-4d03-8c0d-4e14ef9a0e2b',
+    email: 'Kaylyons1969@yahoo.com',
+    phone: '6787609619',
+    surveyAnswers: {
+      comfortRating: 5,
+      comfort: 'Exceptional stay. The home was impeccably clean, peaceful, and comfortable.',
+      amenitiesMissingTag: 'Everything was provided & complete',
+      amenities: 'Everything was provided & complete. All kitchenware, bath linens, coffee supplies, and toiletries were thoughtfully stocked.',
+      cleanlinessRating: '5 Stars (Immaculate)',
+      cleanliness: 'Spotless and thoroughly sanitized throughout the entire home.',
+      operationsStatus: 'No issues, perfect operations',
+      operations: 'Smart lock access and check-in operated flawlessly. Keyless digital entry code worked on first attempt and Wi-Fi was fast.',
+      wouldStayAgain: 'Yes, definitely (100%)',
+      futureIdeas: 'Would stay again without hesitation. We loved our stay and will definitely book again when visiting Atlanta!'
+    },
+    createdAt: '2026-10-09T18:30:00Z'
+  },
   {
     id: 'seed-1',
     author: 'Marcus "Keys" Vance',

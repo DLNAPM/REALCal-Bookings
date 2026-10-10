@@ -92,6 +92,7 @@ export const Survey: React.FC = () => {
       comfortRating,
       comfort: comfort.trim() || `Rated ${comfortRating} stars. Comfortable stay.`,
       amenities: amenities.trim() || amenitiesMissingTag,
+      amenitiesMissingTag,
       cleanliness: cleanliness.trim() || cleanlinessRating,
       cleanlinessRating,
       operations: operations.trim() || operationsStatus,
@@ -102,6 +103,18 @@ export const Survey: React.FC = () => {
       publishAsReview,
       publicReviewComment: (publishAsReview && (publicReviewComment.trim() || comfort.trim())) || '',
       reviewRole: reviewRole.trim(),
+      surveyAnswers: {
+        comfort: comfort.trim() || `Rated ${comfortRating} stars. Comfortable stay.`,
+        comfortRating,
+        amenities: amenities.trim() || amenitiesMissingTag,
+        amenitiesMissingTag,
+        cleanliness: cleanliness.trim() || cleanlinessRating,
+        cleanlinessRating,
+        operations: operations.trim() || operationsStatus,
+        operationsStatus,
+        futureIdeas: futureIdeas.trim() || `Would stay again: ${wouldStayAgain}`,
+        wouldStayAgain
+      },
       createdAt: new Date().toISOString()
     };
 
@@ -119,8 +132,8 @@ export const Survey: React.FC = () => {
         throw new Error(resData.error || 'Failed to submit survey through server.');
       }
 
-      // If server didn't write to DB (e.g. Firebase Admin uninitialized in local sandbox), save from client
-      if (!resData.surveyId && db) {
+      // 2. Also persist directly from client Firestore if client db is active
+      if (db) {
         try {
           await addDoc(collection(db, 'surveys'), {
             ...surveyPayload,
@@ -131,17 +144,45 @@ export const Survey: React.FC = () => {
             await addDoc(collection(db, 'reviews'), {
               author: guestName.trim(),
               email: guestEmail.trim(),
+              phone: guestPhone.trim(),
               role: reviewRole.trim() || 'Verified Guest',
-              propertyName: propertyName.trim(),
+              propertyName: propertyName.trim() || '2844 Stonewall Villa',
               rating: comfortRating,
               comment: (publicReviewComment.trim() || comfort.trim()),
               bookingRef: bookingRef.trim(),
               verified: true,
+              surveyAnswers: surveyPayload.surveyAnswers,
               createdAt: serverTimestamp()
             });
           }
         } catch (dbErr) {
-          console.warn("Client Firestore fallback write warning:", dbErr);
+          console.warn("Client Firestore write attempt:", dbErr);
+        }
+      }
+
+      // 3. Cache published review locally so it renders immediately upon navigating to /reviews
+      if (publishAsReview && (publicReviewComment.trim() || comfort.trim())) {
+        try {
+          const publishedReviewItem = {
+            id: resData.review?.id || ('rev-' + Date.now()),
+            author: guestName.trim(),
+            email: guestEmail.trim(),
+            phone: guestPhone.trim(),
+            role: reviewRole.trim() || 'Verified Guest',
+            propertyName: propertyName.trim() || '2844 Stonewall Villa',
+            rating: comfortRating,
+            title: 'Verified Guest Stay',
+            comment: (publicReviewComment.trim() || comfort.trim()),
+            bookingRef: bookingRef.trim(),
+            verified: true,
+            surveyAnswers: surveyPayload.surveyAnswers,
+            createdAt: new Date().toISOString()
+          };
+          const existing = JSON.parse(localStorage.getItem('realcal_published_reviews') || '[]');
+          const updated = [publishedReviewItem, ...existing.filter((r: any) => r.id !== publishedReviewItem.id && r.bookingRef !== publishedReviewItem.bookingRef)];
+          localStorage.setItem('realcal_published_reviews', JSON.stringify(updated));
+        } catch (storeErr) {
+          console.warn("Could not cache review locally:", storeErr);
         }
       }
 

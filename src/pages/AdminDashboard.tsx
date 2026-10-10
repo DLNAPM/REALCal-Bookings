@@ -357,10 +357,33 @@ export const AdminDashboard: React.FC = () => {
     });
 
     onSnapshot(query(collection(db, 'surveys')), (snap) => {
-      setSurveys(snap.docs.map(d => ({ id: d.id, ...d.data() } as SurveyResponse)));
+      const dbSurveys = snap.docs.map(d => ({ id: d.id, ...d.data() } as SurveyResponse));
+      setSurveys(prev => {
+        const merged = [...dbSurveys];
+        prev.forEach(p => { if (!merged.some(m => m.id === p.id)) merged.push(p); });
+        return merged;
+      });
     }, (error) => {
-      console.error("Admin surveys snapshot error:", error);
+      console.warn("Admin surveys snapshot notice (fetching via API):", error);
     });
+
+    // Also fetch surveys from server endpoint
+    fetch('/api/surveys')
+      .then(r => r.json())
+      .then(d => {
+        if (d && Array.isArray(d.surveys)) {
+          setSurveys(prev => {
+            const merged = [...prev];
+            d.surveys.forEach((s: any) => {
+              if (!merged.some(m => m.id === s.id || (m.bookingRef && s.bookingRef && m.bookingRef === s.bookingRef))) {
+                merged.push(s);
+              }
+            });
+            return merged;
+          });
+        }
+      })
+      .catch(() => {});
 
     onSnapshot(query(collection(db, 'reviews')), (snap) => {
       const dbReviews = snap.docs.map(d => ({ id: d.id, ...d.data() } as Review));
@@ -372,8 +395,21 @@ export const AdminDashboard: React.FC = () => {
       });
       setReviews(allReviews);
     }, (error) => {
-      console.error("Admin reviews snapshot error:", error);
-      setReviews(INITIAL_REVIEWS);
+      console.warn("Admin reviews snapshot notice (using API & seed):", error);
+      fetch('/api/reviews')
+        .then(r => r.json())
+        .then(d => {
+          if (d && Array.isArray(d.reviews)) {
+            const merged = [...d.reviews];
+            INITIAL_REVIEWS.forEach(ir => {
+              if (!merged.some(m => m.id === ir.id)) merged.push(ir);
+            });
+            setReviews(merged);
+          } else {
+            setReviews(INITIAL_REVIEWS);
+          }
+        })
+        .catch(() => setReviews(INITIAL_REVIEWS));
     });
   }, []);
 

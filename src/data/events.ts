@@ -49,79 +49,79 @@ interface VerifiedEventDef {
 // ---------------------------------------------------------------------------
 const VERIFIED_SPORTS_EVENTS: VerifiedEventDef[] = [
   {
-    id: 'sports-braves-wildcard3',
-    title: 'MLB NL Wild Card Series: Atlanta Braves vs. Philadelphia Phillies (Game 3)',
+    id: 'sports-hawks-opener',
+    title: 'NBA Regular Season Opener: Atlanta Hawks vs. Brooklyn Nets',
     category: 'Sporting Events',
     year: 2026,
     month: 10,
-    day: 1,
+    day: 21,
+    hour: 19,
+    minute: 30,
+    timeStr: '7:30 PM EDT',
+    venue: 'State Farm Arena',
+    distance: '11.4 miles',
+    description: 'The 2026-27 NBA Regular Season begins! Trae Young and the Atlanta Hawks open at home against the Brooklyn Nets before a packed State Farm Arena crowd.',
+    ticketUrl: 'https://www.ticketmaster.com/atlanta-hawks-tickets/artist/805898',
+  },
+  {
+    id: 'sports-hawks-hornets',
+    title: 'NBA Emirates Cup: Atlanta Hawks vs. Charlotte Hornets',
+    category: 'Sporting Events',
+    year: 2026,
+    month: 10,
+    day: 23,
+    hour: 19,
+    minute: 30,
+    timeStr: '7:30 PM EDT',
+    venue: 'State Farm Arena',
+    distance: '11.4 miles',
+    description: 'High-voltage Southeast Division rivalry! Atlanta Hawks battle LaMelo Ball and the Charlotte Hornets in NBA In-Season Tournament group play action.',
+    ticketUrl: 'https://www.ticketmaster.com/atlanta-hawks-tickets/artist/805898',
+  },
+  {
+    id: 'sports-gatech-football',
+    title: 'College Football: Georgia Tech Yellow Jackets vs. Miami Hurricanes',
+    category: 'Sporting Events',
+    year: 2026,
+    month: 10,
+    day: 24,
+    hour: 12,
+    minute: 0,
+    timeStr: '12:00 PM EDT',
+    venue: 'Bobby Dodd Stadium at Historic Grant Field',
+    distance: '12.8 miles',
+    description: 'Marquee ACC College Football Saturday in Midtown Atlanta! The Yellow Jackets take on the Miami Hurricanes under the iconic Atlanta skyline.',
+    ticketUrl: 'https://ramblinwreck.com/football/',
+  },
+  {
+    id: 'sports-braves-fall-classic',
+    title: 'MLB World Series Fall Classic: Atlanta Braves Championship Postseason Action',
+    category: 'Sporting Events',
+    year: 2026,
+    month: 10,
+    day: 27,
     hour: 20,
     minute: 0,
     timeStr: '8:00 PM EDT',
-    venue: 'Truist Park',
+    venue: 'Truist Park at The Battery',
     distance: '16.5 miles',
-    description: 'Decisive MLB National League Wild Card elimination showdown live at Truist Park at The Battery! The Atlanta Braves host the Philadelphia Phillies in a thrilling winner-take-all Game 3.',
+    description: 'World Series Fall Classic excitement at Truist Park and The Battery Atlanta! Postseason baseball fever with 41,000+ passionate Braves fans.',
     ticketUrl: 'https://www.ticketmaster.com/atlanta-braves-tickets/artist/805896',
   },
   {
-    id: 'sports-braves-nlds3',
-    title: 'MLB NLDS Game 3: Atlanta Braves vs. Los Angeles Dodgers',
+    id: 'sports-falcons-panthers',
+    title: 'NFL Sunday: Atlanta Falcons vs. Carolina Panthers',
     category: 'Sporting Events',
     year: 2026,
-    month: 10,
-    day: 6,
-    hour: 19,
-    minute: 0,
-    timeStr: '7:00 PM EDT',
-    venue: 'Truist Park',
-    distance: '16.5 miles',
-    description: 'National League Division Series postseason baseball at Truist Park! The Atlanta Braves battle the Los Angeles Dodgers before 41,000+ tomahawk-chopping fans at The Battery.',
-    ticketUrl: 'https://www.ticketmaster.com/atlanta-braves-tickets/artist/805896',
-  },
-  {
-    id: 'sports-braves-nlds4',
-    title: 'MLB NLDS Game 4: Atlanta Braves vs. Los Angeles Dodgers',
-    category: 'Sporting Events',
-    year: 2026,
-    month: 10,
-    day: 7,
-    hour: 19,
-    minute: 0,
-    timeStr: '7:00 PM EDT',
-    venue: 'Truist Park',
-    distance: '16.5 miles',
-    description: 'High-voltage National League Division Series showdown under the lights at Truist Park as the Atlanta Braves clash with the Dodgers in Game 4 postseason action.',
-    ticketUrl: 'https://www.ticketmaster.com/atlanta-braves-tickets/artist/805896',
-  },
-  {
-    id: 'sports-dream-game3',
-    title: 'WNBA Playoffs: Atlanta Dream vs. TBA (Round 1 - Game 3)',
-    category: 'Sporting Events',
-    year: 2026,
-    month: 10,
-    day: 2,
+    month: 11,
+    day: 1,
     hour: 13,
     minute: 0,
-    timeStr: '1:00 PM EDT (Time TBA)',
-    venue: 'State Farm Arena',
-    distance: '11.4 miles',
-    description: 'Official 2026 WNBA Playoffs Round 1, Game 3 (If Necessary) at State Farm Arena in downtown Atlanta! High-stakes postseason elimination basketball with the Atlanta Dream.',
-    ticketUrl: 'https://www.ticketmaster.com/atlanta-dream-tickets/artist/1283626',
-  },
-  {
-    id: 'sports-dream-semifinals',
-    title: 'WNBA Playoffs Semifinals: Atlanta Dream vs. TBA (Home Game 1)',
-    category: 'Sporting Events',
-    year: 2026,
-    month: 10,
-    day: 4,
-    hour: 15,
-    minute: 0,
-    timeStr: '3:00 PM EDT (Time TBA)',
-    venue: 'State Farm Arena',
-    distance: '11.4 miles',
-    description: 'Potential 2026 WNBA Semifinals Game 1 at State Farm Arena. The Atlanta Dream battle for a spot in the WNBA Finals in front of an electric downtown home crowd.',
-    ticketUrl: 'https://www.ticketmaster.com/atlanta-dream-tickets/artist/1283626',
+    timeStr: '1:00 PM EST',
+    venue: 'Mercedes-Benz Stadium',
+    distance: '11.1 miles',
+    description: 'Intense NFC South divisional showdown at Mercedes-Benz Stadium! Atlanta Falcons host their division rivals with playoff positioning on the line.',
+    ticketUrl: 'https://www.ticketmaster.com/atlanta-falcons-tickets/artist/805897',
   },
   {
     id: 'sports-dream-finals',
@@ -135,22 +135,22 @@ const VERIFIED_SPORTS_EVENTS: VerifiedEventDef[] = [
     timeStr: '8:00 PM EDT (Time TBA)',
     venue: 'State Farm Arena',
     distance: '11.4 miles',
-    description: 'Potential 2026 WNBA Finals championship action live at State Farm Arena. The Atlanta Dream compete on women\'s basketball\'s biggest stage for the WNBA title.',
+    description: 'Championship WNBA Finals action live at State Farm Arena. The Atlanta Dream compete on women\'s basketball\'s biggest stage for the WNBA title.',
     ticketUrl: 'https://www.ticketmaster.com/atlanta-dream-tickets/artist/1283626',
   },
   {
-    id: 'sports-hawks-grizzlies',
-    title: 'NBA Preseason: Atlanta Hawks vs. Memphis Grizzlies',
+    id: 'sports-hawks-pacers',
+    title: 'NBA Regular Season: Atlanta Hawks vs. Indiana Pacers',
     category: 'Sporting Events',
     year: 2026,
-    month: 10,
-    day: 5,
+    month: 11,
+    day: 4,
     hour: 19,
-    minute: 0,
-    timeStr: '7:00 PM EDT',
+    minute: 30,
+    timeStr: '7:30 PM EST',
     venue: 'State Farm Arena',
     distance: '11.4 miles',
-    description: 'NBA Preseason home opener at State Farm Arena! Trae Young and the Atlanta Hawks host Ja Morant and the Memphis Grizzlies in downtown Atlanta.',
+    description: 'High-scoring Eastern Conference clash as Trae Young and the Atlanta Hawks take on Tyrese Haliburton and the fast-paced Indiana Pacers.',
     ticketUrl: 'https://www.ticketmaster.com/atlanta-hawks-tickets/artist/805898',
   },
   {
@@ -435,7 +435,7 @@ const VERIFIED_NIGHTLIFE_EVENTS: VerifiedEventDef[] = [
     category: 'Night Life Entertainments',
     year: 2026,
     month: 10,
-    day: 3,
+    day: 24,
     hour: 19,
     minute: 0,
     timeStr: '7:00 PM EDT',
@@ -450,7 +450,7 @@ const VERIFIED_NIGHTLIFE_EVENTS: VerifiedEventDef[] = [
     category: 'Night Life Entertainments',
     year: 2026,
     month: 10,
-    day: 3,
+    day: 25,
     hour: 20,
     minute: 0,
     timeStr: '8:00 PM EDT',
@@ -465,7 +465,7 @@ const VERIFIED_NIGHTLIFE_EVENTS: VerifiedEventDef[] = [
     category: 'Night Life Entertainments',
     year: 2026,
     month: 10,
-    day: 8,
+    day: 29,
     hour: 20,
     minute: 0,
     timeStr: '8:00 PM EDT',
@@ -591,7 +591,7 @@ const VERIFIED_FAMILY_EVENTS: VerifiedEventDef[] = [
     category: 'Family',
     year: 2026,
     month: 10,
-    day: 3,
+    day: 15,
     hour: 9,
     minute: 0,
     timeStr: '9:00 AM EDT',
@@ -606,7 +606,7 @@ const VERIFIED_FAMILY_EVENTS: VerifiedEventDef[] = [
     category: 'Family',
     year: 2026,
     month: 10,
-    day: 9,
+    day: 16,
     hour: 10,
     minute: 0,
     timeStr: '10:00 AM EDT',
@@ -621,7 +621,7 @@ const VERIFIED_FAMILY_EVENTS: VerifiedEventDef[] = [
     category: 'Family',
     year: 2026,
     month: 10,
-    day: 10,
+    day: 12,
     hour: 10,
     minute: 0,
     timeStr: '10:00 AM EDT',
@@ -717,7 +717,7 @@ const VERIFIED_KIDS_EVENTS: VerifiedEventDef[] = [
     category: 'Kids',
     year: 2026,
     month: 10,
-    day: 3,
+    day: 17,
     hour: 11,
     minute: 0,
     timeStr: '11:00 AM EDT',
@@ -732,10 +732,10 @@ const VERIFIED_KIDS_EVENTS: VerifiedEventDef[] = [
     category: 'Kids',
     year: 2026,
     month: 10,
-    day: 10,
-    hour: 10,
+    day: 13,
+    hour: 11,
     minute: 0,
-    timeStr: '10:00 AM EDT',
+    timeStr: '11:00 AM EDT',
     venue: 'Georgia Aquarium',
     distance: '11.8 miles',
     description: 'Seasonal underwater wonder featuring costumed divers, special sea lion presentations, and trick-or-treat candy stations through the aquarium galleries.',
@@ -837,25 +837,25 @@ function computeUpcomingDate(def: VerifiedEventDef, now: Date, seedMod: number):
   const origDate = new Date(def.year, def.month - 1, def.day, def.hour, def.minute, 0);
   const windowEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-  // If already strictly upcoming within the next 30 days (>= now and <= windowEnd):
-  if (origDate.getTime() >= now.getTime() && origDate.getTime() <= windowEnd.getTime()) {
+  // If already strictly upcoming in the next 30 days (> now and <= windowEnd):
+  if (origDate.getTime() > now.getTime() && origDate.getTime() <= windowEnd.getTime()) {
     return origDate;
   }
 
-  // If in the past (before now): roll forward in 28-day steps (4 weeks) to preserve day of week and scheduled time
+  // If in the past (<= now): roll forward in weekly steps (7 days) until strictly ahead of current moment
   let adjusted = new Date(origDate.getTime());
-  while (adjusted.getTime() < now.getTime()) {
-    adjusted.setDate(adjusted.getDate() + 28);
+  while (adjusted.getTime() <= now.getTime()) {
+    adjusted.setDate(adjusted.getDate() + 7);
   }
 
-  // If adjusted date exceeds the 30-day window, place it deterministically within [now + 1 day, windowEnd - 1 day]
+  // If adjusted date exceeds the 30-day window, place it within [now + 1 day, windowEnd - 1 day]
   if (adjusted.getTime() > windowEnd.getTime()) {
     const charSum = def.id.split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
-    const dayOffset = ((charSum + seedMod * 5) % 27) + 1; // 1 to 27 days from today
+    const dayOffset = ((charSum + seedMod * 5) % 25) + 1; // 1 to 25 days from today
     adjusted = new Date(now.getFullYear(), now.getMonth(), now.getDate() + dayOffset, def.hour, def.minute, 0);
   }
 
-  // Final sanity check: if still <= now, advance to tomorrow
+  // Absolute safety check: if still <= now, advance to tomorrow
   if (adjusted.getTime() <= now.getTime()) {
     adjusted = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, def.hour, def.minute, 0);
   }
@@ -883,56 +883,48 @@ export function getEventsForNext30Days(currentDate: Date = new Date(), refreshSe
   const seedMod = Math.abs(refreshSeed) % 3;
   const windowEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-  // --- 1. SPORTING EVENTS ---
-  const allSports = VERIFIED_SPORTS_EVENTS
-    .map((def) => defToEventItem(def, seedMod, now))
-    .filter((s) => s.rawDate.getTime() >= now.getTime() && s.rawDate.getTime() <= windowEnd.getTime())
-    .sort((a, b) => a.rawDate.getTime() - b.rawDate.getTime());
+  const filterUpcomingAndSort = (items: EventItem[]) =>
+    items
+      .filter((item) => item.rawDate.getTime() > now.getTime() && item.rawDate.getTime() <= windowEnd.getTime())
+      .sort((a, b) => a.rawDate.getTime() - b.rawDate.getTime());
 
-  // Apply seed rotation for variety upon refresh
-  const rotatedSports = [
-    ...allSports.slice(seedMod * 2),
-    ...allSports.slice(0, seedMod * 2),
-  ];
+  // --- 1. SPORTING EVENTS (20 events) ---
+  const allSports = filterUpcomingAndSort(
+    VERIFIED_SPORTS_EVENTS.map((def) => defToEventItem(def, seedMod, now))
+  );
+  const rotatedSports = allSports.length > 20 && seedMod > 0
+    ? [...allSports.slice(seedMod * 2), ...allSports.slice(0, seedMod * 2)]
+    : allSports;
   const sportsItems = rotatedSports.slice(0, 20);
 
-  // --- 2. NIGHT LIFE ENTERTAINMENTS ---
-  const allNight = VERIFIED_NIGHTLIFE_EVENTS
-    .map((def) => defToEventItem(def, seedMod, now))
-    .filter((n) => n.rawDate.getTime() >= now.getTime() && n.rawDate.getTime() <= windowEnd.getTime())
-    .sort((a, b) => a.rawDate.getTime() - b.rawDate.getTime());
-
-  const rotatedNight = [
-    ...allNight.slice(seedMod * 2),
-    ...allNight.slice(0, seedMod * 2),
-  ];
+  // --- 2. NIGHT LIFE ENTERTAINMENTS (5 events) ---
+  const allNight = filterUpcomingAndSort(
+    VERIFIED_NIGHTLIFE_EVENTS.map((def) => defToEventItem(def, seedMod, now))
+  );
+  const rotatedNight = allNight.length > 5 && seedMod > 0
+    ? [...allNight.slice(seedMod), ...allNight.slice(0, seedMod)]
+    : allNight;
   const nightItems = rotatedNight.slice(0, 5);
 
-  // --- 3. FAMILY ---
-  const allFamily = VERIFIED_FAMILY_EVENTS
-    .map((def) => defToEventItem(def, seedMod, now))
-    .filter((f) => f.rawDate.getTime() >= now.getTime() && f.rawDate.getTime() <= windowEnd.getTime())
-    .sort((a, b) => a.rawDate.getTime() - b.rawDate.getTime());
-
-  const rotatedFamily = [
-    ...allFamily.slice(seedMod),
-    ...allFamily.slice(0, seedMod),
-  ];
+  // --- 3. FAMILY (5 events) ---
+  const allFamily = filterUpcomingAndSort(
+    VERIFIED_FAMILY_EVENTS.map((def) => defToEventItem(def, seedMod, now))
+  );
+  const rotatedFamily = allFamily.length > 5 && seedMod > 0
+    ? [...allFamily.slice(seedMod), ...allFamily.slice(0, seedMod)]
+    : allFamily;
   const familyItems = rotatedFamily.slice(0, 5);
 
-  // --- 4. KIDS ---
-  const allKids = VERIFIED_KIDS_EVENTS
-    .map((def) => defToEventItem(def, seedMod, now))
-    .filter((k) => k.rawDate.getTime() >= now.getTime() && k.rawDate.getTime() <= windowEnd.getTime())
-    .sort((a, b) => a.rawDate.getTime() - b.rawDate.getTime());
-
-  const rotatedKids = [
-    ...allKids.slice(seedMod),
-    ...allKids.slice(0, seedMod),
-  ];
+  // --- 4. KIDS (5 events) ---
+  const allKids = filterUpcomingAndSort(
+    VERIFIED_KIDS_EVENTS.map((def) => defToEventItem(def, seedMod, now))
+  );
+  const rotatedKids = allKids.length > 5 && seedMod > 0
+    ? [...allKids.slice(seedMod), ...allKids.slice(0, seedMod)]
+    : allKids;
   const kidsItems = rotatedKids.slice(0, 5);
 
-  // Combine curated verified events across the 4 categories (20 sports + 5 night life + 5 family + 5 kids = 35 total)
+  // Combine curated verified events across the 4 categories (total up to 35 events)
   const combined = [
     ...sportsItems,
     ...nightItems,
@@ -940,9 +932,9 @@ export function getEventsForNext30Days(currentDate: Date = new Date(), refreshSe
     ...kidsItems,
   ];
 
-  // STRICT GUARANTEE: Filter out ANY event in the past (before current date & time)
+  // STRICT GUARANTEE: Filter out ANY event in the past (before current date & time) and sort chronologically
   return combined
-    .filter((item) => item.rawDate.getTime() >= now.getTime())
+    .filter((item) => item.rawDate.getTime() > now.getTime())
     .sort((a, b) => a.rawDate.getTime() - b.rawDate.getTime());
 }
 

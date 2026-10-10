@@ -199,6 +199,19 @@ export interface SurveyResponse {
   createdAt: any;
 }
 
+export interface ReviewSurveyAnswers {
+  comfort?: string;
+  comfortRating?: number;
+  amenities?: string;
+  amenitiesMissingTag?: string;
+  cleanliness?: string;
+  cleanlinessRating?: string;
+  operations?: string;
+  operationsStatus?: string;
+  futureIdeas?: string;
+  wouldStayAgain?: string;
+}
+
 export interface Review {
   id: string;
   author: string;
@@ -210,8 +223,11 @@ export interface Review {
   propertyName: string;
   stayDates?: string;
   bookingRef?: string;
+  email?: string;
+  phone?: string;
   verified: boolean;
   venueMentioned?: string;
+  surveyAnswers?: ReviewSurveyAnswers;
   createdAt: any;
 }
 

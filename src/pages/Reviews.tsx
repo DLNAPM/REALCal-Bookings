@@ -6,7 +6,7 @@ import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from 
 import { 
   Star, MessageSquare, CheckCircle2, Calendar, ShieldCheck, 
   Sparkles, Filter, Plus, ArrowLeft, Send, ThumbsUp, Building2,
-  HelpCircle, Music, Award
+  HelpCircle, Music, Award, ChevronDown, ChevronUp, ClipboardCheck
 } from 'lucide-react';
 import { INITIAL_REVIEWS } from '../data/initialReviews';
 import { Review } from '../types';
@@ -19,6 +19,8 @@ export const Reviews: React.FC = () => {
   const prefillRef = searchParams.get('ref') || searchParams.get('bookingId') || '';
 
   const [firestoreReviews, setFirestoreReviews] = useState<Review[]>([]);
+  const [apiReviews, setApiReviews] = useState<Review[]>([]);
+  const [localReviews, setLocalReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedProperty, setSelectedProperty] = useState<string>('all');
   const [ratingFilter, setRatingFilter] = useState<number | 'all'>('all');
@@ -27,7 +29,7 @@ export const Reviews: React.FC = () => {
   // Form State
   const [author, setAuthor] = useState(user?.displayName || '');
   const [email, setEmail] = useState(user?.email || '');
-  const [propertyName, setPropertyName] = useState(prefillProperty || 'Stonewall Villa');
+  const [propertyName, setPropertyName] = useState(prefillProperty || '2844 Stonewall Villa');
   const [rating, setRating] = useState<number>(5);
   const [hoverRating, setHoverRating] = useState<number>(0);
   const [role, setRole] = useState('Verified Guest');
@@ -39,8 +41,37 @@ export const Reviews: React.FC = () => {
 
   // Helpful reactions tracking in local state
   const [likedReviews, setLikedReviews] = useState<Record<string, boolean>>({});
+  // Expanded 5-stay questions accordion state (open by default for Kiwanis Lyons)
+  const [expandedSurveyIds, setExpandedSurveyIds] = useState<Record<string, boolean>>({
+    'seed-kiwanis-lyons': true,
+    'review-kiwanis-lyons': true,
+    'booking-d96e53b5-320f-4d03-8c0d-4e14ef9a0e2b': true
+  });
 
   useEffect(() => {
+    // 1. Fetch server-persisted reviews
+    fetch('/api/reviews')
+      .then(res => res.json())
+      .then(data => {
+        if (data && Array.isArray(data.reviews)) {
+          setApiReviews(data.reviews);
+        }
+      })
+      .catch(err => {
+        console.warn("Could not fetch server /api/reviews:", err);
+      });
+
+    // 2. Fetch local storage cached reviews
+    try {
+      const stored = localStorage.getItem('realcal_published_reviews');
+      if (stored) {
+        setLocalReviews(JSON.parse(stored));
+      }
+    } catch (e) {
+      console.warn("Could not read local storage reviews:", e);
+    }
+
+    // 3. Attach Firestore real-time listener if Firestore is configured
     if (!db) {
       setLoading(false);
       return;
@@ -55,7 +86,7 @@ export const Reviews: React.FC = () => {
         setFirestoreReviews(reviewsData);
         setLoading(false);
       }, (err) => {
-        console.warn("Reviews snapshot error (using initial reviews):", err);
+        console.warn("Reviews snapshot notice (using local & seed reviews):", err);
         setLoading(false);
       });
       return () => unsubscribe();
@@ -65,16 +96,58 @@ export const Reviews: React.FC = () => {
     }
   }, []);
 
-  // Combine initial seed reviews with Firestore reviews (avoiding duplicates by id)
-  const allReviews: Review[] = [
-    ...firestoreReviews,
-    ...INITIAL_REVIEWS.filter(seed => !firestoreReviews.some(fr => fr.id === seed.id))
-  ];
+  // Combine Firestore reviews, API reviews, local reviews, and initial seed reviews
+  const allReviews: Review[] = React.useMemo(() => {
+    const map = new Map<string, Review>();
+
+    const addReview = (r: Review | any) => {
+      if (!r || !r.author || !r.comment) return;
+      const key = r.bookingRef 
+        ? `booking-${r.bookingRef}` 
+        : (r.id || `${r.author}-${r.comment.slice(0, 30)}`);
+      
+      const existing = map.get(key);
+      if (!existing) {
+        map.set(key, {
+          ...r,
+          id: r.id || key,
+          rating: Number(r.rating || 5),
+          verified: r.verified !== false
+        });
+      } else {
+        // Enriched merge
+        map.set(key, {
+          ...r,
+          ...existing,
+          surveyAnswers: existing.surveyAnswers || r.surveyAnswers,
+          bookingRef: existing.bookingRef || r.bookingRef,
+          email: existing.email || r.email,
+          phone: existing.phone || r.phone,
+          role: existing.role || r.role,
+        });
+      }
+    };
+
+    // Priority order: Firestore -> API -> Local -> Seed
+    firestoreReviews.forEach(addReview);
+    apiReviews.forEach(addReview);
+    localReviews.forEach(addReview);
+    INITIAL_REVIEWS.forEach(addReview);
+
+    return Array.from(map.values()).sort((a, b) => {
+      const timeA = new Date(a.createdAt || 0).getTime();
+      const timeB = new Date(b.createdAt || 0).getTime();
+      return timeB - timeA;
+    });
+  }, [firestoreReviews, apiReviews, localReviews]);
 
   // Filtered reviews
   const filteredReviews = allReviews.filter(rev => {
+    const propName = (rev.propertyName || '').toLowerCase();
+    const filter = selectedProperty.toLowerCase();
     const matchesProp = selectedProperty === 'all' || 
-      (rev.propertyName && rev.propertyName.toLowerCase().includes(selectedProperty.toLowerCase()));
+      propName.includes(filter) ||
+      (filter.includes('stonewall') && propName.includes('stonewall'));
     const matchesRating = ratingFilter === 'all' || rev.rating === ratingFilter;
     return matchesProp && matchesRating;
   });
@@ -107,20 +180,50 @@ export const Reviews: React.FC = () => {
         author: author.trim(),
         role: role.trim() || 'Verified Guest',
         email: email.trim(),
-        propertyName: propertyName.trim() || 'Stonewall Villa',
+        propertyName: propertyName.trim() || '2844 Stonewall Villa',
         rating,
         title: title.trim(),
         comment: comment.trim(),
         bookingRef: prefillRef || '',
         verified: true,
-        createdAt: serverTimestamp()
+        createdAt: new Date().toISOString()
       };
 
-      if (db) {
-        await addDoc(collection(db, 'reviews'), newReviewData);
+      // 1. Post to backend API
+      try {
+        const res = await fetch('/api/reviews', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newReviewData)
+        });
+        const resJson = await res.json();
+        if (resJson?.review) {
+          setApiReviews(prev => [resJson.review, ...prev]);
+        }
+      } catch (apiErr) {
+        console.warn("API review submission warning:", apiErr);
       }
 
-      // Also trigger manager notification if configured
+      // 2. Also write to client Firestore if active
+      if (db) {
+        try {
+          await addDoc(collection(db, 'reviews'), {
+            ...newReviewData,
+            createdAt: serverTimestamp()
+          });
+        } catch (dbErr) {
+          console.warn("Client Firestore write warning:", dbErr);
+        }
+      }
+
+      // 3. Cache in local storage
+      try {
+        const stored = JSON.parse(localStorage.getItem('realcal_published_reviews') || '[]');
+        localStorage.setItem('realcal_published_reviews', JSON.stringify([newReviewData, ...stored]));
+        setLocalReviews(prev => [newReviewData as any, ...prev]);
+      } catch (localErr) {}
+
+      // 4. Also trigger manager notification if configured
       try {
         await fetch('/api/notify-review-submitted', {
           method: 'POST',
@@ -136,7 +239,7 @@ export const Reviews: React.FC = () => {
           })
         });
       } catch (err) {
-        console.warn("Manager notification for review submission skipped or failed:", err);
+        console.warn("Manager notification skipped or failed:", err);
       }
 
       setSubmitSuccess(true);
@@ -378,10 +481,134 @@ export const Reviews: React.FC = () => {
                       "{rev.comment}"
                     </p>
 
+                    {/* Stay Reference Tag */}
+                    {rev.bookingRef && (
+                      <div className="mt-2.5 inline-flex items-center gap-1.5 text-[11px] font-mono text-slate-500 bg-slate-50 border border-slate-200/70 px-2.5 py-1 rounded-lg">
+                        <span className="font-semibold text-slate-400">Stay Ref:</span>
+                        <span className="text-slate-700">{rev.bookingRef}</span>
+                      </div>
+                    )}
+
                     {rev.venueMentioned && (
                       <div className="mt-3 inline-flex items-center gap-1.5 text-xs text-indigo-700 bg-indigo-50/70 border border-indigo-100 px-2.5 py-1 rounded-lg font-semibold">
                         <Music size={12} className="text-indigo-600" />
                         <span>Venue Proximity: {rev.venueMentioned}</span>
+                      </div>
+                    )}
+
+                    {/* 5 Stay Questions & Answers Section */}
+                    {rev.surveyAnswers && (
+                      <div className="mt-4 pt-3 border-t border-slate-100">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedSurveyIds(prev => ({ ...prev, [rev.id]: !prev[rev.id] }))}
+                          className="w-full flex items-center justify-between text-left p-2.5 rounded-xl bg-indigo-50/70 hover:bg-indigo-50 text-indigo-900 border border-indigo-150 transition-colors cursor-pointer group"
+                        >
+                          <div className="flex items-center gap-2">
+                            <ClipboardCheck size={16} className="text-indigo-600 flex-shrink-0" />
+                            <span className="text-xs font-bold">5-Question Verified Stay Survey Answers</span>
+                          </div>
+                          <span className="text-[11px] font-bold text-indigo-600 flex items-center gap-1">
+                            {expandedSurveyIds[rev.id] ? (
+                              <><span>Hide Answers</span><ChevronUp size={14} /></>
+                            ) : (
+                              <><span>View 5 Answers</span><ChevronDown size={14} /></>
+                            )}
+                          </span>
+                        </button>
+
+                        {expandedSurveyIds[rev.id] && (
+                          <div className="mt-3 space-y-2.5 bg-slate-50/90 rounded-2xl p-3 border border-slate-200/80 text-xs">
+                            {/* Q1: Comfort */}
+                            <div className="bg-white p-2.5 rounded-xl border border-slate-200/60 shadow-2xs">
+                              <div className="flex items-center justify-between gap-2 mb-1">
+                                <span className="font-bold text-slate-800 flex items-center gap-1.5 text-xs">
+                                  <span className="w-4.5 h-4.5 rounded-md bg-indigo-100 text-indigo-700 text-[10px] font-black flex items-center justify-center">1</span>
+                                  Comfort & Lodging Experience
+                                </span>
+                                <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/60 flex items-center gap-0.5">
+                                  <Star size={10} className="fill-amber-400 text-amber-400" />
+                                  <span>{rev.surveyAnswers.comfortRating || 5}/5 Stars</span>
+                                </span>
+                              </div>
+                              <p className="text-slate-600 pl-6 leading-relaxed text-xs">
+                                {rev.surveyAnswers.comfort || 'Exceptional stay. The home was impeccably clean, peaceful, and comfortable.'}
+                              </p>
+                            </div>
+
+                            {/* Q2: Amenities */}
+                            <div className="bg-white p-2.5 rounded-xl border border-slate-200/60 shadow-2xs">
+                              <div className="flex items-center justify-between gap-2 mb-1">
+                                <span className="font-bold text-slate-800 flex items-center gap-1.5 text-xs">
+                                  <span className="w-4.5 h-4.5 rounded-md bg-indigo-100 text-indigo-700 text-[10px] font-black flex items-center justify-center">2</span>
+                                  Amenities & Essentials Provided
+                                </span>
+                                {rev.surveyAnswers.amenitiesMissingTag && (
+                                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/60">
+                                    {rev.surveyAnswers.amenitiesMissingTag}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-slate-600 pl-6 leading-relaxed text-xs">
+                                {rev.surveyAnswers.amenities || 'Everything was provided & complete.'}
+                              </p>
+                            </div>
+
+                            {/* Q3: Cleanliness */}
+                            <div className="bg-white p-2.5 rounded-xl border border-slate-200/60 shadow-2xs">
+                              <div className="flex items-center justify-between gap-2 mb-1">
+                                <span className="font-bold text-slate-800 flex items-center gap-1.5 text-xs">
+                                  <span className="w-4.5 h-4.5 rounded-md bg-indigo-100 text-indigo-700 text-[10px] font-black flex items-center justify-center">3</span>
+                                  Cleanliness & Preparation
+                                </span>
+                                {rev.surveyAnswers.cleanlinessRating && (
+                                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/60">
+                                    {rev.surveyAnswers.cleanlinessRating}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-slate-600 pl-6 leading-relaxed text-xs">
+                                {rev.surveyAnswers.cleanliness || 'Spotless and thoroughly sanitized.'}
+                              </p>
+                            </div>
+
+                            {/* Q4: Operations */}
+                            <div className="bg-white p-2.5 rounded-xl border border-slate-200/60 shadow-2xs">
+                              <div className="flex items-center justify-between gap-2 mb-1">
+                                <span className="font-bold text-slate-800 flex items-center gap-1.5 text-xs">
+                                  <span className="w-4.5 h-4.5 rounded-md bg-indigo-100 text-indigo-700 text-[10px] font-black flex items-center justify-center">4</span>
+                                  Operations & Digital Smart Lock
+                                </span>
+                                {rev.surveyAnswers.operationsStatus && (
+                                  <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200/60">
+                                    {rev.surveyAnswers.operationsStatus}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-slate-600 pl-6 leading-relaxed text-xs">
+                                {rev.surveyAnswers.operations || 'Smart lock access and check-in operated flawlessly.'}
+                              </p>
+                            </div>
+
+                            {/* Q5: Future Ideas / Stay Again */}
+                            <div className="bg-white p-2.5 rounded-xl border border-slate-200/60 shadow-2xs">
+                              <div className="flex items-center justify-between gap-2 mb-1">
+                                <span className="font-bold text-slate-800 flex items-center gap-1.5 text-xs">
+                                  <span className="w-4.5 h-4.5 rounded-md bg-indigo-100 text-indigo-700 text-[10px] font-black flex items-center justify-center">5</span>
+                                  Future Stays & Recommendation
+                                </span>
+                                {rev.surveyAnswers.wouldStayAgain && (
+                                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/60">
+                                    {rev.surveyAnswers.wouldStayAgain}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-slate-600 pl-6 leading-relaxed text-xs">
+                                {rev.surveyAnswers.futureIdeas || 'Would stay again without hesitation.'}
+                              </p>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

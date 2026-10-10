@@ -1329,6 +1329,34 @@ export const AdminSurveyReminders: React.FC<AdminSurveyRemindersProps> = ({
                 "{viewingReviewItem.comment}"
               </div>
 
+              {viewingReviewItem.surveyAnswers && (
+                <div className="space-y-2 p-3 bg-indigo-50/50 rounded-2xl border border-indigo-150 text-[11px]">
+                  <div className="font-bold text-indigo-900 mb-1 flex items-center gap-1.5">
+                    <span>Verified 5 Stay Questions & Answers</span>
+                  </div>
+                  <div className="bg-white p-2 rounded-xl border border-slate-150">
+                    <span className="font-bold text-slate-700">1. Comfort:</span>{" "}
+                    <span className="text-slate-600">{viewingReviewItem.surveyAnswers.comfort} ({viewingReviewItem.surveyAnswers.comfortRating || 5}/5)</span>
+                  </div>
+                  <div className="bg-white p-2 rounded-xl border border-slate-150">
+                    <span className="font-bold text-slate-700">2. Amenities:</span>{" "}
+                    <span className="text-slate-600">{viewingReviewItem.surveyAnswers.amenities}</span>
+                  </div>
+                  <div className="bg-white p-2 rounded-xl border border-slate-150">
+                    <span className="font-bold text-slate-700">3. Cleanliness:</span>{" "}
+                    <span className="text-slate-600">{viewingReviewItem.surveyAnswers.cleanliness} ({viewingReviewItem.surveyAnswers.cleanlinessRating || '5 Stars'})</span>
+                  </div>
+                  <div className="bg-white p-2 rounded-xl border border-slate-150">
+                    <span className="font-bold text-slate-700">4. Operations:</span>{" "}
+                    <span className="text-slate-600">{viewingReviewItem.surveyAnswers.operations}</span>
+                  </div>
+                  <div className="bg-white p-2 rounded-xl border border-slate-150">
+                    <span className="font-bold text-slate-700">5. Would Stay Again:</span>{" "}
+                    <span className="text-slate-600">{viewingReviewItem.surveyAnswers.wouldStayAgain} - {viewingReviewItem.surveyAnswers.futureIdeas}</span>
+                  </div>
+                </div>
+              )}
+
               <div className="flex justify-between items-center text-[11px] text-slate-400 pt-1">
                 <span>Ref: #{viewingReviewItem.bookingRef || 'N/A'}</span>
                 <span>{viewingReviewItem.verified ? 'Verified Stay' : 'Unverified'}</span>

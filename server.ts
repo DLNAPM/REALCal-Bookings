@@ -3684,6 +3684,69 @@ async function startServer() {
   // SURVEY & REVIEWS API ENDPOINTS
   // ==========================================
 
+  const REVIEWS_FILE = path.resolve(process.cwd(), "data", "reviews.json");
+  const SURVEYS_FILE = path.resolve(process.cwd(), "data", "surveys.json");
+
+  function getLocalReviews(): any[] {
+    try {
+      if (fs.existsSync(REVIEWS_FILE)) {
+        return JSON.parse(fs.readFileSync(REVIEWS_FILE, "utf-8"));
+      }
+    } catch (e) {
+      console.warn("[Reviews] Error reading local reviews file:", e);
+    }
+    return [];
+  }
+
+  function saveLocalReview(review: any) {
+    try {
+      const dataDir = path.dirname(REVIEWS_FILE);
+      if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+      const current = getLocalReviews();
+      const existingIdx = current.findIndex(r => r.id === review.id || (r.bookingRef && review.bookingRef && r.bookingRef === review.bookingRef));
+      if (existingIdx >= 0) {
+        current[existingIdx] = { ...current[existingIdx], ...review };
+      } else {
+        current.unshift(review);
+      }
+      fs.writeFileSync(REVIEWS_FILE, JSON.stringify(current, null, 2), "utf-8");
+      return current;
+    } catch (e) {
+      console.error("[Reviews] Error writing local review:", e);
+      return [];
+    }
+  }
+
+  function getLocalSurveys(): any[] {
+    try {
+      if (fs.existsSync(SURVEYS_FILE)) {
+        return JSON.parse(fs.readFileSync(SURVEYS_FILE, "utf-8"));
+      }
+    } catch (e) {
+      console.warn("[Surveys] Error reading local surveys file:", e);
+    }
+    return [];
+  }
+
+  function saveLocalSurvey(survey: any) {
+    try {
+      const dataDir = path.dirname(SURVEYS_FILE);
+      if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+      const current = getLocalSurveys();
+      const existingIdx = current.findIndex(s => s.id === survey.id || (s.bookingRef && survey.bookingRef && s.bookingRef === survey.bookingRef));
+      if (existingIdx >= 0) {
+        current[existingIdx] = { ...current[existingIdx], ...survey };
+      } else {
+        current.unshift(survey);
+      }
+      fs.writeFileSync(SURVEYS_FILE, JSON.stringify(current, null, 2), "utf-8");
+      return current;
+    } catch (e) {
+      console.error("[Surveys] Error writing local survey:", e);
+      return [];
+    }
+  }
+
   // Submit 5-Question Survey and forward results to Property Management Contacts
   app.post("/api/submit-survey", async (req, res) => {
     console.log("[API] Submit Survey hit");
@@ -3693,53 +3756,200 @@ async function startServer() {
         return res.status(400).json({ error: "Survey data and guest name are required." });
       }
 
-      let surveyId = "srv-" + Date.now();
+      const surveyId = "srv-" + Date.now();
+      const newSurveyRecord = {
+        id: surveyId,
+        ...surveyData,
+        createdAt: new Date().toISOString()
+      };
 
-      if (db) {
-        const docRef = await db.collection("surveys").add({
-          ...surveyData,
-          createdAt: admin.firestore.FieldValue.serverTimestamp()
-        });
-        surveyId = docRef.id;
+      // 1. Always save to reliable local store
+      saveLocalSurvey(newSurveyRecord);
 
-        // If user opted to publish a public review comment
-        if (surveyData.publishAsReview && (surveyData.publicReviewComment || surveyData.comfort)) {
-          await db.collection("reviews").add({
-            author: surveyData.guestName,
-            email: surveyData.guestEmail || "",
-            role: surveyData.reviewRole || "Verified Guest",
-            propertyName: surveyData.propertyName || "Stonewall Villa",
-            rating: surveyData.overallRating || surveyData.comfortRating || 5,
-            comment: surveyData.publicReviewComment || surveyData.comfort,
-            bookingRef: surveyData.bookingRef || "",
-            verified: true,
-            createdAt: admin.firestore.FieldValue.serverTimestamp()
-          });
-        }
+      let publishedReviewRecord: any = null;
+      if (surveyData.publishAsReview && (surveyData.publicReviewComment || surveyData.comfort)) {
+        const surveyAnswers = surveyData.surveyAnswers || {
+          comfort: (surveyData.comfort || "").trim(),
+          comfortRating: Number(surveyData.comfortRating || 5),
+          amenities: (surveyData.amenities || "").trim(),
+          amenitiesMissingTag: (surveyData.amenitiesMissingTag || "").trim(),
+          cleanliness: (surveyData.cleanliness || "").trim(),
+          cleanlinessRating: (surveyData.cleanlinessRating || "").trim(),
+          operations: (surveyData.operations || "").trim(),
+          operationsStatus: (surveyData.operationsStatus || "").trim(),
+          futureIdeas: (surveyData.futureIdeas || "").trim(),
+          wouldStayAgain: (surveyData.wouldStayAgain || "").trim()
+        };
 
-        // Mark booking as survey completed if reference provided
-        if (surveyData.bookingRef) {
-          try {
-            const bDoc = await db.collection("bookings").doc(surveyData.bookingRef).get();
-            if (bDoc.exists) {
-              await db.collection("bookings").doc(surveyData.bookingRef).update({
-                surveyCompleted: true,
-                surveyCompletedAt: admin.firestore.FieldValue.serverTimestamp()
-              });
-            }
-          } catch (e) {}
-        }
-
-        // Forward full survey results to Property Management Contacts
-        await sendSurveyResultsToPropertyManagers({ surveyData, activeDb: db });
-      } else {
-        await sendSurveyResultsToPropertyManagers({ surveyData, activeDb: null });
+        publishedReviewRecord = {
+          id: "rev-" + Date.now(),
+          author: surveyData.guestName.trim(),
+          email: (surveyData.guestEmail || "").trim(),
+          phone: (surveyData.guestPhone || "").trim(),
+          role: surveyData.reviewRole || "Verified Guest",
+          propertyName: surveyData.propertyName || "2844 Stonewall Villa",
+          rating: Number(surveyData.overallRating || surveyData.comfortRating || 5),
+          title: (surveyData.publicReviewTitle || "Guest Stay Experience").trim(),
+          comment: (surveyData.publicReviewComment || surveyData.comfort).trim(),
+          bookingRef: (surveyData.bookingRef || "").trim(),
+          verified: true,
+          surveyAnswers,
+          createdAt: new Date().toISOString()
+        };
+        saveLocalReview(publishedReviewRecord);
+        console.log(`[API] Saved public review for guest ${surveyData.guestName} (${publishedReviewRecord.id})`);
       }
 
-      res.json({ success: true, surveyId });
+      // 2. Try Firestore Admin if available, but never fail the submission if Firestore permissions are restricted
+      if (db) {
+        try {
+          const docRef = await db.collection("surveys").add({
+            ...surveyData,
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
+          });
+          console.log(`[API] Survey persisted to Firestore: ${docRef.id}`);
+
+          if (publishedReviewRecord) {
+            const revDocRef = await db.collection("reviews").add({
+              author: publishedReviewRecord.author,
+              email: publishedReviewRecord.email,
+              phone: publishedReviewRecord.phone,
+              role: publishedReviewRecord.role,
+              propertyName: publishedReviewRecord.propertyName,
+              rating: publishedReviewRecord.rating,
+              title: publishedReviewRecord.title,
+              comment: publishedReviewRecord.comment,
+              bookingRef: publishedReviewRecord.bookingRef,
+              verified: true,
+              surveyAnswers: publishedReviewRecord.surveyAnswers,
+              createdAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+            console.log(`[API] Public review persisted to Firestore: ${revDocRef.id}`);
+          }
+
+          if (surveyData.bookingRef) {
+            try {
+              const bDoc = await db.collection("bookings").doc(surveyData.bookingRef).get();
+              if (bDoc.exists) {
+                await db.collection("bookings").doc(surveyData.bookingRef).update({
+                  surveyCompleted: true,
+                  surveyCompletedAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+              }
+            } catch (bErr) {}
+          }
+        } catch (dbErr: any) {
+          console.warn("[API] Firestore Admin write warning (handled gracefully via local fallback):", dbErr.message);
+        }
+      }
+
+      // 3. Dispatch management notification emails
+      try {
+        await sendSurveyResultsToPropertyManagers({ surveyData, activeDb: db });
+      } catch (emailErr: any) {
+        console.warn("[API] Survey email dispatch warning:", emailErr.message);
+      }
+
+      res.json({
+        success: true,
+        surveyId,
+        reviewPublished: !!publishedReviewRecord,
+        review: publishedReviewRecord
+      });
     } catch (err: any) {
       console.error("[API] Error submitting survey:", err);
       res.status(500).json({ error: err.message || "Failed to process survey." });
+    }
+  });
+
+  // GET /api/reviews - returns all reviews from local store and Firestore
+  app.get("/api/reviews", async (req, res) => {
+    try {
+      const localReviews = getLocalReviews();
+      let firestoreReviewsList: any[] = [];
+      if (db) {
+        try {
+          const snap = await db.collection("reviews").orderBy("createdAt", "desc").get();
+          firestoreReviewsList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        } catch (e: any) {
+          console.warn("[API] Firestore get reviews warning:", e.message);
+        }
+      }
+      const mergedMap = new Map<string, any>();
+      [...firestoreReviewsList, ...localReviews].forEach(item => {
+        const key = item.id || `${item.author}-${item.comment?.slice(0, 20)}`;
+        if (!mergedMap.has(key)) {
+          mergedMap.set(key, item);
+        }
+      });
+      res.json({ reviews: Array.from(mergedMap.values()) });
+    } catch (err: any) {
+      console.error("[API] Error fetching reviews:", err);
+      res.status(500).json({ error: err.message, reviews: getLocalReviews() });
+    }
+  });
+
+  // POST /api/reviews - direct review submission from Leave a Review modal
+  app.post("/api/reviews", async (req, res) => {
+    try {
+      const reviewData = req.body;
+      if (!reviewData || !reviewData.author || !reviewData.comment) {
+        return res.status(400).json({ error: "Author name and comment are required." });
+      }
+      const newReview = {
+        id: "rev-" + Date.now(),
+        author: reviewData.author.trim(),
+        role: reviewData.role || "Verified Guest",
+        email: (reviewData.email || "").trim(),
+        propertyName: reviewData.propertyName || "2844 Stonewall Villa",
+        rating: Number(reviewData.rating || 5),
+        title: (reviewData.title || "").trim(),
+        comment: reviewData.comment.trim(),
+        bookingRef: (reviewData.bookingRef || "").trim(),
+        verified: true,
+        createdAt: new Date().toISOString()
+      };
+      saveLocalReview(newReview);
+      if (db) {
+        try {
+          await db.collection("reviews").add({
+            ...newReview,
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
+          });
+        } catch (dbErr: any) {
+          console.warn("[API] Firestore review add warning:", dbErr.message);
+        }
+      }
+      res.json({ success: true, review: newReview });
+    } catch (err: any) {
+      console.error("[API] Error saving review:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/surveys - returns all completed surveys
+  app.get("/api/surveys", async (req, res) => {
+    try {
+      const localSurveys = getLocalSurveys();
+      let firestoreSurveysList: any[] = [];
+      if (db) {
+        try {
+          const snap = await db.collection("surveys").orderBy("createdAt", "desc").get();
+          firestoreSurveysList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        } catch (e: any) {
+          console.warn("[API] Firestore get surveys warning:", e.message);
+        }
+      }
+      const mergedMap = new Map<string, any>();
+      [...firestoreSurveysList, ...localSurveys].forEach(item => {
+        const key = item.id || `${item.guestEmail}-${item.bookingRef}`;
+        if (!mergedMap.has(key)) {
+          mergedMap.set(key, item);
+        }
+      });
+      res.json({ surveys: Array.from(mergedMap.values()) });
+    } catch (err: any) {
+      res.json({ surveys: getLocalSurveys() });
     }
   });
 
