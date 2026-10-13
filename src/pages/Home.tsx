@@ -505,7 +505,7 @@ export const Home: React.FC = () => {
                                 </div>
                                 <div>
                                     <h3 className="text-xl font-bold text-slate-800">Sporting Events</h3>
-                                    <p className="text-xs text-slate-400 mt-0.5">Top-tier athletic events, championships, and matchups across MLB, NBA, WNBA, NFL, MLS & College Football</p>
+                                    <p className="text-xs text-slate-400 mt-0.5">Top-tier athletic events, tournaments, stadium tours & college matchups across Atlanta</p>
                                 </div>
                                 <span className="ml-auto text-xs bg-amber-50 text-amber-700 px-3 py-1 rounded-full font-bold">
                                     {eventsList.filter(e => e.category === 'Sporting Events').length} Matches
