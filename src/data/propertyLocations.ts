@@ -17,6 +17,7 @@ export interface PropertyLocationProfile {
   lng: number;
   imageUrl: string;
   isFlagship?: boolean;
+  isTestProperty?: boolean;
   powerUtility: {
     name: string;
     phone: string;
@@ -121,6 +122,7 @@ export const KNOWN_PROPERTY_PROFILES: PropertyLocationProfile[] = [
     lat: 25.7825,
     lng: -80.1340,
     imageUrl: 'https://images.unsplash.com/photo-1499793983690-e29da59ef1c2?auto=format&fit=crop&q=80&w=2000',
+    isTestProperty: true,
     powerUtility: {
       name: 'Florida Power & Light (FPL)',
       phone: '1-800-468-8243',
@@ -183,6 +185,7 @@ export const KNOWN_PROPERTY_PROFILES: PropertyLocationProfile[] = [
     lat: 34.8640,
     lng: -84.3240,
     imageUrl: 'https://images.unsplash.com/photo-1542314831-c6a4d14effca?auto=format&fit=crop&q=80&w=2000',
+    isTestProperty: true,
     powerUtility: {
       name: 'Blue Ridge Mountain EMC',
       phone: '1-706-379-3121',

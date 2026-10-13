@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, isAdminEmail } from '../contexts/AuthContext';
 import { signIn, signOut, db } from '../lib/firebase';
 import { collection, query, onSnapshot } from 'firebase/firestore';
 import { Link, useNavigate } from 'react-router-dom';
@@ -27,7 +27,7 @@ export const Home: React.FC = () => {
     const [eventsList, setEventsList] = useState<EventItem[]>(() => getEventsForNext30Days(new Date(), 0));
     const navigate = useNavigate();
 
-    const isAdmin = user?.role === 'admin';
+    const isAdmin = Boolean(user && (user.role === 'admin' || isAdminEmail(user.email)));
 
     // Automatic Events Refresh: automatically recalculate events on mount, whenever the tab is switched to 'events',
     // when visibility changes, on window focus, and periodically every 60 seconds so no events can ever be shown in the past
@@ -98,10 +98,18 @@ export const Home: React.FC = () => {
         if (!db) return;
         const unsub = onSnapshot(query(collection(db, 'properties')), (snap) => {
             const allProperties = snap.docs.map(d => ({id: d.id, ...d.data() } as Property));
-            const allowedTestEmails = ['reach_dlaniger@hotmail.com', 'dlaniger.napm.consulting@gmail.com', 'monnib30228@gmail.com'];
-            const canViewTestProps = user && user.email && allowedTestEmails.includes(user.email);
-            
-            setProperties(allProperties.filter(p => !p.isTestProperty || canViewTestProps));
+            const isTestProp = (p: Property) => {
+                if (p.isTestProperty) return true;
+                const nameLower = (p.name || '').toLowerCase();
+                const idLower = (p.id || '').toLowerCase();
+                return (
+                    nameLower.includes('oceanview') ||
+                    nameLower.includes('mountain retreat') ||
+                    idLower === 'oceanview-paradise-villa' ||
+                    idLower === 'mountain-retreat-cabin'
+                );
+            };
+            setProperties(allProperties.filter(p => !isTestProp(p) || isAdmin));
         }, (error) => {
             console.error("Home properties snapshot error:", error);
         });

@@ -35,11 +35,12 @@ import {
   HelpCircle,
   Key,
   LogOut,
-  ChevronDown
+  ChevronDown,
+  Lock
 } from 'lucide-react';
 import { collection, onSnapshot, query } from 'firebase/firestore';
 import { db, signIn, signOut } from '../lib/firebase';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, isAdminEmail } from '../contexts/AuthContext';
 import { Property } from '../types';
 import { LegalFooter } from '../components/LegalFooter';
 import { 
@@ -79,14 +80,31 @@ interface NwsAlert {
 }
 
 export function AlertsAndEvents() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+
+  const isAdmin = Boolean(user && (user.role === 'admin' || isAdminEmail(user.email)));
+
+  // Helper to determine if a property is a designated test property
+  // (Oceanview Paradise Villa or Mountain Retreat Cabin)
+  const isTestProperty = (p: { id?: string; name?: string; isTestProperty?: boolean }) => {
+    if (p.isTestProperty) return true;
+    const nameLower = (p.name || '').toLowerCase();
+    const idLower = (p.id || '').toLowerCase();
+    return (
+      nameLower.includes('oceanview') ||
+      nameLower.includes('mountain retreat') ||
+      idLower === 'oceanview-paradise-villa' ||
+      idLower === 'mountain-retreat-cabin'
+    );
+  };
 
   // Loaded properties from Firestore + Known defaults
   const [dbProperties, setDbProperties] = useState<Property[]>([]);
   const [selectedPropertyId, setSelectedPropertyId] = useState<string>(() => {
-    return searchParams.get('property') || searchParams.get('id') || 'stonewall-villa';
+    const rawParam = searchParams.get('property') || searchParams.get('id') || 'stonewall-villa';
+    return rawParam;
   });
 
   // Events & Filter state
@@ -106,6 +124,21 @@ export function AlertsAndEvents() {
   const [networkPingLatency, setNetworkPingLatency] = useState<number>(12);
   const [isPingingNetwork, setIsPingingNetwork] = useState<boolean>(false);
 
+  // Sign in handler
+  const handleSignIn = async () => {
+    try {
+      await signIn();
+    } catch (error: any) {
+      console.error("Sign in error:", error);
+      if (error.code === 'auth/unauthorized-domain') {
+        const domain = window.location.hostname;
+        alert(`Authentication Error: Firebase does not trust this domain (${domain}).\n\nPlease go to Firebase Console -> Authentication -> Settings -> Authorized Domains and add:\n\n${domain}`);
+      } else {
+        alert(`Sign in failed: ${error.message}`);
+      }
+    }
+  };
+
   // Fetch Firestore properties
   useEffect(() => {
     if (!db) return;
@@ -118,9 +151,11 @@ export function AlertsAndEvents() {
     return unsub;
   }, []);
 
-  // Combine Firestore properties with known defaults so user can select any property
+  // Combine Firestore properties with known defaults so user can select any property.
+  // ONLY Admins can see the TEST Properties:
+  // Oceanview Paradise Villa & Mountain Retreat Cabin
   const allSelectableProperties = useMemo(() => {
-    const combined: { id: string; name: string; location?: string; images?: any[] }[] = [];
+    const combined: { id: string; name: string; location?: string; images?: any[]; isTestProperty?: boolean }[] = [];
     
     // Add known flagship profiles
     KNOWN_PROPERTY_PROFILES.forEach(kp => {
@@ -128,19 +163,35 @@ export function AlertsAndEvents() {
         id: kp.id,
         name: kp.name,
         location: kp.address,
-        images: [kp.imageUrl]
+        images: [kp.imageUrl],
+        isTestProperty: kp.isTestProperty,
       });
     });
 
     // Add properties from Firestore that aren't exact duplicates
     dbProperties.forEach(p => {
       if (!combined.some(c => c.name.toLowerCase() === p.name.toLowerCase() || c.id === p.id)) {
-        combined.push(p);
+        combined.push({
+          id: p.id,
+          name: p.name,
+          location: p.location,
+          images: p.images,
+          isTestProperty: p.isTestProperty,
+        });
       }
     });
 
-    return combined;
-  }, [dbProperties]);
+    // Enforce requirement: ONLY Admins can see the TEST Properties!
+    return combined.filter(p => !isTestProperty(p) || isAdmin);
+  }, [dbProperties, isAdmin]);
+
+  // If a non-admin user lands with a test property selected, redirect them to Stonewall Villa
+  useEffect(() => {
+    if (!isAdmin && isTestProperty({ id: selectedPropertyId, name: selectedPropertyId })) {
+      setSelectedPropertyId('stonewall-villa');
+      setSearchParams({ property: 'stonewall-villa' });
+    }
+  }, [isAdmin, selectedPropertyId, setSearchParams]);
 
   // Currently active profile
   const activePropertyProfile: PropertyLocationProfile = useMemo(() => {
@@ -317,6 +368,174 @@ export function AlertsAndEvents() {
 
   const WeatherIconComponent = weather ? decodeWeatherCode(weather.weatherCode).icon : Sun;
 
+  // 1. Loading screen while resolving Firebase auth session
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800">
+        <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-200">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between">
+            <Link to="/" className="flex items-center gap-2">
+              <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-tr from-slate-900 to-indigo-900 flex items-center justify-center text-white">
+                <Building2 size={20} className="sm:size-6 text-indigo-200" />
+              </div>
+              <span className="font-extrabold text-base sm:text-xl text-slate-900">
+                C.&.S.H. <span className="text-indigo-600">Properties</span>
+              </span>
+            </Link>
+          </div>
+        </header>
+        <div className="flex-1 flex items-center justify-center p-8">
+          <div className="text-center">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center mx-auto mb-4 animate-spin shadow-lg shadow-indigo-600/30">
+              <RotateCw size={24} />
+            </div>
+            <h2 className="text-lg font-bold text-slate-800">Verifying Guest Access...</h2>
+            <p className="text-xs text-slate-500 mt-1">Connecting to CSH Properties Stay Portal</p>
+          </div>
+        </div>
+        <LegalFooter />
+      </div>
+    );
+  }
+
+  // 2. REQUIRE GUEST SIGN-IN:
+  // Guests must sign-in before they can see "Alerts and Events" for any Property!
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800">
+        {/* Top Navigation Bar */}
+        <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-2xs">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between gap-4">
+            <Link to="/" className="flex items-center gap-2 group shrink-0">
+              <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-tr from-slate-900 to-indigo-900 flex items-center justify-center text-white shadow-md group-hover:scale-105 transition-transform">
+                <Building2 size={20} className="sm:size-6 text-indigo-200" />
+              </div>
+              <div className="flex flex-col">
+                <span className="font-extrabold text-base sm:text-xl tracking-tight text-slate-900 leading-none">
+                  C.&.S.H. <span className="text-indigo-600">Properties</span>
+                </span>
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
+                  Stay Portal &amp; Alerts
+                </span>
+              </div>
+            </Link>
+
+            <nav className="flex items-center gap-1 sm:gap-3">
+              <Link 
+                to="/" 
+                className="text-slate-600 hover:text-indigo-600 font-bold flex items-center gap-1.5 text-xs sm:text-sm px-2.5 py-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+              >
+                <ArrowLeft size={14} /> Back to Home
+              </Link>
+              <Link 
+                to="/reviews" 
+                className="text-slate-600 hover:text-indigo-600 font-bold hidden sm:flex items-center gap-1 text-xs sm:text-sm px-2.5 py-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+              >
+                <Star size={14} className="text-amber-500 fill-amber-500/30" /> Reviews
+              </Link>
+              <Link 
+                to="/faq" 
+                className="text-slate-600 hover:text-indigo-600 font-bold hidden md:flex items-center gap-1 text-xs sm:text-sm px-2.5 py-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+              >
+                <HelpCircle size={14} /> FAQ
+              </Link>
+              <button 
+                onClick={handleSignIn}
+                className="px-3.5 py-1.5 sm:px-4 sm:py-2 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors text-xs sm:text-sm shadow-sm cursor-pointer"
+              >
+                Sign In
+              </button>
+            </nav>
+          </div>
+        </header>
+
+        {/* Guest Sign-In Barrier Main Container */}
+        <main className="flex-1 w-full max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-16 flex flex-col items-center justify-center">
+          <div className="w-full bg-white rounded-3xl border border-slate-200 shadow-xl p-6 sm:p-10 relative overflow-hidden text-center">
+            <div className="absolute top-0 right-0 w-80 h-80 bg-gradient-to-br from-indigo-100/60 to-purple-100/30 rounded-full blur-3xl pointer-events-none -z-0"></div>
+            
+            <div className="relative z-10 max-w-xl mx-auto flex flex-col items-center">
+              {/* Lock Badge */}
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-tr from-indigo-600 to-indigo-800 text-white flex items-center justify-center shadow-lg shadow-indigo-600/25 mb-5 ring-8 ring-indigo-50">
+                <Lock size={32} className="sm:size-9 text-white" />
+              </div>
+
+              <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold uppercase tracking-wider mb-3">
+                <ShieldAlert size={14} className="text-amber-600" /> Guest Sign-In Required
+              </div>
+
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-slate-900 tracking-tight">
+                Sign In to View Alerts and Events
+              </h1>
+
+              <p className="text-sm sm:text-base text-slate-600 mt-3 leading-relaxed">
+                To protect property privacy and deliver real-time localized information, guests must sign in before viewing property alerts, weather conditions, network outages, and local community events.
+              </p>
+
+              {/* Three Value Pillars */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full my-8 text-left">
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/70 flex flex-col gap-2">
+                  <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shadow-2xs">
+                    <CloudSun size={18} />
+                  </div>
+                  <span className="font-bold text-xs sm:text-sm text-slate-900">Live Weather &amp; NWS</span>
+                  <span className="text-[11px] text-slate-500 leading-normal">
+                    Current temperatures, precipitation probability, and official National Weather Service advisories for property coordinates.
+                  </span>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/70 flex flex-col gap-2">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shadow-2xs">
+                    <Wifi size={18} />
+                  </div>
+                  <span className="font-bold text-xs sm:text-sm text-slate-900">Carrier &amp; ISP Outages</span>
+                  <span className="text-[11px] text-slate-500 leading-normal">
+                    Live network uptime &amp; outage tracking for AT&amp;T, Verizon, T-Mobile, Xfinity, and local electric grid.
+                  </span>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/70 flex flex-col gap-2">
+                  <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center shadow-2xs">
+                    <Trophy size={18} />
+                  </div>
+                  <span className="font-bold text-xs sm:text-sm text-slate-900">Verified Local Events</span>
+                  <span className="text-[11px] text-slate-500 leading-normal">
+                    Real games for the Braves, Dream WNBA Finals, Hawks, Falcons, concerts &amp; attractions tailored to property proximity.
+                  </span>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={handleSignIn}
+                  className="w-full sm:w-auto px-8 py-3.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-extrabold rounded-xl shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2.5 text-sm sm:text-base transition-all duration-200 cursor-pointer"
+                >
+                  <span>Sign In with Google</span>
+                </button>
+
+                <Link
+                  to="/"
+                  className="w-full sm:w-auto px-6 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl flex items-center justify-center gap-2 text-sm transition-all duration-200"
+                >
+                  <ArrowLeft size={16} /> Return to Home
+                </Link>
+              </div>
+
+              <p className="text-[11px] text-slate-400 mt-6">
+                Safe Google authentication. Registered guests with reservations get immediate access.
+              </p>
+            </div>
+          </div>
+        </main>
+
+        <LegalFooter />
+      </div>
+    );
+  }
+
+  // 3. Authenticated User View
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800">
       {/* Top Navigation Bar */}
@@ -331,7 +550,7 @@ export function AlertsAndEvents() {
                 C.&.S.H. <span className="text-indigo-600">Properties</span>
               </span>
               <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
-                Stay Portal & Alerts
+                Stay Portal &amp; Alerts
               </span>
             </div>
           </Link>
@@ -358,7 +577,7 @@ export function AlertsAndEvents() {
               <HelpCircle size={14} /> FAQ
             </Link>
 
-            {user?.role === 'admin' && (
+            {isAdmin && (
               <Link 
                 to="/admin" 
                 className="text-amber-700 bg-amber-50 border border-amber-200/80 font-bold flex items-center gap-1 text-xs sm:text-sm px-2.5 py-1.5 rounded-lg hover:bg-amber-100 transition-colors"
@@ -367,27 +586,18 @@ export function AlertsAndEvents() {
               </Link>
             )}
 
-            {user ? (
-              <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
-                <Link to="/my-bookings" className="text-xs sm:text-sm font-bold text-slate-700 hover:text-indigo-600">
-                  My Bookings
-                </Link>
-                <button 
-                  onClick={() => signOut()} 
-                  className="p-1.5 text-slate-400 hover:text-red-600 transition-colors"
-                  title="Log out"
-                >
-                  <LogOut size={16} />
-                </button>
-              </div>
-            ) : (
+            <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
+              <Link to="/my-bookings" className="text-xs sm:text-sm font-bold text-slate-700 hover:text-indigo-600">
+                My Bookings
+              </Link>
               <button 
-                onClick={() => signIn()}
-                className="px-3.5 py-1.5 sm:px-4 sm:py-2 bg-slate-900 text-white font-bold rounded-xl hover:bg-indigo-600 transition-colors text-xs sm:text-sm shadow-sm"
+                onClick={() => signOut()} 
+                className="p-1.5 text-slate-400 hover:text-red-600 transition-colors cursor-pointer"
+                title="Log out"
               >
-                Sign In
+                <LogOut size={16} />
               </button>
-            )}
+            </div>
           </nav>
         </div>
       </header>
@@ -476,6 +686,11 @@ export function AlertsAndEvents() {
                         {profile.isFlagship && (
                           <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-indigo-100 text-indigo-700 uppercase">
                             Flagship
+                          </span>
+                        )}
+                        {profile.isTestProperty && (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-amber-100 text-amber-800 border border-amber-300 uppercase">
+                            Test Property (Admin Only)
                           </span>
                         )}
                       </div>
