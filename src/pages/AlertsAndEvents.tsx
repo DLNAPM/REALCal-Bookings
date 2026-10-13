@@ -1006,6 +1006,66 @@ export function AlertsAndEvents() {
                 </select>
               </div>
             </div>
+
+            {/* Atlanta Pro Sports Team Quick Shortcuts */}
+            <div className="w-full flex items-center gap-2 pt-3 border-t border-slate-100 flex-wrap">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1 shrink-0">
+                <Trophy size={12} className="text-amber-500" /> Atlanta Teams:
+              </span>
+              <button
+                type="button"
+                onClick={() => { setSelectedCategory('Sporting Events'); setSearchQuery('Braves'); }}
+                className={`text-xs px-2.5 py-1 rounded-lg font-bold border transition-colors cursor-pointer ${
+                  searchQuery.toLowerCase() === 'braves' 
+                    ? 'bg-red-600 text-white border-red-600 shadow-2xs' 
+                    : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-red-50 hover:text-red-700'
+                }`}
+              >
+                ⚾ Atlanta Braves (Truist Park)
+              </button>
+              <button
+                type="button"
+                onClick={() => { setSelectedCategory('Sporting Events'); setSearchQuery('Dream'); }}
+                className={`text-xs px-2.5 py-1 rounded-lg font-bold border transition-colors cursor-pointer ${
+                  searchQuery.toLowerCase() === 'dream' 
+                    ? 'bg-sky-600 text-white border-sky-600 shadow-2xs' 
+                    : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-sky-50 hover:text-sky-700'
+                }`}
+              >
+                🏀 Atlanta Dream (WNBA Finals vs. Valkyries)
+              </button>
+              <button
+                type="button"
+                onClick={() => { setSelectedCategory('Sporting Events'); setSearchQuery('Falcons'); }}
+                className={`text-xs px-2.5 py-1 rounded-lg font-bold border transition-colors cursor-pointer ${
+                  searchQuery.toLowerCase() === 'falcons' 
+                    ? 'bg-slate-900 text-white border-slate-900 shadow-2xs' 
+                    : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                🏈 Atlanta Falcons (Mercedes-Benz)
+              </button>
+              <button
+                type="button"
+                onClick={() => { setSelectedCategory('Sporting Events'); setSearchQuery('Hawks'); }}
+                className={`text-xs px-2.5 py-1 rounded-lg font-bold border transition-colors cursor-pointer ${
+                  searchQuery.toLowerCase() === 'hawks' 
+                    ? 'bg-amber-600 text-white border-amber-600 shadow-2xs' 
+                    : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-amber-50 hover:text-amber-700'
+                }`}
+              >
+                🦅 Atlanta Hawks (State Farm Arena)
+              </button>
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="text-[11px] text-slate-400 hover:text-slate-600 underline font-semibold cursor-pointer ml-1"
+                >
+                  Show All Events
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Events Grid */}
