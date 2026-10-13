@@ -20,6 +20,7 @@ import { FAQ } from './pages/FAQ';
 import { PayInvoice } from './pages/PayInvoice';
 import { Reviews } from './pages/Reviews';
 import { Survey } from './pages/Survey';
+import { AlertsAndEvents } from './pages/AlertsAndEvents';
 import { HelpModal } from './components/HelpModal';
 
 export default function App() {
@@ -39,6 +40,8 @@ export default function App() {
            <Route path="/reviews" element={<Reviews />} />
            <Route path="/survey" element={<Survey />} />
            <Route path="/survey/:id" element={<Survey />} />
+           <Route path="/alerts-and-events" element={<AlertsAndEvents />} />
+           <Route path="/events" element={<AlertsAndEvents />} />
            <Route path="/opt-in" element={<OptIn />} />
            <Route path="/privacy" element={<PrivacyPolicy />} />
            <Route path="/terms" element={<TermsOfService />} />

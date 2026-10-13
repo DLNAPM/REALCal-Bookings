@@ -558,11 +558,61 @@ export const VERIFIED_KIDS_EVENTS: VerifiedEventDef[] = [
   },
 ];
 
+export const VENUE_COORDINATES: Record<string, { lat: number; lng: number }> = {
+  'Mercedes-Benz Stadium': { lat: 33.7554, lng: -84.4009 },
+  'Fox Theatre Atlanta': { lat: 33.7725, lng: -84.3857 },
+  'Fox Theatre': { lat: 33.7725, lng: -84.3857 },
+  'State Farm Arena': { lat: 33.7573, lng: -84.3963 },
+  'Zoo Atlanta': { lat: 33.7331, lng: -84.3725 },
+  "Children's Museum of Atlanta": { lat: 33.7628, lng: -84.3897 },
+  'Center for Puppetry Arts': { lat: 33.7915, lng: -84.3895 },
+  'Stone Mountain Park': { lat: 33.8053, lng: -84.1456 },
+  'Bobby Dodd Stadium at Historic Grant Field': { lat: 33.7724, lng: -84.3928 },
+  'Atlanta Botanical Garden': { lat: 33.7905, lng: -84.3732 },
+  'Georgia Aquarium': { lat: 33.7634, lng: -84.3951 },
+  'St. James Live': { lat: 33.6558, lng: -84.5020 },
+  'Wolf Creek Amphitheater': { lat: 33.6420, lng: -84.5610 },
+  'Phipps Plaza LEGO Discovery Center': { lat: 33.8530, lng: -84.3620 },
+  'Bobby Jones Golf Course': { lat: 33.8115, lng: -84.4075 },
+  'Atlanta Symphony Hall at Woodruff Arts Center': { lat: 33.7892, lng: -84.3849 },
+  'Atlanta Symphony Hall': { lat: 33.7892, lng: -84.3849 },
+  'Atlantic Station': { lat: 33.7915, lng: -84.3980 },
+  'Fernbank Museum of Natural History': { lat: 33.7743, lng: -84.3289 },
+  'Center Parc Stadium': { lat: 33.7353, lng: -84.3895 },
+  'Historic Cabbagetown Park': { lat: 33.7495, lng: -84.3648 },
+  'OTE Arena at Atlantic Station': { lat: 33.7890, lng: -84.3985 },
+  'Tellus Science Museum': { lat: 34.2370, lng: -84.8150 },
+  'Southside Park Trailhead': { lat: 33.6812, lng: -84.3792 },
+};
+
+function calculateDistanceInMiles(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 3958.8; // Radius of the Earth in statute miles
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(R * c * 10) / 10;
+}
+
+export interface EventOriginOptions {
+  lat?: number;
+  lng?: number;
+  propertyName?: string;
+}
+
 /**
  * Returns genuine, verified upcoming events occurring strictly within the next 30 days.
  * Real events with verified dates: NO fake rolled dates or fabricated games!
+ * Computes proximity dynamically if origin coordinates and property name are provided.
  */
-export function getEventsForNext30Days(currentDate: Date = new Date(), refreshSeed: number = 0): EventItem[] {
+export function getEventsForNext30Days(
+  currentDate: Date = new Date(),
+  refreshSeed: number = 0,
+  origin?: EventOriginOptions
+): EventItem[] {
   const now = currentDate instanceof Date && !isNaN(currentDate.getTime()) ? currentDate : new Date();
   const currentYear = now.getFullYear();
   const windowEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
@@ -576,6 +626,17 @@ export function getEventsForNext30Days(currentDate: Date = new Date(), refreshSe
       return null;
     }
 
+    let calculatedDistance = def.distance;
+    if (origin && typeof origin.lat === 'number' && typeof origin.lng === 'number') {
+      const coord = VENUE_COORDINATES[def.venue];
+      if (coord) {
+        const miles = calculateDistanceInMiles(origin.lat, origin.lng, coord.lat, coord.lng);
+        calculatedDistance = origin.propertyName 
+          ? `${miles} mi from ${origin.propertyName}` 
+          : `${miles} miles`;
+      }
+    }
+
     return {
       id: def.id,
       title: def.title,
@@ -585,7 +646,7 @@ export function getEventsForNext30Days(currentDate: Date = new Date(), refreshSe
       description: def.description,
       ticketUrl: def.ticketUrl,
       venue: def.venue,
-      distance: def.distance,
+      distance: calculatedDistance,
     };
   };
 

@@ -4,7 +4,7 @@ import { Calendar } from '../components/Calendar';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
-import { ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, MapPin, Home, Shield, Sparkles, Video, Play, Maximize2, Film, Youtube, ExternalLink } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, MapPin, Home, Shield, Sparkles, Video, Play, Maximize2, Film, Youtube, ExternalLink, Compass, ShieldAlert } from 'lucide-react';
 import { Property, getImageUrl, getImageRoomNumber } from '../types';
 import { isAppleOS, getMapLink } from '../lib/utils';
 
@@ -334,6 +334,30 @@ export const PropertyDetail: React.FC = () => {
                         ) : (
                             <span className="text-slate-500 italic">Not configured</span>
                         )}
+                    </div>
+
+                    {/* Area Alerts & Local Events Banner */}
+                    <div className="mt-6 p-4 rounded-2xl bg-gradient-to-r from-indigo-50/80 via-blue-50/60 to-purple-50/40 border border-indigo-150 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-2xs">
+                        <div className="flex items-center gap-3.5">
+                            <div className="w-10 h-10 rounded-xl bg-white text-indigo-600 flex items-center justify-center shadow-xs border border-indigo-100 shrink-0">
+                                <Compass size={20} />
+                            </div>
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <h4 className="font-extrabold text-sm text-slate-900">Area Alerts &amp; Upcoming Events</h4>
+                                    <span className="text-[10px] font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full uppercase">Live Feed</span>
+                                </div>
+                                <p className="text-xs text-slate-500 mt-0.5">
+                                    Current weather conditions, mobile &amp; internet carrier outage monitors, and verified local concerts &amp; sports near this property.
+                                </p>
+                            </div>
+                        </div>
+                        <Link
+                            to={`/alerts-and-events?property=${property.id}`}
+                            className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold text-xs rounded-xl shadow-xs transition-colors whitespace-nowrap self-start sm:self-auto flex items-center gap-1.5 shrink-0"
+                        >
+                            <span>Check Alerts &amp; Events</span> &rarr;
+                        </Link>
                     </div>
                 </div>
 

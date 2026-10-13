@@ -16,6 +16,9 @@ export const LegalFooter: React.FC = () => {
             </div>
             
             <div className="flex flex-wrap justify-center gap-x-8 gap-y-3 mt-2">
+                <Link to="/alerts-and-events" className="text-xs text-slate-500 hover:text-indigo-600 font-bold uppercase tracking-widest transition-colors">
+                    Alerts &amp; Events
+                </Link>
                 <Link to="/reviews" className="text-xs text-slate-500 hover:text-indigo-600 font-bold uppercase tracking-widest transition-colors">
                     Guest Reviews
                 </Link>

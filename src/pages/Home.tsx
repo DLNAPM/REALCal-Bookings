@@ -180,20 +180,14 @@ export const Home: React.FC = () => {
                                     <CalendarIcon size={15}/>
                                     <span className="hidden md:inline">My Bookings</span>
                                 </Link>
-                                <button 
-                                  onClick={() => {
-                                      setActiveTab('events');
-                                      setTimeout(() => {
-                                          const el = document.getElementById('main-content-tabs');
-                                          el?.scrollIntoView({ behavior: 'smooth' });
-                                      }, 100);
-                                  }}
-                                  className="text-slate-600 hover:text-indigo-600 font-bold flex items-center gap-1 text-xs sm:text-sm transition-colors rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 hover:bg-slate-50 cursor-pointer"
-                                  title="Upcoming Local Events"
+                                <Link 
+                                  to="/alerts-and-events"
+                                  className="text-slate-600 hover:text-indigo-600 font-bold flex items-center gap-1.5 text-xs sm:text-sm transition-colors rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 hover:bg-slate-50"
+                                  title="Upcoming Local Alerts and Events"
                                 >
-                                    <Compass size={15}/>
-                                    <span>Events</span>
-                                </button>
+                                    <Compass size={15} className="text-indigo-600"/>
+                                    <span>Alerts &amp; Events</span>
+                                </Link>
                                 <Link 
                                   to="/reviews" 
                                   className="text-slate-600 hover:text-indigo-600 font-bold flex items-center gap-1 text-xs sm:text-sm transition-colors rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 hover:bg-slate-50"
@@ -243,18 +237,12 @@ export const Home: React.FC = () => {
                             </div>
                         ) : (
                             <div className="flex items-center gap-3 sm:gap-4">
-                                <button 
-                                  onClick={() => {
-                                      setActiveTab('events');
-                                      setTimeout(() => {
-                                          const el = document.getElementById('main-content-tabs');
-                                          el?.scrollIntoView({ behavior: 'smooth' });
-                                      }, 100);
-                                  }}
-                                  className="text-slate-500 hover:text-indigo-600 font-bold text-[10px] sm:text-xs uppercase tracking-widest transition-colors flex items-center gap-1 cursor-pointer"
+                                <Link 
+                                  to="/alerts-and-events"
+                                  className="text-slate-500 hover:text-indigo-600 font-bold text-[10px] sm:text-xs uppercase tracking-widest transition-colors flex items-center gap-1"
                                 >
-                                    <Compass size={14}/> Events
-                                </button>
+                                    <Compass size={14} className="text-indigo-600"/> Alerts &amp; Events
+                                </Link>
                                 <Link to="/reviews" className="text-slate-500 hover:text-indigo-600 font-bold text-[10px] sm:text-xs uppercase tracking-widest transition-colors flex items-center gap-1"><Star size={14} className="text-amber-500 fill-amber-500/30"/> Reviews</Link> <Link to="/faq" className="text-slate-500 hover:text-indigo-600 font-bold text-[10px] sm:text-xs uppercase tracking-widest transition-colors flex items-center gap-1">
                                     <HelpCircle size={14}/> FAQ
                                 </Link>
@@ -303,18 +291,13 @@ export const Home: React.FC = () => {
                                 >
                                     Browse Properties
                                 </button>
-                                <button 
-                                    onClick={() => {
-                                        setActiveTab('events');
-                                        setTimeout(() => {
-                                            const el = document.getElementById('main-content-tabs');
-                                            el?.scrollIntoView({ behavior: 'smooth' });
-                                        }, 100);
-                                    }} 
-                                    className="px-8 py-4 bg-indigo-50 text-indigo-700 font-bold rounded-xl border border-indigo-100 hover:bg-indigo-100 transition-colors transform hover:-translate-y-0.5 cursor-pointer"
+                                <Link 
+                                    to="/alerts-and-events"
+                                    className="px-8 py-4 bg-indigo-50 text-indigo-700 font-bold rounded-xl border border-indigo-100 hover:bg-indigo-100 transition-colors transform hover:-translate-y-0.5 cursor-pointer flex items-center gap-2"
                                 >
-                                    📅 Explore Local Events
-                                </button>
+                                    <Compass size={18} className="text-indigo-600" />
+                                    <span>🚨 Alerts &amp; Events Page</span>
+                                </Link>
                             </>
                         )}
                     </div>
@@ -424,6 +407,34 @@ export const Home: React.FC = () => {
                             </button>
                         </div>
                     </div>
+                </div>
+
+                {/* Dedicated Alerts and Events Hub Banner */}
+                <div className="mb-10 p-5 rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-5 border border-indigo-500/20">
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300 shrink-0 shadow-inner">
+                            <Compass size={24} />
+                        </div>
+                        <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <h3 className="text-base sm:text-lg font-bold text-white">
+                                    Alerts and Events Page Hub
+                                </h3>
+                                <span className="text-[10px] uppercase font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 px-2 py-0.5 rounded-full">
+                                    Live Weather &amp; Outage Monitor
+                                </span>
+                            </div>
+                            <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-2xl leading-relaxed">
+                                Select any property to view real-time weather conditions, mobile &amp; internet service outage status, and verified local Atlanta &amp; regional events.
+                            </p>
+                        </div>
+                    </div>
+                    <Link
+                        to="/alerts-and-events"
+                        className="px-5 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs sm:text-sm transition-all shadow-md flex items-center gap-2 shrink-0 self-start md:self-center"
+                    >
+                        <span>Open Alerts &amp; Events Page</span> &rarr;
+                    </Link>
                 </div>
 
                 {activeTab === 'properties' ? (
