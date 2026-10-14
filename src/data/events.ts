@@ -93,19 +93,26 @@ export const VERIFIED_SPORTS_EVENTS: VerifiedEventDef[] = [
   },
 
   // --- ATLANTA DREAM (WNBA Finals vs. Golden State Valkyries in Atlanta) ---
-  // Note: Games 1 & 2 of the WNBA Finals are played in California (Chase Center); the series shifts to Atlanta for Games 3 & 4!
+  // Official 2026 WNBA Finals best-of-7 series:
+  // Game 1: Sat, Oct 17 @ Chase Center, San Francisco, CA (California)
+  // Game 2: Mon, Oct 19 @ Chase Center, San Francisco, CA (California)
+  // Game 3 (Atlanta Home Game 1): Wed, Oct 21 • 8:00 PM EDT @ State Farm Arena, Atlanta, GA (USA / Peacock)
+  // Game 4 (Atlanta Home Game 2): Sat, Oct 24 • 1:00 PM EDT @ State Farm Arena, Atlanta, GA (NBC / Peacock)
+  // Game 5 (if nec): Mon, Oct 26 @ Chase Center, San Francisco, CA (California)
+  // Game 6 (if nec, Atlanta Home Game 3): Thu, Oct 29 • 8:00 PM EDT @ State Farm Arena, Atlanta, GA (USA / Peacock)
+  // Game 7 (if nec): Sat, Oct 31 @ Chase Center, San Francisco, CA (California)
   {
     id: 'sports-dream-wnba-finals-gm3-home1',
     title: 'WNBA Finals: Game 3 (Atlanta Home Game 1) — Atlanta Dream vs. Golden State Valkyries',
     category: 'Sporting Events',
     month: 10,
-    day: 18,
-    hour: 15,
+    day: 21,
+    hour: 20,
     minute: 0,
-    timeStr: '3:00 PM EDT',
-    venue: 'Gateway Center Arena @ College Park',
-    distance: '7.2 miles',
-    description: 'WNBA Finals Championship basketball arrives in Atlanta! After Games 1 & 2 in California, the series moves to Atlanta as the Atlanta Dream host the Golden State Valkyries in Game 3 (Atlanta Home Game 1) at Gateway Center Arena @ College Park, located just 7.2 miles from Stonewall Villa.',
+    timeStr: '8:00 PM EDT',
+    venue: 'State Farm Arena',
+    distance: '11.3 miles',
+    description: 'WNBA Finals championship basketball in Atlanta! After the first 2 games in California at Chase Center, the series shifts to Atlanta as the Atlanta Dream host the Golden State Valkyries in Game 3 (Atlanta Home Game 1) at State Farm Arena in downtown Atlanta before an electric crowd (USA Network & Peacock).',
     ticketUrl: 'https://www.ticketmaster.com/atlanta-dream-tickets/artist/1206859',
   },
   {
@@ -113,13 +120,27 @@ export const VERIFIED_SPORTS_EVENTS: VerifiedEventDef[] = [
     title: 'WNBA Finals: Game 4 (Atlanta Home Game 2) — Atlanta Dream vs. Golden State Valkyries',
     category: 'Sporting Events',
     month: 10,
-    day: 21,
+    day: 24,
+    hour: 13,
+    minute: 0,
+    timeStr: '1:00 PM EDT',
+    venue: 'State Farm Arena',
+    distance: '11.3 miles',
+    description: 'Championship basketball in downtown Atlanta! The Atlanta Dream battle the Golden State Valkyries in Game 4 (Atlanta Home Game 2) of the WNBA Finals at State Farm Arena in a marquee Saturday matinee showcase (NBC & Peacock).',
+    ticketUrl: 'https://www.ticketmaster.com/atlanta-dream-tickets/artist/1206859',
+  },
+  {
+    id: 'sports-dream-wnba-finals-gm6-home3',
+    title: 'WNBA Finals: Game 6 (Atlanta Home Game 3, If Necessary) — Atlanta Dream vs. Golden State Valkyries',
+    category: 'Sporting Events',
+    month: 10,
+    day: 29,
     hour: 20,
     minute: 0,
     timeStr: '8:00 PM EDT',
-    venue: 'Gateway Center Arena @ College Park',
-    distance: '7.2 miles',
-    description: 'Championship basketball in Atlanta! The Atlanta Dream battle the Golden State Valkyries in Game 4 (Atlanta Home Game 2) of the WNBA Finals at Gateway Center Arena @ College Park before a sold-out home crowd.',
+    venue: 'State Farm Arena',
+    distance: '11.3 miles',
+    description: 'High-stakes championship drama in Atlanta! If the series extends to Game 6, the Atlanta Dream host the Golden State Valkyries for Game 6 (Atlanta Home Game 3) at State Farm Arena in downtown Atlanta (USA Network & Peacock).',
     ticketUrl: 'https://www.ticketmaster.com/atlanta-dream-tickets/artist/1206859',
   },
 
