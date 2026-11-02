@@ -4994,9 +4994,9 @@ C.&S.H. Group Properties, LLC
                    <span className="bg-red-100 text-red-700 px-2 py-1 rounded-md font-bold uppercase">{bookings.filter(b => b.status === 'cancelled').length} Cancelled</span>
                 </div>
              </div>
-             <div className="overflow-x-auto">
+             <div className={cn("overflow-x-auto", bookings.length > 10 && "max-h-[500px] overflow-y-auto")}>
                 <table className="w-full text-sm text-left">
-                   <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-y border-slate-100">
+                   <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-y border-slate-100 sticky top-0 z-10 shadow-xs">
                       <tr>
                          <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest">Ref#</th>
                          <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest">Guest</th>
@@ -5250,9 +5250,9 @@ C.&S.H. Group Properties, LLC
                       </div>
                    </div>
                    
-                   <div className="overflow-x-auto">
+                   <div className={cn("overflow-x-auto", bookings.filter(b => !!b.invoiceDetails).length > 10 && "max-h-[500px] overflow-y-auto")}>
                       <table className="w-full text-sm text-left">
-                         <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-y border-slate-100 sticky top-0 z-10">
+                         <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-y border-slate-100 sticky top-0 z-10 shadow-xs">
                             <tr>
                                <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest">Invoice #</th>
                                <th className="px-4 py-3 font-bold text-slate-400 uppercase tracking-widest">Sponsor Name & Email</th>
