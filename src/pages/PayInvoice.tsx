@@ -279,6 +279,30 @@ export const PayInvoice: React.FC = () => {
                 &ldquo;{inv.customNotes}&rdquo;
               </div>
             )}
+
+            {/* Stay Extension Callout */}
+            {(() => {
+              if (!booking.checkOut) return null;
+              const diffDays = Math.ceil((new Date(booking.checkOut + 'T12:00:00').getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+              const showExtension = searchParams.get('extend') === 'true' || (diffDays <= 5 && diffDays >= 0);
+              if (!showExtension) return null;
+              return (
+                <div className="bg-emerald-950/40 border border-emerald-800/60 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                  <div>
+                    <span className="font-bold text-emerald-300 block mb-0.5">🌟 Option to Pay to Extend Stay</span>
+                    <span className="text-slate-300">
+                      Stay scheduled to end on <strong>{booking.checkOut}</strong>. You can pay to extend your stay directly from your Guest Portal.
+                    </span>
+                  </div>
+                  <Link
+                    to={`/my-bookings?extendStay=${booking.id}`}
+                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl whitespace-nowrap shadow-sm cursor-pointer"
+                  >
+                    Extend Stay in Portal &rarr;
+                  </Link>
+                </div>
+              );
+            })()}
           </div>
         </div>
 

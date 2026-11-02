@@ -206,6 +206,9 @@ export const MyBookings: React.FC = () => {
                         window.location.reload();
                     }
                 }
+            } else if (params.get('checkout') === 'lease_renewal_success') {
+                alert('🎉 Success! Your month-to-month lease payment and extension have been confirmed.');
+                window.history.replaceState({}, document.title, window.location.pathname);
             } else if (params.get('checkout') === 'success') {
                 const bookingId = params.get('bookingId');
                 const newCheckIn = params.get('newCheckIn');
@@ -324,6 +327,20 @@ export const MyBookings: React.FC = () => {
                 });
 
                 setBookings(enhanced);
+
+                // Auto-scroll to extension renewal notice if linked from 5-day reminder email/sms
+                const urlParams = new URLSearchParams(window.location.search);
+                const targetExtendId = urlParams.get('extendStay') || urlParams.get('extendBookingId');
+                if (targetExtendId) {
+                    setTimeout(() => {
+                        const targetCard = document.getElementById(`invoice-renewal-notice-${targetExtendId}`);
+                        if (targetCard) {
+                            targetCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            targetCard.classList.add('ring-4', 'ring-indigo-400');
+                            setTimeout(() => targetCard.classList.remove('ring-4', 'ring-indigo-400'), 4000);
+                        }
+                    }, 500);
+                }
             } catch (err) {
                 console.error("Failed to load bookings:", err);
             }
@@ -1109,6 +1126,25 @@ export const MyBookings: React.FC = () => {
                                             const renewalGrandTotal = Math.round((((baseRenewalSubtotal + 0.30) / (1 - 0.029)) * (1 + 0.004)) * 100) / 100;
                                             const decision = booking.renewalDecision || 'pending';
 
+                                            // Check if requested extension days conflict with any other booking for the same property/rooms
+                                            const isExtensionDaysAvailable = !bookings.some(other => {
+                                                if (other.id === booking.id || other.status === 'cancelled') return false;
+                                                if (other.propertyId !== booking.propertyId) return false;
+                                                const otherIn = other.checkIn.split('T')[0];
+                                                const otherOut = other.checkOut.split('T')[0];
+                                                const overlaps = otherIn < renewalCheckOutStr && otherOut > booking.checkOut.split('T')[0];
+                                                if (!overlaps) return false;
+                                                if (booking.rentalMode === 'entire' || other.rentalMode === 'entire') return true;
+                                                const currentRooms = (booking.selectedBedrooms && booking.selectedBedrooms.length > 0)
+                                                    ? booking.selectedBedrooms.map((r: any) => String(r.roomNumber || r))
+                                                    : (booking.selectedBedroom ? [String(booking.selectedBedroom.roomNumber || booking.selectedBedroom)] : []);
+                                                const otherRooms = (other.selectedBedrooms && other.selectedBedrooms.length > 0)
+                                                    ? other.selectedBedrooms.map((r: any) => String(r.roomNumber || r))
+                                                    : (other.selectedBedroom ? [String(other.selectedBedroom.roomNumber || other.selectedBedroom)] : []);
+                                                if (currentRooms.length === 0 || otherRooms.length === 0) return true;
+                                                return currentRooms.some(r => otherRooms.includes(r));
+                                            });
+
                                             return (
                                                 <div id={`invoice-renewal-notice-${booking.id}`} className="mb-6 p-5 rounded-2xl border bg-slate-900 border-indigo-500/40 text-white shadow-xl space-y-4">
                                                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
@@ -1117,13 +1153,22 @@ export const MyBookings: React.FC = () => {
                                                                 <Receipt size={22} />
                                                             </div>
                                                             <div>
-                                                                <div className="flex items-center gap-2">
+                                                                <div className="flex items-center gap-2 flex-wrap">
                                                                     <h4 className="font-extrabold text-sm text-indigo-200 uppercase tracking-wide">
-                                                                        Invoice Renewal Notification
+                                                                        5-Day Stay & Invoice Renewal Notice
                                                                     </h4>
                                                                     <span className="bg-amber-500/20 text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-500/30">
                                                                         ⏰ {daysUntilEnd === 0 ? 'Ends Today' : `${daysUntilEnd} Day${daysUntilEnd === 1 ? '' : 's'} Remaining`}
                                                                     </span>
+                                                                    {isExtensionDaysAvailable ? (
+                                                                        <span className="bg-emerald-500/20 text-emerald-300 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-500/30 flex items-center gap-1">
+                                                                            <CheckCircle2 size={11} className="text-emerald-400" /> Extension Days Available
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="bg-rose-500/20 text-rose-300 text-[10px] font-bold px-2 py-0.5 rounded-full border border-rose-500/30 flex items-center gap-1">
+                                                                            <XCircle size={11} className="text-rose-400" /> Extension Unavailable
+                                                                        </span>
+                                                                    )}
                                                                 </div>
                                                                 <p className="text-xs text-slate-300 mt-0.5">
                                                                     Scheduled End Date: <strong className="text-white">{booking.checkOut.split('T')[0]}</strong> ({stayDays} Days Stay)
@@ -1132,43 +1177,66 @@ export const MyBookings: React.FC = () => {
                                                         </div>
                                                     </div>
 
-                                                    <div className="bg-slate-950/80 p-4 rounded-xl border border-slate-800 space-y-1.5 text-xs">
-                                                        <p className="font-semibold text-slate-100 text-sm">
-                                                            Do you plan to renew your stay using the same amount of days ({stayDays} day{stayDays === 1 ? '' : 's'}) as on your current invoice?
-                                                        </p>
-                                                        <p className="text-slate-400 leading-relaxed">
-                                                            Renewal Period: <strong className="text-indigo-300">{booking.checkOut.split('T')[0]} &rarr; {renewalCheckOutStr}</strong> ({stayDays} days) &bull; Total Renewal Cost: <strong className="text-emerald-400 font-mono">${renewalGrandTotal.toFixed(2)}</strong>
-                                                        </p>
-                                                    </div>
+                                                    {isExtensionDaysAvailable ? (
+                                                        <div className="bg-slate-950/80 p-4 rounded-xl border border-slate-800 space-y-1.5 text-xs">
+                                                            <p className="font-semibold text-slate-100 text-sm">
+                                                                Do you plan to renew your stay using the same amount of days ({stayDays} day{stayDays === 1 ? '' : 's'}) as on your current invoice?
+                                                            </p>
+                                                            <p className="text-slate-400 leading-relaxed">
+                                                                Extension Period: <strong className="text-indigo-300">{booking.checkOut.split('T')[0]} &rarr; {renewalCheckOutStr}</strong> ({stayDays} days) &bull; Total Renewal Cost: <strong className="text-emerald-400 font-mono">${renewalGrandTotal.toFixed(2)}</strong>
+                                                            </p>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="bg-rose-950/40 p-4 rounded-xl border border-rose-800/50 space-y-1.5 text-xs">
+                                                            <p className="font-bold text-rose-300 text-sm flex items-center gap-1.5">
+                                                                <AlertCircle size={16} /> Extension Unavailable: Following Dates Already Booked
+                                                            </p>
+                                                            <p className="text-slate-300 leading-relaxed">
+                                                                Another guest reservation is already confirmed for this unit from <strong className="text-white">{booking.checkOut.split('T')[0]} to {renewalCheckOutStr}</strong>. We are unable to offer an extension. Please plan for standard electronic check-out below on your departure date by 11:00 AM.
+                                                            </p>
+                                                        </div>
+                                                    )}
 
                                                     {/* Renewal Option Buttons */}
-                                                    <div className="flex flex-col sm:flex-row items-center gap-3">
-                                                        <button
-                                                            type="button"
-                                                            id={`renew-yes-btn-${booking.id}`}
-                                                            onClick={() => handleUpdateRenewalDecision(booking.id, 'yes')}
-                                                            className={`w-full sm:w-auto px-5 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                                                                decision === 'yes'
-                                                                    ? 'bg-emerald-600 text-white ring-2 ring-emerald-400 shadow-lg shadow-emerald-950'
-                                                                    : 'bg-emerald-700/80 hover:bg-emerald-600 text-white'
-                                                            }`}
-                                                        >
-                                                            <CheckCircle2 size={16} /> Yes, I Plan To Renew ({stayDays} Days)
-                                                        </button>
+                                                    {isExtensionDaysAvailable ? (
+                                                        <div className="flex flex-col sm:flex-row items-center gap-3">
+                                                            <button
+                                                                type="button"
+                                                                id={`renew-yes-btn-${booking.id}`}
+                                                                onClick={() => handleUpdateRenewalDecision(booking.id, 'yes')}
+                                                                className={`w-full sm:w-auto px-5 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                                                                    decision === 'yes'
+                                                                        ? 'bg-emerald-600 text-white ring-2 ring-emerald-400 shadow-lg shadow-emerald-950'
+                                                                        : 'bg-emerald-700/80 hover:bg-emerald-600 text-white'
+                                                                }`}
+                                                            >
+                                                                <CheckCircle2 size={16} /> Yes, I Plan To Renew ({stayDays} Days)
+                                                            </button>
 
-                                                        <button
-                                                            type="button"
-                                                            id={`renew-no-btn-${booking.id}`}
-                                                            onClick={() => handleUpdateRenewalDecision(booking.id, 'no')}
-                                                            className={`w-full sm:w-auto px-5 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                                                                decision === 'no'
-                                                                    ? 'bg-rose-600 text-white ring-2 ring-rose-400 shadow-lg shadow-rose-950'
-                                                                    : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
-                                                            }`}
-                                                        >
-                                                            <XCircle size={16} /> No, I Will Check-Out
-                                                        </button>
-                                                    </div>
+                                                            <button
+                                                                type="button"
+                                                                id={`renew-no-btn-${booking.id}`}
+                                                                onClick={() => handleUpdateRenewalDecision(booking.id, 'no')}
+                                                                className={`w-full sm:w-auto px-5 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                                                                    decision === 'no'
+                                                                        ? 'bg-rose-600 text-white ring-2 ring-rose-400 shadow-lg shadow-rose-950'
+                                                                        : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
+                                                                }`}
+                                                            >
+                                                                <XCircle size={16} /> No, I Will Check-Out
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex flex-col sm:flex-row items-center gap-3">
+                                                            <button
+                                                                type="button"
+                                                                disabled
+                                                                className="w-full sm:w-auto px-5 py-2.5 bg-slate-800/80 text-slate-500 font-bold text-xs rounded-xl border border-slate-700 cursor-not-allowed flex items-center justify-center gap-2"
+                                                            >
+                                                                <Lock size={14} /> Extension Booking Unavailable
+                                                            </button>
+                                                        </div>
+                                                    )}
 
                                                     {/* Payment Button Behavior */}
                                                     {decision === 'yes' && (

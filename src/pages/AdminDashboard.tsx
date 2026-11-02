@@ -185,6 +185,7 @@ export const AdminDashboard: React.FC = () => {
   const [invoiceLateFeePerDay, setInvoiceLateFeePerDay] = useState<number>(25);
   const [sendingInvoice, setSendingInvoice] = useState<boolean>(false);
   const [sendingInvoiceId, setSendingInvoiceId] = useState<string | null>(null);
+  const [sending5DayReminderId, setSending5DayReminderId] = useState<string | null>(null);
   const [syncingInvoiceId, setSyncingInvoiceId] = useState<string | null>(null);
   const [viewingInvoiceBooking, setViewingInvoiceBooking] = useState<any | null>(null);
 
@@ -2422,6 +2423,27 @@ C.&S.H. Group Properties, LLC
       alert("Success! Invoice marked as paid.");
     } catch (err: any) {
       alert("Error marking paid: " + err.message);
+    }
+  };
+
+  const handleSend5DayReminder = async (bookingId: string) => {
+    setSending5DayReminderId(bookingId);
+    try {
+      const res = await fetch('/api/send-5day-reminder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookingId, force: true })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to dispatch 5-day reminder.');
+      }
+      alert(`5-Day Reminder Dispatched!\n\n${data.message}\nExtension Available: ${data.isAvailable ? '✅ YES (Dates Available)' : '❌ NO (Conflicting Booking/Blackout)'}\n${data.paymentUrl ? 'Direct Pay Link: ' + data.paymentUrl : ''}`);
+    } catch (err: any) {
+      console.error("Error sending 5-day reminder:", err);
+      alert(`Failed to send 5-day reminder: ${err.message}`);
+    } finally {
+      setSending5DayReminderId(null);
     }
   };
 
@@ -5174,10 +5196,27 @@ C.&S.H. Group Properties, LLC
                                      </button>
                                   )}
 
+                                  {b.status !== 'cancelled' && (
+                                     <button 
+                                       type="button"
+                                       onClick={() => handleSend5DayReminder(b.id)}
+                                       disabled={sending5DayReminderId === b.id}
+                                       className="text-[10px] font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2 py-1 rounded-lg transition-all inline-flex items-center gap-1 cursor-pointer align-middle mr-2 shadow-2xs disabled:opacity-50"
+                                       title="Dispatch 5-Day Stay & Invoice reminder (checks extension availability and provides direct pay link)"
+                                     >
+                                        {sending5DayReminderId === b.id ? (
+                                           <Loader2 size={11} className="animate-spin text-indigo-600" />
+                                        ) : (
+                                           <Clock size={11} className="text-indigo-600" />
+                                        )}
+                                        5-Day Reminder
+                                     </button>
+                                  )}
+
                                   {b.status === 'confirmed' && (
                                      <button 
                                        onClick={() => handleAdminCancelBooking(b.id)}
-                                       className="text-[10px] font-bold text-amber-600 hover:text-amber-700 align-middle"
+                                       className="text-[10px] font-bold text-amber-600 hover:text-amber-700 align-middle mr-2"
                                      >
                                         Cancel
                                      </button>
@@ -5401,6 +5440,19 @@ C.&S.H. Group Properties, LLC
                                                     </>
                                                  )}
 
+                                                 <button
+                                                    onClick={() => handleSend5DayReminder(b.id)}
+                                                    disabled={sending5DayReminderId === b.id}
+                                                    className="text-[10px] font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1 rounded-lg transition-all inline-flex items-center gap-1 cursor-pointer shadow-2xs disabled:opacity-50"
+                                                    title="Send 5-Day invoice reminder to guest with stay extension availability check and direct payment link"
+                                                 >
+                                                    {sending5DayReminderId === b.id ? (
+                                                       <Loader2 size={11} className="animate-spin text-indigo-600" />
+                                                    ) : (
+                                                       <Clock size={11} className="text-indigo-600" />
+                                                    )}
+                                                    5-Day Reminder
+                                                 </button>
                                                  <button
                                                     onClick={() => handleRenewInvoice(b)}
                                                     className="text-[10px] font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1 rounded-lg transition-all inline-flex items-center gap-1 cursor-pointer"

@@ -1042,6 +1042,711 @@ function getCheckoutDeadline(checkOutDate: string): Date {
   return new Date(utcDate.getTime() + hourDiff * 60 * 60 * 1000);
 }
 
+function addDaysDateString(dateStr: string, days: number): string {
+  if (!dateStr || !dateStr.includes('-')) {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    return d.toISOString().split('T')[0];
+  }
+  const parts = dateStr.split('-').map(Number);
+  const d = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2], 12, 0, 0));
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().split('T')[0];
+}
+
+async function checkExtensionAvailability(
+  activeDb: admin.firestore.Firestore,
+  propertyId: string,
+  currentCheckOut: string,
+  requestedDays: number,
+  rentalMode: string = 'entire',
+  selectedBedrooms: any[] = [],
+  currentBookingId?: string
+): Promise<{ isAvailable: boolean; reason?: string; extensionStart: string; extensionEnd: string }> {
+  const extensionStart = currentCheckOut;
+  const extensionEnd = addDaysDateString(currentCheckOut, requestedDays);
+
+  if (!activeDb) {
+    return { isAvailable: false, reason: "Database connection not ready", extensionStart, extensionEnd };
+  }
+
+  try {
+    // 1. Check for conflicting bookings
+    const bookingsSnap = await activeDb.collection("bookings")
+      .where("propertyId", "==", propertyId)
+      .get();
+
+    for (const bDoc of bookingsSnap.docs) {
+      if (currentBookingId && bDoc.id === currentBookingId) continue;
+      const b = bDoc.data();
+      if (!b || b.status === "cancelled") continue;
+
+      const otherIn = b.checkIn;
+      const otherOut = b.checkOut;
+      if (!otherIn || !otherOut) continue;
+
+      // Check overlap: StartA < EndB and EndA > StartB
+      const overlaps = otherIn < extensionEnd && otherOut > extensionStart;
+      if (overlaps) {
+        if (rentalMode === 'entire' || b.rentalMode === 'entire') {
+          return {
+            isAvailable: false,
+            reason: `Another guest has booked ${b.propertyName || 'the property'} from ${otherIn} to ${otherOut}.`,
+            extensionStart,
+            extensionEnd
+          };
+        }
+
+        // Room rentals: check overlapping room numbers
+        const currentRooms: string[] = (selectedBedrooms && selectedBedrooms.length > 0)
+          ? selectedBedrooms.map((r: any) => String(r.roomNumber || r))
+          : [];
+        const otherRooms: string[] = (b.selectedBedrooms && b.selectedBedrooms.length > 0)
+          ? b.selectedBedrooms.map((r: any) => String(r.roomNumber || r))
+          : (b.selectedBedroom ? [String(b.selectedBedroom.roomNumber || b.selectedBedroom)] : []);
+
+        if (currentRooms.length === 0 || otherRooms.length === 0) {
+          return {
+            isAvailable: false,
+            reason: `Conflicting stay reserved from ${otherIn} to ${otherOut}.`,
+            extensionStart,
+            extensionEnd
+          };
+        }
+
+        const conflictRooms = currentRooms.filter(r => otherRooms.includes(r));
+        if (conflictRooms.length > 0) {
+          return {
+            isAvailable: false,
+            reason: `Room(s) ${conflictRooms.join(', ')} already booked from ${otherIn} to ${otherOut}.`,
+            extensionStart,
+            extensionEnd
+          };
+        }
+      }
+    }
+
+    // 2. Check for conflicting blackout dates
+    const blackoutsSnap = await activeDb.collection("blackout_dates")
+      .where("propertyId", "==", propertyId)
+      .get();
+
+    for (const boDoc of blackoutsSnap.docs) {
+      const bo = boDoc.data();
+      if (!bo || !bo.date) continue;
+      if (bo.date >= extensionStart && bo.date < extensionEnd) {
+        if (!bo.roomNumber || bo.roomNumber === 'all' || rentalMode === 'entire') {
+          return {
+            isAvailable: false,
+            reason: `Maintenance blackout on ${bo.date}: ${bo.reason || 'Property reserved'}.`,
+            extensionStart,
+            extensionEnd
+          };
+        }
+        const currentRooms = (selectedBedrooms && selectedBedrooms.length > 0)
+          ? selectedBedrooms.map((r: any) => String(r.roomNumber || r))
+          : [];
+        if (currentRooms.includes(String(bo.roomNumber))) {
+          return {
+            isAvailable: false,
+            reason: `Maintenance blackout for Room ${bo.roomNumber} on ${bo.date}.`,
+            extensionStart,
+            extensionEnd
+          };
+        }
+      }
+    }
+
+    // 3. Check for conflicting leases
+    const leasesSnap = await activeDb.collection("leases")
+      .where("propertyId", "==", propertyId)
+      .get();
+
+    for (const lDoc of leasesSnap.docs) {
+      const l = lDoc.data();
+      if (!l || l.status === 'cancelled' || l.status === 'terminated') continue;
+      if (l.startDate && l.endDate) {
+        if (l.startDate < extensionEnd && l.endDate > extensionStart) {
+          return {
+            isAvailable: false,
+            reason: `Property is under an active lease (${l.leaseCode || 'Lease'}) from ${l.startDate} to ${l.endDate}.`,
+            extensionStart,
+            extensionEnd
+          };
+        }
+      }
+    }
+
+    return { isAvailable: true, extensionStart, extensionEnd };
+  } catch (err: any) {
+    console.warn("[checkExtensionAvailability] Error:", err.message);
+    return { isAvailable: false, reason: err.message, extensionStart, extensionEnd };
+  }
+}
+
+async function createOrGetRenewalPaymentUrl({
+  activeDb,
+  bookingId,
+  bookingData,
+  propertyName,
+  extensionStart,
+  extensionEnd,
+  stayDays,
+  renewalGrandTotal,
+  hostUrl
+}: {
+  activeDb: admin.firestore.Firestore;
+  bookingId: string;
+  bookingData: any;
+  propertyName: string;
+  extensionStart: string;
+  extensionEnd: string;
+  stayDays: number;
+  renewalGrandTotal: number;
+  hostUrl: string;
+}): Promise<string> {
+  let normalizedHost = hostUrl.trim();
+  if (!normalizedHost.endsWith('/')) normalizedHost += '/';
+  const fallbackUrl = `${normalizedHost}my-bookings?checkout=renewal_success&bookingId=${bookingId}&newCheckIn=${extensionStart}&newCheckOut=${extensionEnd}&amount=${renewalGrandTotal}&stayDays=${stayDays}`;
+
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key || key === "sk_test_..." || key.trim() === "") {
+    return fallbackUrl;
+  }
+
+  try {
+    const stripe = new Stripe(key);
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: `${stayDays}-Day Stay Extension at ${propertyName}`,
+              description: `Stay extension from ${extensionStart} to ${extensionEnd} (${stayDays} additional days)`,
+            },
+            unit_amount: Math.round(Number(renewalGrandTotal) * 100),
+          },
+          quantity: 1,
+        },
+      ],
+      mode: 'payment',
+      success_url: fallbackUrl,
+      cancel_url: `${normalizedHost}my-bookings?extendStay=${bookingId}`,
+      customer_email: bookingData.guestEmail || undefined,
+      metadata: {
+        bookingId: bookingId,
+        type: 'renewal_charge',
+        newCheckIn: extensionStart,
+        newCheckOut: extensionEnd,
+        stayDays: String(stayDays),
+        amount: String(renewalGrandTotal)
+      }
+    });
+
+    return session.url || fallbackUrl;
+  } catch (err: any) {
+    console.warn("[createOrGetRenewalPaymentUrl] Stripe session fallback:", err.message);
+    return fallbackUrl;
+  }
+}
+
+async function sendBooking5DayReminderInternal({
+  activeDb,
+  bookingId,
+  force = false,
+  reqHostUrl
+}: {
+  activeDb: admin.firestore.Firestore;
+  bookingId: string;
+  force?: boolean;
+  reqHostUrl?: string;
+}): Promise<{
+  success: boolean;
+  bookingId: string;
+  isAvailable: boolean;
+  message: string;
+  paymentUrl?: string;
+  extensionStart?: string;
+  extensionEnd?: string;
+  stayDays?: number;
+  renewalGrandTotal?: number;
+  emailSent?: boolean;
+  smsSent?: boolean;
+}> {
+  if (!activeDb) {
+    throw new Error("Firestore database is not initialized.");
+  }
+
+  const bDoc = await activeDb.collection("bookings").doc(bookingId).get();
+  if (!bDoc.exists) {
+    throw new Error(`Booking ${bookingId} not found.`);
+  }
+
+  const b = bDoc.data() || {};
+  if (b.status === "cancelled") {
+    throw new Error(`Booking ${bookingId} is cancelled.`);
+  }
+
+  const now = new Date();
+  const checkOutDateStr = b.checkOut;
+  if (!checkOutDateStr) {
+    throw new Error(`Booking ${bookingId} does not have a valid checkOut date.`);
+  }
+
+  const diffDaysToEnd = Math.ceil((new Date(checkOutDateStr + 'T12:00:00').getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  if (!force) {
+    if (diffDaysToEnd > 5 || diffDaysToEnd < 0) {
+      return { success: false, bookingId, isAvailable: false, message: `Booking checkout is ${diffDaysToEnd} days away, not within 5-day window.` };
+    }
+    if (b.sentRenewalNotification) {
+      return { success: false, bookingId, isAvailable: false, message: `5-day renewal reminder was already sent previously.` };
+    }
+  }
+
+  // Calculate stay days
+  const checkInDateObj = new Date(b.checkIn + 'T12:00:00');
+  const checkOutDateObj = new Date(b.checkOut + 'T12:00:00');
+  const stayDays = Math.max(1, Math.round((checkOutDateObj.getTime() - checkInDateObj.getTime()) / (1000 * 60 * 60 * 24)));
+
+  // Resolve property name
+  let propertyName = b.propertyName || "Property";
+  try {
+    if (b.propertyId) {
+      const pSnap = await activeDb.collection("properties").doc(b.propertyId).get();
+      if (pSnap.exists) {
+        propertyName = pSnap.data()?.name || propertyName;
+      }
+    }
+  } catch (err) {}
+
+  // Rooms string
+  let roomsStr = "";
+  if (b.selectedBedrooms && b.selectedBedrooms.length > 0) {
+    roomsStr = " (Room(s): " + b.selectedBedrooms.map((r: any) => `${r.roomNumber || r}`).join(', ') + ")";
+  } else if (b.selectedBedroom) {
+    roomsStr = ` (Room: ${b.selectedBedroom.roomNumber || b.selectedBedroom})`;
+  }
+
+  // Resolve guest email, name, phone
+  let guestName = b.guestName || "Valued Guest";
+  let guestEmail = b.guestEmail;
+  let guestPhone = formatPhoneToE164(b.guestPhone);
+
+  if ((!guestEmail || !guestPhone) && b.userId) {
+    try {
+      const userRec = await admin.auth().getUser(b.userId);
+      if (!guestEmail) guestEmail = userRec.email;
+      if (!guestName || guestName === "Valued Guest") guestName = userRec.displayName || "Valued Guest";
+      if (!guestPhone && userRec.phoneNumber) guestPhone = formatPhoneToE164(userRec.phoneNumber);
+    } catch (err) {}
+  }
+
+  // Check extension availability
+  const availability = await checkExtensionAvailability(
+    activeDb,
+    b.propertyId,
+    b.checkOut,
+    stayDays,
+    b.rentalMode || 'entire',
+    b.selectedBedrooms || (b.selectedBedroom ? [b.selectedBedroom] : []),
+    bookingId
+  );
+
+  // Calculate renewal price
+  let baseRenewalSubtotal = 0;
+  if (b.invoiceDetails?.baseAmount) {
+    baseRenewalSubtotal = Number(b.invoiceDetails.baseAmount);
+  } else if (b.priceDetails?.baseTotal) {
+    baseRenewalSubtotal = Number(b.priceDetails.baseTotal);
+  } else {
+    baseRenewalSubtotal = (b.totalPrice / 100);
+  }
+  const renewalGrandTotal = Math.round((((baseRenewalSubtotal + 0.30) / (1 - 0.029)) * (1 + 0.004)) * 100) / 100;
+
+  // Resolve host URL
+  let hostUrl = reqHostUrl || process.env.APP_URL || process.env.PUBLIC_URL || "https://realcal.app";
+  let normalizedHost = hostUrl.trim();
+  if (!normalizedHost.endsWith('/')) normalizedHost += '/';
+
+  const portalManageUrl = `${normalizedHost}my-bookings?extendStay=${bookingId}`;
+  let paymentUrl = "";
+  if (availability.isAvailable) {
+    paymentUrl = await createOrGetRenewalPaymentUrl({
+      activeDb,
+      bookingId,
+      bookingData: b,
+      propertyName,
+      extensionStart: availability.extensionStart,
+      extensionEnd: availability.extensionEnd,
+      stayDays,
+      renewalGrandTotal,
+      hostUrl: normalizedHost
+    });
+  }
+
+  // Check invoice details (if any unpaid invoice)
+  const inv = b.invoiceDetails;
+  const isInvoiceUnpaid = inv && !inv.paid && !inv.cancelled;
+  const invoicePayUrl = `${normalizedHost}pay-invoice/${bookingId}`;
+  const invoiceNumber = inv?.invoiceNumber || b.bookingRef || 'Manual';
+  const invoiceGrandTotal = inv?.grandTotal || (b.totalPrice / 100);
+
+  // Build Rich HTML Email
+  const emailSubject = availability.isAvailable
+    ? `[ACTION REQUIRED] 5-Day Stay & Invoice Reminder: Extend Your Stay at ${propertyName}`
+    : `[REMINDER] 5-Day Check-out & Invoice Notice: ${propertyName}`;
+
+  const emailHtml = `
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  </head>
+  <body style="margin: 0; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #1e293b; line-height: 1.6;">
+    <div style="max-width: 620px; margin: 0 auto; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+      
+      <!-- Header -->
+      <div style="background-color: #4f46e5; padding: 24px 32px; text-align: left;">
+        <h1 style="color: #ffffff; margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -0.5px;">REALCal Bookings</h1>
+        <p style="color: #e0e7ff; margin: 4px 0 0; font-size: 12px; font-weight: 500;">5-Day Stay & Invoice Notification</p>
+      </div>
+
+      <div style="padding: 32px;">
+        <p style="font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 0;">Hi ${guestName},</p>
+        
+        <p style="font-size: 14px; color: #334155; margin-bottom: 20px;">
+          This is an official 5-day reminder regarding your upcoming stay conclusion at <strong>${propertyName}</strong>${roomsStr}.
+        </p>
+
+        <!-- Current Stay Recap Box -->
+        <div style="background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 12px; padding: 18px; margin-bottom: 24px;">
+          <h4 style="margin: 0 0 10px 0; font-size: 13px; text-transform: uppercase; color: #475569; letter-spacing: 0.05em;">Current Reservation Details</h4>
+          <p style="margin: 4px 0; font-size: 14px;">📅 <strong>Scheduled Departure Date:</strong> <span style="color: #0f172a; font-weight: bold;">${b.checkOut}</span></p>
+          <p style="margin: 4px 0; font-size: 14px;">⏰ <strong>Standard Check-out Deadline:</strong> <span style="color: #4f46e5; font-weight: bold;">11:00 AM Eastern Time</span></p>
+          <p style="margin: 4px 0; font-size: 14px;">📍 <strong>Property:</strong> ${propertyName}${roomsStr}</p>
+          <p style="margin: 4px 0; font-size: 14px;">🎫 <strong>Confirmation Ref:</strong> ${b.bookingRef || bookingId}</p>
+        </div>
+
+        ${isInvoiceUnpaid ? `
+        <!-- Unpaid Invoice Notice -->
+        <div style="background-color: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; padding: 18px; margin-bottom: 24px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 18px;">💳</span>
+            <strong style="color: #92400e; font-size: 14px;">Pending Invoice #${invoiceNumber} Due: $${Number(invoiceGrandTotal).toFixed(2)}</strong>
+          </div>
+          <p style="margin: 8px 0 14px 0; font-size: 13px; color: #78350f;">
+            An invoice associated with this booking is currently unpaid. Please complete payment before check-out:
+          </p>
+          <div style="text-align: left;">
+            <a href="${invoicePayUrl}" style="display: inline-block; background-color: #d97706; color: #ffffff; text-decoration: none; padding: 10px 20px; border-radius: 8px; font-weight: 700; font-size: 13px;">
+              Pay Outstanding Invoice ($${Number(invoiceGrandTotal).toFixed(2)}) &rarr;
+            </a>
+          </div>
+        </div>
+        ` : ''}
+
+        <!-- Stay Extension Section -->
+        ${availability.isAvailable ? `
+        <div style="background-color: #f0fdf4; border: 2px solid #86efac; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+            <span style="font-size: 20px;">🎉</span>
+            <h3 style="margin: 0; color: #166534; font-size: 16px; font-weight: 800;">Extension Days Confirmed Available!</h3>
+          </div>
+          <p style="font-size: 13.5px; color: #14532d; margin-bottom: 12px; line-height: 1.5;">
+            Would you like to extend your stay for another <strong>${stayDays} days</strong>? The property and your allocated room are completely available for your extension window.
+          </p>
+          
+          <div style="background-color: #ffffff; border: 1px solid #bbf7d0; border-radius: 8px; padding: 14px; margin-bottom: 18px;">
+            <p style="margin: 3px 0; font-size: 13.5px; color: #166534;">🗓️ <strong>Extension Dates:</strong> <strong>${availability.extensionStart} &rarr; ${availability.extensionEnd}</strong> (${stayDays} Days)</p>
+            <p style="margin: 3px 0; font-size: 13.5px; color: #166534;">💰 <strong>Total Renewal Cost:</strong> <strong style="color: #059669; font-size: 16px;">$${renewalGrandTotal.toFixed(2)}</strong> (Includes all fees)</p>
+          </div>
+
+          <div style="text-align: center; margin: 20px 0 10px 0;">
+            <a href="${paymentUrl}" style="display: inline-block; background-color: #16a34a; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 10px; font-weight: 800; font-size: 15px; box-shadow: 0 4px 6px -1px rgba(22, 163, 74, 0.3);">
+              Pay Now to Extend Stay ($${renewalGrandTotal.toFixed(2)}) &rarr;
+            </a>
+          </div>
+          <p style="font-size: 11.5px; color: #15803d; text-align: center; margin: 8px 0 0 0;">
+            Instant Confirmation &bull; Direct Secure Payment &bull; Or manage in <a href="${portalManageUrl}" style="color: #166534; text-decoration: underline; font-weight: bold;">Guest Portal</a>
+          </p>
+        </div>
+        ` : `
+        <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 12px; padding: 18px; margin-bottom: 24px;">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+            <span style="font-size: 18px;">⚠️</span>
+            <strong style="color: #991b1b; font-size: 14px;">Stay Extension Unavailable (Fully Booked)</strong>
+          </div>
+          <p style="font-size: 13px; color: #7f1d1d; margin: 4px 0 0 0; line-height: 1.5;">
+            ${availability.reason || 'The property is scheduled for maintenance or has an existing guest reservation immediately following your stay.'} Extensions cannot be accommodated at this time. Standard check-out applies on <strong>${b.checkOut} by 11:00 AM</strong>.
+          </p>
+        </div>
+        `}
+
+        <div style="border-top: 1px solid #e2e8f0; padding-top: 20px; margin-top: 24px; font-size: 13px; color: #64748b;">
+          <p style="margin: 0 0 4px 0;">Need assistance or have special check-out requests?</p>
+          <p style="margin: 0;">Access your portal anytime at <a href="${portalManageUrl}" style="color: #4f46e5; font-weight: bold;">${normalizedHost}my-bookings</a>.</p>
+        </div>
+
+      </div>
+
+      <!-- Footer -->
+      <div style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 16px 32px; text-align: center; font-size: 11px; color: #94a3b8;">
+        REALCal Bookings &bull; C&SH Group Properties, LLC
+      </div>
+
+    </div>
+  </body>
+  </html>
+  `;
+
+  // Build SMS Text
+  let smsText = "";
+  if (availability.isAvailable) {
+    smsText = `5-Day Stay & Invoice Notice: Hi ${guestName}, your stay at ${propertyName}${roomsStr} ends on ${b.checkOut} at 11:00 AM. Good news! Extension dates (${availability.extensionStart} to ${availability.extensionEnd}, ${stayDays} days) are AVAILABLE. Pay now to extend stay ($${renewalGrandTotal.toFixed(2)}): ${paymentUrl} or manage in portal: ${portalManageUrl}. Standard check-out is by 11:00 AM.`;
+  } else {
+    smsText = `5-Day Stay & Invoice Notice: Hi ${guestName}, your stay at ${propertyName}${roomsStr} ends on ${b.checkOut} at 11:00 AM. Please note stay extension is UNAVAILABLE as unit is booked for following dates. Standard check-out is by 11:00 AM on ${b.checkOut} via ${portalManageUrl}.`;
+  }
+
+  let emailSent = false;
+  let smsSent = false;
+
+  // Send Email
+  if (guestEmail && process.env.SMTP_HOST) {
+    try {
+      await sendSmtpEmail({
+        to: guestEmail,
+        subject: emailSubject,
+        html: emailHtml,
+        text: smsText
+      });
+      emailSent = true;
+      console.log(`[5-Day Reminder] Successfully emailed guest ${guestEmail} for booking ${bookingId}`);
+    } catch (err: any) {
+      console.error(`[5-Day Reminder] Email failed to ${guestEmail}:`, err.message);
+    }
+  }
+
+  // Send SMS
+  const tSid = process.env.TWILIO_ACCOUNT_SID;
+  const tTok = process.env.TWILIO_AUTH_TOKEN;
+  const tFrom = process.env.TWILIO_PHONE_NUMBER;
+  if (guestPhone && tSid && tTok && tSid.startsWith('AC') && !tSid.includes('PROVIDE_REAL') && tFrom) {
+    try {
+      const twilioPkg = await import('twilio');
+      const twilio = twilioPkg.default || twilioPkg;
+      const twilioClient = (twilio as any)(tSid, tTok);
+      await twilioClient.messages.create({
+        body: smsText,
+        from: tFrom,
+        to: guestPhone
+      });
+      smsSent = true;
+      console.log(`[5-Day Reminder] Successfully sent SMS to ${guestPhone} for booking ${bookingId}`);
+    } catch (err: any) {
+      console.error(`[5-Day Reminder] SMS failed to ${guestPhone}:`, err.message);
+    }
+  }
+
+  // Update Firestore booking record
+  await activeDb.collection("bookings").doc(bookingId).update({
+    sentRenewalNotification: true,
+    sentRenewalNotificationAt: admin.firestore.FieldValue.serverTimestamp(),
+    lastRenewalReminder: {
+      sentAt: new Date().toISOString(),
+      isAvailable: availability.isAvailable,
+      extensionStart: availability.extensionStart,
+      extensionEnd: availability.extensionEnd,
+      stayDays,
+      renewalGrandTotal,
+      paymentUrl: availability.isAvailable ? paymentUrl : null,
+      emailSent,
+      smsSent
+    }
+  });
+
+  return {
+    success: true,
+    bookingId,
+    isAvailable: availability.isAvailable,
+    message: availability.isAvailable 
+      ? `5-day reminder sent! Extension available for ${stayDays} days ($${renewalGrandTotal.toFixed(2)}). Direct pay link included in Email & SMS.`
+      : `5-day reminder sent! Extension unavailable (unit booked). Check-out instructions sent via Email & SMS.`,
+    paymentUrl: availability.isAvailable ? paymentUrl : undefined,
+    extensionStart: availability.extensionStart,
+    extensionEnd: availability.extensionEnd,
+    stayDays,
+    renewalGrandTotal,
+    emailSent,
+    smsSent
+  };
+}
+
+async function sendLease5DayReminderInternal({
+  activeDb,
+  leaseId,
+  leaseData,
+  hostUrl
+}: {
+  activeDb: admin.firestore.Firestore;
+  leaseId: string;
+  leaseData: any;
+  hostUrl: string;
+}): Promise<{ success: boolean; message: string; isAvailable: boolean; paymentUrl?: string }> {
+  if (!activeDb) throw new Error("Firestore not initialized");
+
+  const leaseDoc = leaseData || (await activeDb.collection("leases").doc(leaseId).get()).data();
+  if (!leaseDoc) throw new Error(`Lease ${leaseId} not found`);
+
+  const code = leaseDoc.leaseCode || leaseId;
+  const name = leaseDoc.tenantName || "Valued Resident";
+  const email = leaseDoc.tenantEmail;
+  const phone = formatPhoneToE164(leaseDoc.tenantPhone);
+  const prop = leaseDoc.propertyNameOrRoom || "Property";
+  const termEnd = leaseDoc.endDate || "End of Term";
+  const rent = leaseDoc.monthlyRent || 0;
+  const invNum = leaseDoc.invoiceNumber || "Manual";
+
+  let nextTermStart = termEnd;
+  let nextTermEnd = addDaysDateString(termEnd, 30);
+
+  // Check availability
+  let isAvailable = true;
+  let conflictReason = "";
+  if (leaseDoc.propertyId) {
+    const avail = await checkExtensionAvailability(activeDb, leaseDoc.propertyId, termEnd, 30, 'entire', [], undefined);
+    isAvailable = avail.isAvailable;
+    conflictReason = avail.reason || "";
+  }
+
+  let normalizedHost = hostUrl.trim();
+  if (!normalizedHost.endsWith('/')) normalizedHost += '/';
+  const validationUrl = `${normalizedHost}my-bookings`;
+
+  // Create payment URL for next month lease
+  let paymentUrl = validationUrl;
+  const rentSubtotal = Number(rent);
+  const leaseGrandTotal = rentSubtotal > 0 ? Math.round((((rentSubtotal + 0.30) / (1 - 0.029)) * (1 + 0.004)) * 100) / 100 : rentSubtotal;
+
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (key && key !== "sk_test_..." && key.trim() !== "" && isAvailable && leaseGrandTotal > 0) {
+    try {
+      const stripe = new Stripe(key);
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        line_items: [
+          {
+            price_data: {
+              currency: 'usd',
+              product_data: {
+                name: `Month-to-Month Lease Renewal - ${prop}`,
+                description: `Monthly lease extension from ${nextTermStart} to ${nextTermEnd} (Lease #${code})`,
+              },
+              unit_amount: Math.round(Number(leaseGrandTotal) * 100),
+            },
+            quantity: 1,
+          },
+        ],
+        mode: 'payment',
+        success_url: `${normalizedHost}my-bookings?checkout=lease_renewal_success&leaseId=${leaseId}&amount=${leaseGrandTotal}`,
+        cancel_url: validationUrl,
+        customer_email: email || undefined,
+        metadata: {
+          leaseId,
+          type: 'lease_renewal_charge',
+          nextTermStart,
+          nextTermEnd,
+          amount: String(leaseGrandTotal)
+        }
+      });
+      paymentUrl = session.url || validationUrl;
+    } catch (err: any) {
+      console.warn("[sendLease5DayReminderInternal] Stripe error:", err.message);
+    }
+  }
+
+  const htmlContent = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
+      <div style="background-color: #4f46e5; padding: 20px; border-radius: 8px 8px 0 0; text-align: center;">
+        <h2 style="color: #ffffff; margin: 0; font-size: 20px;">Month-to-Month Lease 5-Day Renewal & Payment Reminder</h2>
+      </div>
+      <div style="padding: 24px; color: #1e293b; line-height: 1.6;">
+        <p>Dear <strong>${name}</strong>,</p>
+        <p>This is your official 5-day payment & renewal reminder for Month-to-Month Lease Agreement <strong>#${code}</strong> (Invoice #${invNum}) for <strong>${prop}</strong>.</p>
+        
+        <div style="background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 16px; margin: 20px 0;">
+          <p style="margin: 4px 0;">📅 <strong>Current Term End Date:</strong> ${termEnd}</p>
+          <p style="margin: 4px 0;">💳 <strong>Next Month Rent Due:</strong> $${leaseGrandTotal.toFixed(2)}</p>
+          ${isAvailable ? `
+          <p style="margin: 4px 0; color: #166534;">✅ <strong>Next Term Extension:</strong> AVAILABLE (${nextTermStart} to ${nextTermEnd})</p>
+          ` : `
+          <p style="margin: 4px 0; color: #991b1b;">⚠️ <strong>Next Term Extension:</strong> UNAVAILABLE (${conflictReason || 'Reserved'})</p>
+          `}
+        </div>
+
+        ${isAvailable ? `
+        <p><strong>Action Required - Pay & Secure Next Month:</strong></p>
+        <p>Your property is confirmed available for the upcoming month. You can remit payment directly using the button below:</p>
+        <div style="text-align: center; margin: 25px 0;">
+          <a href="${paymentUrl}" style="background-color: #16a34a; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 15px; display: inline-block;">
+            Pay Next Month Lease ($${leaseGrandTotal.toFixed(2)}) &rarr;
+          </a>
+        </div>
+        ` : `
+        <p style="color: #991b1b;">Please log in to your portal to validate move-out intentions as renewal cannot be accommodated for the subsequent period.</p>
+        `}
+
+        <div style="text-align: center; margin: 20px 0;">
+          <a href="${validationUrl}" style="color: #4f46e5; text-decoration: underline; font-size: 13px;">Manage in Guest Portal</a>
+        </div>
+      </div>
+      <div style="border-top: 1px solid #e2e8f0; padding-top: 15px; text-align: center; font-size: 11px; color: #94a3b8;">
+        REALCal Property Management System
+      </div>
+    </div>
+  `;
+
+  const smsText = isAvailable
+    ? `5-Day Lease Notice: Hi ${name}, your lease #${code} at ${prop} ends on ${termEnd}. Next month is AVAILABLE. Pay now to renew ($${leaseGrandTotal.toFixed(2)}): ${paymentUrl} or portal: ${validationUrl}`
+    : `5-Day Lease Notice: Hi ${name}, your lease #${code} at ${prop} ends on ${termEnd}. Lease extension is UNAVAILABLE due to upcoming reservation. Check portal: ${validationUrl}`;
+
+  if (email && process.env.SMTP_HOST) {
+    await sendSmtpEmail({
+      to: email,
+      subject: `[ACTION REQUIRED] Month-to-Month Lease 5-Day Renewal & Payment Reminder #${code}`,
+      html: htmlContent,
+      text: smsText
+    });
+  }
+
+  const tSid = process.env.TWILIO_ACCOUNT_SID;
+  const tTok = process.env.TWILIO_AUTH_TOKEN;
+  const tFrom = process.env.TWILIO_PHONE_NUMBER;
+  if (phone && tSid && tTok && tSid.startsWith('AC') && !tSid.includes('PROVIDE_REAL') && tFrom) {
+    try {
+      const twilioPkg = await import('twilio');
+      const twilio = twilioPkg.default || twilioPkg;
+      const twilioClient = (twilio as any)(tSid, tTok);
+      await twilioClient.messages.create({
+        body: smsText,
+        from: tFrom,
+        to: phone
+      });
+    } catch (err: any) {
+      console.warn("[sendLease5DayReminderInternal] SMS failed:", err.message);
+    }
+  }
+
+  await activeDb.collection("leases").doc(leaseId).update({
+    lastReminderSentAt: new Date().toISOString(),
+    status: isAvailable ? 'pending_renewal' : 'terminating'
+  });
+
+  return { success: true, message: `5-day lease reminder sent to ${email || phone}`, isAvailable, paymentUrl };
+}
+
 async function createInvoicePDF(booking: any, propertyName: string, priceDetails: any, lateFee: number, overdueHours: number): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     try {
@@ -3320,6 +4025,44 @@ async function startServer() {
     }
   });
 
+  app.post("/api/send-5day-reminder", async (req, res) => {
+    try {
+      const { bookingId, force } = req.body;
+      if (!bookingId) {
+        return res.status(400).json({ error: "bookingId is required." });
+      }
+
+      let activeDb = db;
+      if (!activeDb) {
+        const configPath = path.resolve(process.cwd(), "firebase-applet-config.json");
+        if (fs.existsSync(configPath)) {
+          const firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+          if (admin.apps.length === 0) {
+            admin.initializeApp({ projectId: firebaseConfig.projectId });
+          }
+          activeDb = getFirestore(admin.app(), firebaseConfig.firestoreDatabaseId || "(default)");
+        }
+      }
+
+      if (!activeDb) {
+        return res.status(500).json({ error: "Database not initialized" });
+      }
+
+      const reqHostUrl = req.headers.origin || (`${req.protocol}://${req.get('host')}`);
+      const result = await sendBooking5DayReminderInternal({
+        activeDb,
+        bookingId,
+        force: force !== undefined ? force : true,
+        reqHostUrl
+      });
+
+      res.json(result);
+    } catch (e: any) {
+      console.error("[Server] Error in /api/send-5day-reminder:", e);
+      res.status(500).json({ error: e.message || "Failed to send 5-day reminder." });
+    }
+  });
+
   app.post("/api/resend-lease-reminder", async (req, res) => {
     try {
       const { leaseId, leaseCode, tenantEmail, tenantName, propertyName, endDate, monthlyRent, invoiceNumber } = req.body;
@@ -3335,86 +4078,15 @@ async function startServer() {
         }
       }
 
-      const email = tenantEmail || leaseData?.tenantEmail;
-      const code = leaseCode || leaseData?.leaseCode || leaseId;
-      const name = tenantName || leaseData?.tenantName || "Valued Guest";
-      const prop = propertyName || leaseData?.propertyNameOrRoom || "Property";
-      const termEnd = endDate || leaseData?.endDate || "End of Term";
-      const rent = monthlyRent || leaseData?.monthlyRent || 0;
-      const invNum = invoiceNumber || leaseData?.invoiceNumber || "Manual";
-
-      if (!email) {
-        return res.status(400).json({ error: "Tenant email address is required to send reminder." });
-      }
-
-      let paymentDueDate = "Day after end of lease";
-      let reminderDate = "5 Days prior to end of lease";
-      if (termEnd && termEnd.includes("-")) {
-        const endDt = new Date(termEnd);
-        if (!isNaN(endDt.getTime())) {
-          const nextDay = new Date(endDt);
-          nextDay.setDate(nextDay.getDate() + 1);
-          paymentDueDate = nextDay.toISOString().split("T")[0];
-
-          const remDay = new Date(endDt);
-          remDay.setDate(remDay.getDate() - 5);
-          reminderDate = remDay.toISOString().split("T")[0];
-        }
-      }
-
       const hostUrl = req.headers.origin || ("https://" + req.headers.host);
-      const validationUrl = `${hostUrl}/my-bookings`;
+      const result = await sendLease5DayReminderInternal({
+        activeDb: db,
+        leaseId: leaseId || leaseData?.id || leaseCode,
+        leaseData: leaseData || { leaseCode, tenantEmail, tenantName, propertyNameOrRoom: propertyName, endDate, monthlyRent, invoiceNumber },
+        hostUrl
+      });
 
-      const htmlContent = `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
-          <div style="background-color: #4f46e5; padding: 20px; border-radius: 8px 8px 0 0; text-align: center;">
-            <h2 style="color: #ffffff; margin: 0; font-size: 20px;">Month-to-Month Lease Renewal & Payment Reminder</h2>
-          </div>
-          <div style="padding: 24px; color: #1e293b; line-height: 1.6;">
-            <p>Dear <strong>${name}</strong>,</p>
-            <p>This is an official payment & renewal reminder for your Month-to-Month Lease Agreement <strong>#${code}</strong> (Invoice #${invNum}) for <strong>${prop}</strong>.</p>
-            
-            <div style="background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 16px; margin: 20px 0;">
-              <p style="margin: 4px 0;">📅 <strong>Current Lease Term End Date:</strong> ${termEnd}</p>
-              <p style="margin: 4px 0;">⏰ <strong>Reminder Schedule Date:</strong> ${reminderDate} (5 Days Before End Date)</p>
-              <p style="margin: 4px 0;">💳 <strong>Next Lease Payment Due Date:</strong> <span style="color: #4f46e5; font-weight: bold;">${paymentDueDate}</span> (Day After Term End)</p>
-              ${rent ? `<p style="margin: 4px 0;">💰 <strong>Monthly Rent Amount:</strong> $${Number(rent).toFixed(2)}</p>` : ''}
-            </div>
-
-            <p><strong>Action Required - Validation & Payment:</strong></p>
-            <p>Please log in to your REALCal Guest Portal to <strong>validate whether you wish to continue your lease for another month</strong> and remit your lease payment on or before <strong>${paymentDueDate}</strong>.</p>
-
-            <div style="text-align: center; margin: 30px 0;">
-              <a href="${validationUrl}" style="background-color: #4f46e5; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 15px; display: inline-block; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2);">
-                Validate Renewal & Pay Next Month Lease
-              </a>
-            </div>
-
-            <p style="font-size: 12px; color: #64748b;">If you do not intend to renew, please validate your move-out intention in your portal or notify property management immediately.</p>
-          </div>
-          <div style="border-top: 1px solid #e2e8f0; padding-top: 15px; text-align: center; font-size: 11px; color: #94a3b8;">
-            REALCal Property Management System
-          </div>
-        </div>
-      `;
-
-      if (process.env.SMTP_HOST) {
-        await sendSmtpEmail({
-          to: email,
-          subject: `[ACTION REQUIRED] Month-to-Month Lease Renewal & Payment Reminder #${code}`,
-          html: htmlContent,
-          text: `Reminder: Month-to-Month Lease #${code} for ${prop} ends on ${termEnd}. Next payment due on ${paymentDueDate}. Validate renewal at ${validationUrl}`
-        });
-      }
-
-      if (leaseId) {
-        await db.collection("leases").doc(leaseId).update({
-          lastReminderSentAt: new Date().toISOString(),
-          status: 'pending_renewal'
-        });
-      }
-
-      return res.json({ success: true, message: `Lease payment reminder sent successfully to ${email}` });
+      return res.json({ success: true, message: result.message, isAvailable: result.isAvailable, paymentUrl: result.paymentUrl });
     } catch (err: any) {
       console.error("Error resending lease reminder:", err);
       return res.status(500).json({ error: err.message || "Failed to resend lease payment reminder." });
@@ -4525,35 +5197,19 @@ async function startServer() {
           console.log(`[Reminders] Updated booking ${doc.id} flags:`, updateFields);
         }
 
-        // 5-Day Invoice Renewal Notification Check
+        // 5-Day Stay Extension & Invoice Renewal Notification Check
         const diffDaysToEnd = Math.ceil((new Date(b.checkOut + 'T12:00:00').getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
         if (diffDaysToEnd <= 5 && diffDaysToEnd >= 0 && !b.sentRenewalNotification && !b.checkedOut) {
-          const stayDays = Math.max(1, Math.round((new Date(b.checkOut).getTime() - new Date(b.checkIn).getTime()) / (1000 * 60 * 60 * 24)));
-          let hostUrl = process.env.APP_URL || process.env.PUBLIC_URL || "https://realcal.app/";
-          if (!hostUrl.endsWith('/')) {
-            hostUrl = hostUrl + '/';
+          try {
+            console.log(`[Reminders] Triggering automated 5-day stay extension & invoice reminder for booking ${doc.id}`);
+            await sendBooking5DayReminderInternal({
+              activeDb: db,
+              bookingId: doc.id,
+              force: false
+            });
+          } catch (remErr: any) {
+            console.error(`[Reminders] Failed to dispatch 5-day reminder for booking ${doc.id}:`, remErr.message);
           }
-          const msgText = `Invoice Renewal Notice: Hi ${guestName}, your stay at ${propertyName} is scheduled to end on ${b.checkOut} (${stayDays} days). Do you plan to renew your stay for another ${stayDays} days? Log in to your portal at ${hostUrl}my-bookings to select Yes or No and secure your renewal.`;
-
-          console.log(`[Reminders] Sending 5-day invoice renewal alert to ${guestName} for booking ${doc.id}`);
-          if (useSmtpEmail && guestEmail) {
-            try {
-              await sendSmtpEmail({
-                to: guestEmail,
-                subject: `[ACTION REQUIRED] Invoice Renewal Notice: Extend your stay at ${propertyName}`,
-                text: msgText
-              });
-            } catch (e: any) { console.error(`[Reminders] Failed to send renewal email:`, e.message); }
-          }
-          if (twilioClient && guestPhone && tFrom) {
-            try {
-              await twilioClient.messages.create({ body: msgText, from: tFrom, to: guestPhone });
-            } catch (e: any) { console.error(`[Reminders] Failed to send renewal SMS:`, e.message); }
-          }
-          await db.collection("bookings").doc(doc.id).update({
-            sentRenewalNotification: true,
-            sentRenewalNotificationAt: admin.firestore.FieldValue.serverTimestamp()
-          });
         }
 
         // Automated Stay Survey Email when Booking Ends (checked out or past deadline)
@@ -4609,6 +5265,29 @@ async function startServer() {
               sentSurveyEmail: true,
               sentSurveyEmailAt: admin.firestore.FieldValue.serverTimestamp()
             });
+          }
+
+          // Check for 5-Day Month-to-Month Lease Renewal & Payment Reminder
+          if (l.endDate && !l.sent5DayRenewalReminder && l.status !== 'cancelled' && l.status !== 'terminated') {
+            const diffDaysToLeaseEnd = Math.ceil((new Date(l.endDate + 'T12:00:00').getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+            if (diffDaysToLeaseEnd <= 5 && diffDaysToLeaseEnd >= 0) {
+              try {
+                let hostUrl = process.env.APP_URL || process.env.PUBLIC_URL || "https://realcal.app/";
+                console.log(`[Reminders] Triggering automated 5-day lease renewal & payment reminder for lease ${lDoc.id}`);
+                await sendLease5DayReminderInternal({
+                  activeDb: db,
+                  leaseId: lDoc.id,
+                  leaseData: l,
+                  hostUrl
+                });
+                await db.collection("leases").doc(lDoc.id).update({
+                  sent5DayRenewalReminder: true,
+                  sent5DayRenewalReminderAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+              } catch (leaseRemErr: any) {
+                console.error(`[Reminders] Error sending 5-day lease reminder for ${lDoc.id}:`, leaseRemErr.message);
+              }
+            }
           }
         }
       } catch (leaseSurveyErr: any) {
