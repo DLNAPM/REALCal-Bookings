@@ -4,35 +4,24 @@ import {
   Cpu, 
   Wifi, 
   Battery, 
-  BatteryCharging, 
   BatteryLow, 
-  RotateCw, 
   CheckCircle2, 
-  AlertTriangle, 
   ShieldAlert, 
   Sliders, 
-  Info, 
   Lock, 
   Key, 
-  Radio, 
   Thermometer, 
   Activity, 
   Clock, 
   Download, 
-  Check, 
   X, 
-  ChevronRight, 
   ChevronDown, 
   Search, 
-  Filter, 
   LogOut, 
   Calendar as CalendarIcon, 
   Compass, 
   Star, 
   HelpCircle, 
-  MessageSquare, 
-  Sparkles, 
-  HardDrive, 
   Server, 
   Terminal, 
   Zap, 
@@ -41,15 +30,13 @@ import {
   ArrowLeft 
 } from 'lucide-react';
 import { useAuth, isAdminEmail } from '../contexts/AuthContext';
-import { signIn, signOut, db } from '../lib/firebase';
-import { collection, onSnapshot, query } from 'firebase/firestore';
-import { SmartDevice, DeviceCategory, Property } from '../types';
+import { signIn, signOut } from '../lib/firebase';
+import { SmartDevice, DeviceCategory } from '../types';
 import { 
   getStoredDevices, 
   saveStoredDevices, 
   applyFirmwareUpdate, 
-  executeDeviceSelfTest,
-  INITIAL_DEVICES 
+  executeDeviceSelfTest 
 } from '../data/devicesData';
 import { KNOWN_PROPERTY_PROFILES } from '../data/propertyLocations';
 import { LegalFooter } from '../components/LegalFooter';
@@ -70,14 +57,14 @@ export function DeviceSettings() {
   const [isCheckingUpdates, setIsCheckingUpdates] = useState<boolean>(false);
   const [lastCheckedAt, setLastCheckedAt] = useState<Date>(() => new Date());
 
-  // Active Firmware Update Modal State
+  // Active Firmware Update Modal State (RESTRICTED TO ADMINS)
   const [updatingDevice, setUpdatingDevice] = useState<SmartDevice | null>(null);
   const [otaProgress, setOtaProgress] = useState<number>(0);
   const [otaStage, setOtaStage] = useState<string>('');
   const [otaLogs, setOtaLogs] = useState<string[]>([]);
   const [otaStatus, setOtaStatus] = useState<'idle' | 'downloading' | 'verifying' | 'flashing' | 'rebooting' | 'completed' | 'failed'>('idle');
 
-  // Device Settings Modal State (Auto-update, channel, relock)
+  // Device Settings Modal State (Auto-update, channel, relock - RESTRICTED TO ADMINS)
   const [editingSettingsDevice, setEditingSettingsDevice] = useState<SmartDevice | null>(null);
   const [tempAutoUpdate, setTempAutoUpdate] = useState<boolean>(true);
   const [tempAutoWindow, setTempAutoWindow] = useState<string>('03:00 - 05:00');
@@ -135,12 +122,14 @@ export function DeviceSettings() {
         return false;
       }
 
-      // 3. Status filter
-      if (selectedStatusFilter === 'outdated' && !dev.firmware.updateAvailable) {
-        return false;
-      }
-      if (selectedStatusFilter === 'up_to_date' && dev.firmware.updateAvailable) {
-        return false;
+      // 3. Status filter (Only applied if admin)
+      if (isAdmin) {
+        if (selectedStatusFilter === 'outdated' && !dev.firmware.updateAvailable) {
+          return false;
+        }
+        if (selectedStatusFilter === 'up_to_date' && dev.firmware.updateAvailable) {
+          return false;
+        }
       }
 
       // 4. Search query
@@ -165,8 +154,12 @@ export function DeviceSettings() {
   const criticalUpdatesCount = filteredDevices.filter(d => d.firmware.criticalSecurityUpdate).length;
   const upToDateCount = totalAccessibleCount - updatesAvailableCount;
 
-  // Handle Check For Updates
+  // Handle Check For Updates (RESTRICTED TO ADMINS)
   const handleCheckForUpdates = () => {
+    if (!isAdmin) {
+      alert("Access Denied: Checking for firmware updates is restricted to Property Administrators.");
+      return;
+    }
     setIsCheckingUpdates(true);
     setTimeout(() => {
       setLastCheckedAt(new Date());
@@ -174,8 +167,13 @@ export function DeviceSettings() {
     }, 750);
   };
 
-  // Launch OTA Update flow
+  // Launch OTA Update flow (RESTRICTED TO ADMINS)
   const handleStartOtaUpdate = (device: SmartDevice) => {
+    if (!isAdmin) {
+      alert("Access Denied: Firmware updates and OTA flashing are restricted to Property Administrators.");
+      return;
+    }
+
     setUpdatingDevice(device);
     setOtaProgress(5);
     setOtaStatus('downloading');
@@ -251,7 +249,7 @@ export function DeviceSettings() {
         const { allDevices } = applyFirmwareUpdate(
           device.id, 
           device.firmware.latestVersion, 
-          user?.displayName || user?.email || 'Authorized User'
+          user?.displayName || user?.email || 'Authorized Administrator'
         );
         setDevices(allDevices);
       }
@@ -271,7 +269,7 @@ export function DeviceSettings() {
     setOtaLogs([]);
   };
 
-  // Run Self-Test / Ping on device
+  // Run Self-Test / Ping on device (Accessible to all users)
   const handleRunSelfTest = (deviceId: string) => {
     setTestingDeviceId(deviceId);
     setTimeout(() => {
@@ -283,7 +281,7 @@ export function DeviceSettings() {
     }, 600);
   };
 
-  // Run Self-Test across all visible devices
+  // Run Self-Test across all visible devices (Accessible to all users)
   const handleTestAllDevices = () => {
     setIsTestingAll(true);
     setTimeout(() => {
@@ -295,8 +293,13 @@ export function DeviceSettings() {
     }, 850);
   };
 
-  // Batch Update All Outdated Devices
+  // Batch Update All Outdated Devices (RESTRICTED TO ADMINS)
   const handleBatchUpdateAll = () => {
+    if (!isAdmin) {
+      alert("Access Denied: Batch firmware updates are restricted to Property Administrators.");
+      return;
+    }
+
     const outdated = filteredDevices.filter(d => d.firmware.updateAvailable);
     if (outdated.length === 0) return;
 
@@ -304,25 +307,28 @@ export function DeviceSettings() {
       return;
     }
 
-    // Update first device with interactive modal, update others sequentially
     outdated.forEach((dev) => {
-      applyFirmwareUpdate(dev.id, dev.firmware.latestVersion, user?.displayName || 'Batch OTA');
+      applyFirmwareUpdate(dev.id, dev.firmware.latestVersion, user?.displayName || user?.email || 'Admin Batch OTA');
     });
     setDevices(getStoredDevices());
     alert(`Successfully deployed OTA firmware updates to ${outdated.length} devices!`);
   };
 
-  // Open Device Settings Modal
+  // Open Device Settings Modal (RESTRICTED TO ADMINS)
   const handleOpenSettings = (device: SmartDevice) => {
+    if (!isAdmin) {
+      alert("Access Denied: Hardware and firmware configuration is restricted to Property Administrators.");
+      return;
+    }
     setEditingSettingsDevice(device);
     setTempAutoUpdate(device.autoUpdateEnabled);
     setTempAutoWindow(device.autoUpdateWindow);
     setTempChannel(device.firmware.channel);
   };
 
-  // Save Device Settings
+  // Save Device Settings (RESTRICTED TO ADMINS)
   const handleSaveSettings = () => {
-    if (!editingSettingsDevice) return;
+    if (!isAdmin || !editingSettingsDevice) return;
 
     const current = getStoredDevices();
     const updated = current.map(d => {
@@ -368,6 +374,71 @@ export function DeviceSettings() {
         return <Cpu size={size} className="text-indigo-600" />;
     }
   };
+
+  // 1. Authentication Loading state
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center font-sans">
+        <div className="w-10 h-10 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4" />
+        <p className="text-sm font-bold text-slate-700">Verifying session credentials...</p>
+        <p className="text-xs text-slate-400 mt-1">Please wait a moment</p>
+      </div>
+    );
+  }
+
+  // 2. Unauthenticated Gate: Only show Device Settings after a user has logged into APP
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900 justify-between">
+        <header className="pt-6 px-6 max-w-7xl mx-auto w-full z-10 relative">
+          <div className="flex justify-between items-center bg-white rounded-2xl shadow-xs border border-slate-200 py-3 px-5">
+            <Link to="/" className="flex items-center gap-2 sm:gap-3 hover:opacity-85 transition-opacity">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200">
+                <CalendarIcon size={18} />
+              </div>
+              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-800">
+                REALCal <span className="text-indigo-600">Bookings</span>
+              </h1>
+            </Link>
+            <Link to="/" className="text-xs font-bold text-slate-500 hover:text-indigo-600 flex items-center gap-1.5 transition-colors">
+              <ArrowLeft size={14} /> Back to Home
+            </Link>
+          </div>
+        </header>
+
+        <main className="flex-1 max-w-md mx-auto w-full px-6 flex items-center justify-center py-12">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-md p-8 sm:p-10 text-center w-full">
+            <div className="w-16 h-16 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 mx-auto mb-5 shadow-xs">
+              <Lock size={30} />
+            </div>
+            <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight mb-2">
+              Sign In Required
+            </h2>
+            <p className="text-sm text-slate-600 leading-relaxed mb-8">
+              Device Settings is protected and only accessible after logging into the application. Please sign in to view and monitor connected smart devices for your stay.
+            </p>
+            <div className="space-y-3">
+              <button
+                onClick={() => signIn()}
+                className="w-full py-3.5 px-6 bg-slate-900 hover:bg-indigo-600 text-white font-bold rounded-2xl text-sm transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Key size={16} />
+                <span>Sign In to Access Device Settings</span>
+              </button>
+              <Link
+                to="/"
+                className="w-full py-3 px-6 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-2xl text-xs transition-colors inline-block"
+              >
+                Return to Home
+              </Link>
+            </div>
+          </div>
+        </main>
+
+        <LegalFooter />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900 pb-16">
@@ -484,46 +555,69 @@ export function DeviceSettings() {
         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8 mb-8">
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
             <div>
-              <div className="flex items-center gap-2 mb-2 text-xs text-indigo-600 font-bold uppercase tracking-wider">
+              <div className="flex items-center gap-2 mb-2 text-xs font-bold uppercase tracking-wider text-indigo-600">
                 <Cpu size={16} />
-                <span>IoT Hardware &amp; Over-The-Air Systems</span>
+                <span>{isAdmin ? 'IoT Hardware & Over-The-Air Systems (Admin Mode)' : 'Guest Hardware & Access Status'}</span>
               </div>
               <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-                Device Settings &amp; Firmware Management
+                {isAdmin ? 'Device Settings & Firmware Management' : 'Device Settings & Hardware Status'}
               </h1>
               <p className="text-sm text-slate-600 mt-1 max-w-2xl leading-relaxed">
-                Monitor real-time device status, examine installed firmware architecture, test microcontroller communication, and flash Over-The-Air (OTA) updates for Yamiry smart locks, cloud gateways, thermostats, and environmental sensors.
+                {isAdmin ? (
+                  'Monitor real-time device status, inspect installed firmware architecture, test microcontroller communication, and flash Over-The-Air (OTA) updates for smart locks, cloud gateways, thermostats, and environmental sensors.'
+                ) : (
+                  'Monitor hardware health, battery percentages, and communication telemetry for smart locks, access gateways, climate control, and safety sensors at your property.'
+                )}
               </p>
             </div>
 
             {/* Quick Fleet Action Buttons */}
             <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
-              <button
-                onClick={handleCheckForUpdates}
-                disabled={isCheckingUpdates}
-                className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs sm:text-sm font-bold rounded-xl transition-colors cursor-pointer"
-              >
-                <RefreshCw size={15} className={cn(isCheckingUpdates && "animate-spin text-indigo-600")} />
-                <span>{isCheckingUpdates ? 'Checking OTA Servers...' : 'Check for Updates'}</span>
-              </button>
+              {isAdmin ? (
+                <>
+                  <button
+                    onClick={handleCheckForUpdates}
+                    disabled={isCheckingUpdates}
+                    className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs sm:text-sm font-bold rounded-xl transition-colors cursor-pointer"
+                  >
+                    <RefreshCw size={15} className={cn(isCheckingUpdates && "animate-spin text-indigo-600")} />
+                    <span>{isCheckingUpdates ? 'Checking OTA Servers...' : 'Check for Updates'}</span>
+                  </button>
 
-              <button
-                onClick={handleTestAllDevices}
-                disabled={isTestingAll}
-                className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs sm:text-sm font-bold rounded-xl transition-colors cursor-pointer"
-              >
-                <Activity size={15} className={cn(isTestingAll && "animate-pulse text-indigo-600")} />
-                <span>{isTestingAll ? 'Pinging Fleet...' : 'Test Device Pings'}</span>
-              </button>
+                  <button
+                    onClick={handleTestAllDevices}
+                    disabled={isTestingAll}
+                    className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs sm:text-sm font-bold rounded-xl transition-colors cursor-pointer"
+                  >
+                    <Activity size={15} className={cn(isTestingAll && "animate-pulse text-indigo-600")} />
+                    <span>{isTestingAll ? 'Pinging Fleet...' : 'Test Device Pings'}</span>
+                  </button>
 
-              {updatesAvailableCount > 0 && (
-                <button
-                  onClick={handleBatchUpdateAll}
-                  className="flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs sm:text-sm font-bold rounded-xl transition-colors shadow-sm cursor-pointer"
-                >
-                  <Download size={15} />
-                  <span>Update All Outdated ({updatesAvailableCount})</span>
-                </button>
+                  {updatesAvailableCount > 0 && (
+                    <button
+                      onClick={handleBatchUpdateAll}
+                      className="flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs sm:text-sm font-bold rounded-xl transition-colors shadow-sm cursor-pointer"
+                    >
+                      <Download size={15} />
+                      <span>Update All Outdated ({updatesAvailableCount})</span>
+                    </button>
+                  )}
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={handleTestAllDevices}
+                    disabled={isTestingAll}
+                    className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs sm:text-sm font-bold rounded-xl transition-colors cursor-pointer"
+                  >
+                    <Activity size={15} className={cn(isTestingAll && "animate-pulse text-indigo-600")} />
+                    <span>{isTestingAll ? 'Pinging Devices...' : 'Test Device Pings'}</span>
+                  </button>
+                  <div className="flex items-center gap-1.5 text-xs text-slate-500 bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl">
+                    <Lock size={13} className="text-slate-400" />
+                    <span>Firmware sections restricted to Admins</span>
+                  </div>
+                </>
               )}
             </div>
           </div>
@@ -535,27 +629,54 @@ export function DeviceSettings() {
               <p className="text-2xl font-extrabold text-slate-900 mt-1">{totalAccessibleCount}</p>
               <p className="text-xs text-slate-400 mt-0.5">100% online &amp; responding</p>
             </div>
-            <div>
-              <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Up-to-Date Firmware</p>
-              <p className="text-2xl font-extrabold text-emerald-600 mt-1">{upToDateCount}</p>
-              <p className="text-xs text-slate-400 mt-0.5">Latest stable build</p>
-            </div>
-            <div>
-              <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Updates Available</p>
-              <p className={cn("text-2xl font-extrabold mt-1", updatesAvailableCount > 0 ? "text-amber-600" : "text-slate-900")}>
-                {updatesAvailableCount}
-              </p>
-              <p className="text-xs text-slate-400 mt-0.5">
-                {criticalUpdatesCount > 0 ? `${criticalUpdatesCount} critical security patch` : 'Non-critical improvements'}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Last OTA Sync</p>
-              <p className="text-2xl font-extrabold text-slate-900 mt-1">
-                {lastCheckedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </p>
-              <p className="text-xs text-slate-400 mt-0.5">Automated 60s heartbeats</p>
-            </div>
+
+            {isAdmin ? (
+              <>
+                <div>
+                  <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Up-to-Date Firmware</p>
+                  <p className="text-2xl font-extrabold text-emerald-600 mt-1">{upToDateCount}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">Latest stable build</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Updates Available</p>
+                  <p className={cn("text-2xl font-extrabold mt-1", updatesAvailableCount > 0 ? "text-amber-600" : "text-slate-900")}>
+                    {updatesAvailableCount}
+                  </p>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    {criticalUpdatesCount > 0 ? `${criticalUpdatesCount} critical security patch` : 'Non-critical improvements'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Last OTA Sync</p>
+                  <p className="text-2xl font-extrabold text-slate-900 mt-1">
+                    {lastCheckedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                  <p className="text-xs text-slate-400 mt-0.5">Automated 60s heartbeats</p>
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Operational State</p>
+                  <p className="text-2xl font-extrabold text-emerald-600 mt-1">100%</p>
+                  <p className="text-xs text-slate-400 mt-0.5">All hardware active</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Power Fleet</p>
+                  <p className="text-2xl font-extrabold text-slate-900 mt-1">
+                    {filteredDevices.filter(d => d.powerSource === 'battery').length} Battery
+                  </p>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    {filteredDevices.filter(d => d.powerSource === 'ac_hardwired').length} AC Hardwired
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Protocol</p>
+                  <p className="text-2xl font-extrabold text-slate-900 mt-1">BLE &amp; Wi-Fi</p>
+                  <p className="text-xs text-slate-400 mt-0.5">AES-256 Encrypted</p>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -599,36 +720,38 @@ export function DeviceSettings() {
               </select>
             </div>
 
-            {/* Status Filter Tabs (Segmented Controls) */}
-            <div className="flex items-center p-1 bg-slate-100 rounded-xl self-start lg:self-auto">
-              <button
-                onClick={() => setSelectedStatusFilter('all')}
-                className={cn(
-                  "px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer",
-                  selectedStatusFilter === 'all' ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"
-                )}
-              >
-                All ({filteredDevices.length})
-              </button>
-              <button
-                onClick={() => setSelectedStatusFilter('outdated')}
-                className={cn(
-                  "px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer",
-                  selectedStatusFilter === 'outdated' ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"
-                )}
-              >
-                Updates Available ({devices.filter(d => d.firmware.updateAvailable).length})
-              </button>
-              <button
-                onClick={() => setSelectedStatusFilter('up_to_date')}
-                className={cn(
-                  "px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer",
-                  selectedStatusFilter === 'up_to_date' ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"
-                )}
-              >
-                Up to Date
-              </button>
-            </div>
+            {/* Status Filter Tabs (Segmented Controls) - ONLY ADMINS */}
+            {isAdmin && (
+              <div className="flex items-center p-1 bg-slate-100 rounded-xl self-start lg:self-auto">
+                <button
+                  onClick={() => setSelectedStatusFilter('all')}
+                  className={cn(
+                    "px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer",
+                    selectedStatusFilter === 'all' ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"
+                  )}
+                >
+                  All ({filteredDevices.length})
+                </button>
+                <button
+                  onClick={() => setSelectedStatusFilter('outdated')}
+                  className={cn(
+                    "px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer",
+                    selectedStatusFilter === 'outdated' ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"
+                  )}
+                >
+                  Updates Available ({devices.filter(d => d.firmware.updateAvailable).length})
+                </button>
+                <button
+                  onClick={() => setSelectedStatusFilter('up_to_date')}
+                  className={cn(
+                    "px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer",
+                    selectedStatusFilter === 'up_to_date' ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"
+                  )}
+                >
+                  Up to Date
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Category Tabs (Segmented Controls) */}
@@ -689,9 +812,9 @@ export function DeviceSettings() {
                   key={device.id} 
                   className={cn(
                     "bg-white rounded-3xl border transition-all shadow-sm hover:shadow-md flex flex-col justify-between overflow-hidden",
-                    isCritical 
+                    isAdmin && isCritical 
                       ? "border-amber-300/80 ring-1 ring-amber-300/40" 
-                      : isOutdated 
+                      : isAdmin && isOutdated 
                         ? "border-indigo-200" 
                         : "border-slate-200"
                   )}
@@ -758,54 +881,80 @@ export function DeviceSettings() {
                       </div>
                     </div>
 
-                    {/* Firmware Comparison Box */}
-                    <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 mb-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Firmware Architecture</span>
-                        {isCritical ? (
-                          <span className="flex items-center gap-1 text-xs font-bold text-amber-700">
-                            <ShieldAlert size={14} className="text-amber-600" /> Critical Security Update
-                          </span>
-                        ) : isOutdated ? (
-                          <span className="flex items-center gap-1 text-xs font-bold text-indigo-600">
-                            <Download size={14} /> Update Available
-                          </span>
-                        ) : (
-                          <span className="flex items-center gap-1 text-xs font-semibold text-emerald-700">
-                            <CheckCircle2 size={14} className="text-emerald-600" /> Up to Date
-                          </span>
+                    {/* FIRMWARE SECTION - RESTRICTED TO ONLY ADMINS */}
+                    {isAdmin ? (
+                      <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 mb-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Firmware Architecture</span>
+                          {isCritical ? (
+                            <span className="flex items-center gap-1 text-xs font-bold text-amber-700">
+                              <ShieldAlert size={14} className="text-amber-600" /> Critical Security Update
+                            </span>
+                          ) : isOutdated ? (
+                            <span className="flex items-center gap-1 text-xs font-bold text-indigo-600">
+                              <Download size={14} /> Update Available
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1 text-xs font-semibold text-emerald-700">
+                              <CheckCircle2 size={14} className="text-emerald-600" /> Up to Date
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-200/60">
+                          <div>
+                            <p className="text-[11px] text-slate-400 font-medium">Installed Version</p>
+                            <p className="text-sm font-mono font-bold text-slate-900 mt-0.5">
+                              {device.firmware.currentVersion}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[11px] text-slate-400 font-medium">Latest Available</p>
+                            <p className={cn("text-sm font-mono font-bold mt-0.5", isOutdated ? "text-indigo-600" : "text-slate-700")}>
+                              {device.firmware.latestVersion}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Release Notes Preview */}
+                        {device.firmware.releaseNotes && device.firmware.releaseNotes.length > 0 && (
+                          <div className="mt-3 pt-2.5 border-t border-slate-200/60">
+                            <p className="text-[11px] text-slate-500 font-semibold mb-1">
+                              {isOutdated ? 'What’s New in ' + device.firmware.latestVersion + ':' : 'Active Release Notes:'}
+                            </p>
+                            <ul className="text-xs text-slate-600 space-y-1 list-disc list-inside">
+                              {device.firmware.releaseNotes.slice(0, 2).map((note, idx) => (
+                                <li key={idx} className="leading-relaxed">{note}</li>
+                              ))}
+                            </ul>
+                          </div>
                         )}
                       </div>
-
-                      <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-200/60">
-                        <div>
-                          <p className="text-[11px] text-slate-400 font-medium">Installed Version</p>
-                          <p className="text-sm font-mono font-bold text-slate-900 mt-0.5">
-                            {device.firmware.currentVersion}
-                          </p>
+                    ) : (
+                      /* Guest View: Clean Access State without Firmware Controls */
+                      <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 mb-4 space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Access &amp; Security</span>
+                          <span className="flex items-center gap-1 text-xs font-semibold text-emerald-700">
+                            <CheckCircle2 size={13} className="text-emerald-600" /> Operational &amp; Secured
+                          </span>
                         </div>
-                        <div>
-                          <p className="text-[11px] text-slate-400 font-medium">Latest Available</p>
-                          <p className={cn("text-sm font-mono font-bold mt-0.5", isOutdated ? "text-indigo-600" : "text-slate-700")}>
-                            {device.firmware.latestVersion}
-                          </p>
+                        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-200/60 text-xs">
+                          <div>
+                            <span className="text-slate-400 block text-[11px]">Entry Method</span>
+                            <span className="font-semibold text-slate-700">Keyless Access Code</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block text-[11px]">Encryption</span>
+                            <span className="font-semibold text-slate-700">AES-256 Cloud Link</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-[11px] text-slate-500 pt-2 border-t border-slate-200/60">
+                          <Lock size={12} className="text-slate-400 shrink-0" />
+                          <span>Firmware management restricted to Property Administrators.</span>
                         </div>
                       </div>
-
-                      {/* Release Notes Preview */}
-                      {device.firmware.releaseNotes && device.firmware.releaseNotes.length > 0 && (
-                        <div className="mt-3 pt-2.5 border-t border-slate-200/60">
-                          <p className="text-[11px] text-slate-500 font-semibold mb-1">
-                            {isOutdated ? 'What’s New in ' + device.firmware.latestVersion + ':' : 'Active Release Notes:'}
-                          </p>
-                          <ul className="text-xs text-slate-600 space-y-1 list-disc list-inside">
-                            {device.firmware.releaseNotes.slice(0, 2).map((note, idx) => (
-                              <li key={idx} className="leading-relaxed">{note}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
+                    )}
 
                     {/* Self-Test / Diagnostic Report Preview if available */}
                     {device.selfTestReport && (
@@ -839,20 +988,24 @@ export function DeviceSettings() {
                           <span className="text-slate-400 font-sans">SoC / Core:</span>
                           <span className="truncate max-w-[200px]" title={device.chipset}>{device.chipset}</span>
                         </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-400 font-sans">SHA-256 Checksum:</span>
-                          <span className="truncate max-w-[160px]" title={device.firmware.sha256Checksum}>
-                            {device.firmware.sha256Checksum.slice(0, 16)}...
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-400 font-sans">Auto-Update Window:</span>
-                          <span>{device.autoUpdateEnabled ? device.autoUpdateWindow : 'Disabled'}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-400 font-sans">Firmware Channel:</span>
-                          <span className="capitalize">{device.firmware.channel}</span>
-                        </div>
+                        {isAdmin && (
+                          <>
+                            <div className="flex justify-between">
+                              <span className="text-slate-400 font-sans">SHA-256 Checksum:</span>
+                              <span className="truncate max-w-[160px]" title={device.firmware.sha256Checksum}>
+                                {device.firmware.sha256Checksum.slice(0, 16)}...
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-400 font-sans">Auto-Update Window:</span>
+                              <span>{device.autoUpdateEnabled ? device.autoUpdateWindow : 'Disabled'}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-400 font-sans">Firmware Channel:</span>
+                              <span className="capitalize">{device.firmware.channel}</span>
+                            </div>
+                          </>
+                        )}
                       </div>
                     )}
 
@@ -879,34 +1032,42 @@ export function DeviceSettings() {
                         <span>{isTesting ? 'Pinging...' : 'Self-Test'}</span>
                       </button>
 
-                      <button
-                        onClick={() => handleOpenSettings(device)}
-                        className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
-                        title="Configure Auto-Update & Maintenance"
-                      >
-                        <Sliders size={13} />
-                        <span>Settings</span>
-                      </button>
+                      {isAdmin && (
+                        <button
+                          onClick={() => handleOpenSettings(device)}
+                          className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+                          title="Configure Auto-Update & Maintenance"
+                        >
+                          <Sliders size={13} />
+                          <span>Settings</span>
+                        </button>
+                      )}
                     </div>
 
-                    {/* Update / Reflash Button */}
-                    {isOutdated ? (
-                      <button
-                        onClick={() => handleStartOtaUpdate(device)}
-                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
-                      >
-                        <Download size={14} />
-                        <span>Update Firmware ({device.firmware.latestVersion})</span>
-                      </button>
+                    {/* FIRMWARE UPDATE BUTTONS - RESTRICTED TO ONLY ADMINS */}
+                    {isAdmin ? (
+                      isOutdated ? (
+                        <button
+                          onClick={() => handleStartOtaUpdate(device)}
+                          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+                        >
+                          <Download size={14} />
+                          <span>Update Firmware ({device.firmware.latestVersion})</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleStartOtaUpdate(device)}
+                          className="px-3 py-1.5 bg-slate-200/80 hover:bg-slate-300/80 text-slate-700 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+                          title="Re-flash or verify current firmware integrity"
+                        >
+                          <RefreshCw size={13} />
+                          <span>Re-Verify ROM</span>
+                        </button>
+                      )
                     ) : (
-                      <button
-                        onClick={() => handleStartOtaUpdate(device)}
-                        className="px-3 py-1.5 bg-slate-200/80 hover:bg-slate-300/80 text-slate-700 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
-                        title="Re-flash or verify current firmware integrity"
-                      >
-                        <RefreshCw size={13} />
-                        <span>Re-Verify ROM</span>
-                      </button>
+                      <span className="text-xs text-slate-400 flex items-center gap-1 font-medium">
+                        <Lock size={12} /> Managed by Admin
+                      </span>
                     )}
                   </div>
                 </div>
@@ -915,77 +1076,100 @@ export function DeviceSettings() {
           </div>
         )}
 
-        {/* Firmware Update History Ledger */}
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8 mt-10">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                <Clock size={20} className="text-indigo-600" />
-                Firmware Installation &amp; Audit Ledger
-              </h2>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Cryptographic log of all applied Over-The-Air firmware updates, checksum verifications, and rollbacks.
-              </p>
+        {/* FIRMWARE INSTALLATION & AUDIT LEDGER - RESTRICTED TO ONLY ADMINS */}
+        {isAdmin ? (
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8 mt-10">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                  <Clock size={20} className="text-indigo-600" />
+                  Firmware Installation &amp; Audit Ledger
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Cryptographic log of all applied Over-The-Air firmware updates, checksum verifications, and rollbacks.
+                </p>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left">
+                <thead className="uppercase bg-slate-50 border-y border-slate-100 text-slate-400 font-bold tracking-wider">
+                  <tr>
+                    <th className="px-4 py-3">Device / Hardware</th>
+                    <th className="px-4 py-3">Version Upgrade</th>
+                    <th className="px-4 py-3">Timestamp</th>
+                    <th className="px-4 py-3">Installed By</th>
+                    <th className="px-4 py-3">Duration</th>
+                    <th className="px-4 py-3 text-right">Result</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {devices.flatMap(d => (d.updateHistory || []).map(entry => ({ ...entry, device: d }))).length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-6 text-center text-slate-400">
+                        No firmware update history entries recorded yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    devices
+                      .flatMap(d => (d.updateHistory || []).map(entry => ({ ...entry, device: d })))
+                      .sort((a, b) => new Date(b.installedAt).getTime() - new Date(a.installedAt).getTime())
+                      .map((item, idx) => (
+                        <tr key={item.id || idx} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="px-4 py-3 font-semibold text-slate-800">
+                            <div>{item.device.name}</div>
+                            <div className="text-[10px] text-slate-400 font-mono">{item.device.model}</div>
+                          </td>
+                          <td className="px-4 py-3 font-mono font-bold text-slate-700">
+                            {item.fromVersion} &rarr; <span className="text-indigo-600">{item.toVersion}</span>
+                          </td>
+                          <td className="px-4 py-3 text-slate-500">
+                            {new Date(item.installedAt).toLocaleString()}
+                          </td>
+                          <td className="px-4 py-3 text-slate-600">
+                            {item.installedBy}
+                          </td>
+                          <td className="px-4 py-3 font-mono text-slate-500">
+                            {item.durationSeconds ? `${item.durationSeconds}s` : 'N/A'}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <span className="font-bold text-emerald-700 uppercase">
+                              ✓ Verified Success
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left">
-              <thead className="uppercase bg-slate-50 border-y border-slate-100 text-slate-400 font-bold tracking-wider">
-                <tr>
-                  <th className="px-4 py-3">Device / Hardware</th>
-                  <th className="px-4 py-3">Version Upgrade</th>
-                  <th className="px-4 py-3">Timestamp</th>
-                  <th className="px-4 py-3">Installed By</th>
-                  <th className="px-4 py-3">Duration</th>
-                  <th className="px-4 py-3 text-right">Result</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {devices.flatMap(d => (d.updateHistory || []).map(entry => ({ ...entry, device: d }))).length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="px-4 py-6 text-center text-slate-400">
-                      No firmware update history entries recorded yet.
-                    </td>
-                  </tr>
-                ) : (
-                  devices
-                    .flatMap(d => (d.updateHistory || []).map(entry => ({ ...entry, device: d })))
-                    .sort((a, b) => new Date(b.installedAt).getTime() - new Date(a.installedAt).getTime())
-                    .map((item, idx) => (
-                      <tr key={item.id || idx} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="px-4 py-3 font-semibold text-slate-800">
-                          <div>{item.device.name}</div>
-                          <div className="text-[10px] text-slate-400 font-mono">{item.device.model}</div>
-                        </td>
-                        <td className="px-4 py-3 font-mono font-bold text-slate-700">
-                          {item.fromVersion} &rarr; <span className="text-indigo-600">{item.toVersion}</span>
-                        </td>
-                        <td className="px-4 py-3 text-slate-500">
-                          {new Date(item.installedAt).toLocaleString()}
-                        </td>
-                        <td className="px-4 py-3 text-slate-600">
-                          {item.installedBy}
-                        </td>
-                        <td className="px-4 py-3 font-mono text-slate-500">
-                          {item.durationSeconds ? `${item.durationSeconds}s` : 'N/A'}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <span className="font-bold text-emerald-700 uppercase">
-                            ✓ Verified Success
-                          </span>
-                        </td>
-                      </tr>
-                    ))
-                )}
-              </tbody>
-            </table>
+        ) : (
+          /* Non-Admin Guest reassurance card */
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8 mt-10 flex flex-col sm:flex-row items-center justify-between gap-6">
+            <div className="flex items-start sm:items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+                <ShieldCheck size={24} />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Protected Hardware Infrastructure</h3>
+                <p className="text-xs text-slate-500 mt-0.5 max-w-xl leading-relaxed">
+                  Smart door locks, climate systems, and gateways receive cryptographic Over-The-Air security updates managed exclusively by property administration. Guest entry PIN codes and reservations remain fully operational during all scheduled updates.
+                </p>
+              </div>
+            </div>
+            <Link 
+              to="/faq" 
+              className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors whitespace-nowrap"
+            >
+              Hardware FAQs
+            </Link>
           </div>
-        </div>
+        )}
       </main>
 
-      {/* OTA Firmware Update Modal */}
-      {updatingDevice && (
+      {/* OTA Firmware Update Modal - RESTRICTED TO ONLY ADMINS */}
+      {isAdmin && updatingDevice && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
           <div className="bg-white rounded-3xl max-w-xl w-full border border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             {/* Modal Header */}
@@ -1004,7 +1188,7 @@ export function DeviceSettings() {
               </div>
               <button
                 onClick={handleCloseOtaModal}
-                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-full hover:bg-slate-100 transition-colors"
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-full hover:bg-slate-100 transition-colors cursor-pointer"
               >
                 <X size={18} />
               </button>
@@ -1102,8 +1286,8 @@ export function DeviceSettings() {
         </div>
       )}
 
-      {/* Device Configuration Settings Modal */}
-      {editingSettingsDevice && (
+      {/* Device Configuration Settings Modal - RESTRICTED TO ONLY ADMINS */}
+      {isAdmin && editingSettingsDevice && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
           <div className="bg-white rounded-3xl max-w-lg w-full border border-slate-200 shadow-2xl p-6 sm:p-8 animate-in fade-in zoom-in-95 duration-200">
             <div className="flex justify-between items-start mb-6">
@@ -1113,7 +1297,7 @@ export function DeviceSettings() {
               </div>
               <button
                 onClick={() => setEditingSettingsDevice(null)}
-                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-full hover:bg-slate-100 transition-colors"
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-full hover:bg-slate-100 transition-colors cursor-pointer"
               >
                 <X size={18} />
               </button>

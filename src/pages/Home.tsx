@@ -255,12 +255,6 @@ export const Home: React.FC = () => {
                         ) : (
                             <div className="flex items-center gap-3 sm:gap-4">
                                 <Link 
-                                  to="/device-settings"
-                                  className="text-slate-500 hover:text-indigo-600 font-bold text-[10px] sm:text-xs uppercase tracking-widest transition-colors flex items-center gap-1"
-                                >
-                                    <Cpu size={14} className="text-indigo-600"/> Devices
-                                </Link>
-                                <Link 
                                   to="/alerts-and-events"
                                   className="text-slate-500 hover:text-indigo-600 font-bold text-[10px] sm:text-xs uppercase tracking-widest transition-colors flex items-center gap-1"
                                 >

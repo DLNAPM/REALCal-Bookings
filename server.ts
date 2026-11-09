@@ -5079,9 +5079,36 @@ async function startServer() {
     }
   });
 
-  // POST /api/devices/update-firmware - Apply OTA firmware update
+  // Admin check for firmware management
+  const ADMIN_EMAILS_LIST = [
+    'dlaniger.napm.consulting@gmail.com',
+    'monnib30228@gmail.com',
+    'reach_dlaniger@hotmail.com',
+    'billing@cashgroupproperties.com',
+    'support@cshproperties.com',
+    'cynthia@cshproperties.com',
+    'markus@cshproperties.com'
+  ];
+
+  const verifyDeviceAdmin = (req: express.Request) => {
+    const userEmail = ((req.headers['x-user-email'] as string) || req.body.userEmail || req.body.installedBy || '').toLowerCase().trim();
+    const userRole = ((req.headers['x-user-role'] as string) || req.body.userRole || '').toLowerCase().trim();
+    if (userRole === 'admin') return true;
+    if (userEmail && ADMIN_EMAILS_LIST.includes(userEmail)) return true;
+    if (userEmail.includes('admin') || userEmail.includes('dlaniger')) return true;
+    return false;
+  };
+
+  // POST /api/devices/update-firmware - Apply OTA firmware update (ONLY ADMINS)
   app.post("/api/devices/update-firmware", async (req, res) => {
     try {
+      if (!verifyDeviceAdmin(req)) {
+        return res.status(403).json({
+          success: false,
+          error: "Access Denied: Firmware modification and Over-The-Air (OTA) updates are strictly restricted to Property Administrators."
+        });
+      }
+
       const { deviceId, targetVersion, installedBy } = req.body;
       if (!deviceId) {
         return res.status(400).json({ error: "deviceId is required." });
@@ -5135,9 +5162,16 @@ async function startServer() {
     }
   });
 
-  // POST /api/devices/batch-update - Batch OTA update all outdated devices
+  // POST /api/devices/batch-update - Batch OTA update all outdated devices (ONLY ADMINS)
   app.post("/api/devices/batch-update", async (req, res) => {
     try {
+      if (!verifyDeviceAdmin(req)) {
+        return res.status(403).json({
+          success: false,
+          error: "Access Denied: Batch firmware updates are strictly restricted to Property Administrators."
+        });
+      }
+
       const { propertyId, installedBy } = req.body;
       const devices = await getOrInitServerDevices();
       const updatedDevices: any[] = [];
@@ -5231,9 +5265,16 @@ async function startServer() {
     }
   });
 
-  // POST /api/devices/settings - Update auto-update settings
+  // POST /api/devices/settings - Update auto-update settings (ONLY ADMINS)
   app.post("/api/devices/settings", async (req, res) => {
     try {
+      if (!verifyDeviceAdmin(req)) {
+        return res.status(403).json({
+          success: false,
+          error: "Access Denied: Modifying device hardware and firmware configuration is restricted to Property Administrators."
+        });
+      }
+
       const { deviceId, autoUpdateEnabled, autoUpdateWindow, channel } = req.body;
       const devices = await getOrInitServerDevices();
       const device = devices.find((d: any) => d.id === deviceId);
