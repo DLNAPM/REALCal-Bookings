@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, isAdminEmail } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
 import { YamiryLockGuide } from '../components/YamiryLockGuide';
 import { collection, query, where, getDocs, doc, updateDoc, getDoc, serverTimestamp, deleteDoc, setDoc } from 'firebase/firestore';
@@ -895,14 +895,16 @@ export const MyBookings: React.FC = () => {
                         <div className="bg-slate-100 p-1.5 rounded-lg"><ChevronLeft size={18} /></div> Back to Home
                     </Link>
                     <div className="flex items-center gap-4">
-                        <Link 
-                            to="/device-settings" 
-                            className="text-xs sm:text-sm font-bold text-slate-600 hover:text-indigo-600 flex items-center gap-1.5 transition-colors"
-                            title="Device Settings & Firmware"
-                        >
-                            <Cpu size={15} className="text-indigo-600" />
-                            <span>Device Settings</span>
-                        </Link>
+                        {(user?.role === 'admin' || isAdminEmail(user?.email)) && (
+                            <Link 
+                                to="/device-settings" 
+                                className="text-xs sm:text-sm font-bold text-slate-600 hover:text-indigo-600 flex items-center gap-1.5 transition-colors"
+                                title="Device Settings & Firmware"
+                            >
+                                <Cpu size={15} className="text-indigo-600" />
+                                <span>Device Settings</span>
+                            </Link>
+                        )}
                         <div className="font-bold text-slate-800 flex items-center gap-2">
                             <CalendarIcon size={18} className="text-indigo-500" />
                             My Bookings

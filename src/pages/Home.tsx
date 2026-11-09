@@ -189,14 +189,16 @@ export const Home: React.FC = () => {
                                     <CalendarIcon size={15}/>
                                     <span className="hidden md:inline">My Bookings</span>
                                 </Link>
-                                <Link 
-                                  to="/device-settings" 
-                                  className="text-slate-600 hover:text-indigo-600 font-bold flex items-center gap-1.5 text-xs sm:text-sm transition-colors rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 hover:bg-slate-50"
-                                  title="Device Settings & Firmware"
-                                >
-                                    <Cpu size={15} className="text-indigo-600"/>
-                                    <span className="hidden md:inline">Device Settings</span>
-                                </Link>
+                                {isAdmin && (
+                                  <Link 
+                                    to="/device-settings" 
+                                    className="text-slate-600 hover:text-indigo-600 font-bold flex items-center gap-1.5 text-xs sm:text-sm transition-colors rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 hover:bg-slate-50"
+                                    title="Device Settings & Firmware"
+                                  >
+                                      <Cpu size={15} className="text-indigo-600"/>
+                                      <span className="hidden md:inline">Device Settings</span>
+                                  </Link>
+                                )}
                                 <Link 
                                   to="/alerts-and-events"
                                   className="text-slate-600 hover:text-indigo-600 font-bold flex items-center gap-1.5 text-xs sm:text-sm transition-colors rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 hover:bg-slate-50"

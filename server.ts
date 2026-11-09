@@ -5049,37 +5049,7 @@ async function startServer() {
     return serverDevicesCache;
   };
 
-  // GET /api/devices - List devices with firmware info
-  app.get("/api/devices", async (req, res) => {
-    try {
-      const { propertyId, includeTestProperties } = req.query;
-      let devices = await getOrInitServerDevices();
-
-      if (propertyId && typeof propertyId === "string" && propertyId !== "all") {
-        devices = devices.filter((d: any) => d.propertyId === propertyId);
-      }
-
-      if (includeTestProperties !== "true") {
-        devices = devices.filter((d: any) => 
-          d.propertyId !== "oceanview-paradise-villa" && 
-          d.propertyId !== "mountain-retreat-cabin"
-        );
-      }
-
-      res.json({
-        success: true,
-        devices,
-        total: devices.length,
-        outdatedCount: devices.filter((d: any) => d.firmware?.updateAvailable).length,
-        criticalCount: devices.filter((d: any) => d.firmware?.criticalSecurityUpdate).length
-      });
-    } catch (err: any) {
-      console.error("[API] Error fetching devices:", err.message);
-      res.status(500).json({ success: false, error: err.message });
-    }
-  });
-
-  // Admin check for firmware management
+  // Admin check for firmware and device management
   const ADMIN_EMAILS_LIST = [
     'dlaniger.napm.consulting@gmail.com',
     'monnib30228@gmail.com',
@@ -5091,13 +5061,52 @@ async function startServer() {
   ];
 
   const verifyDeviceAdmin = (req: express.Request) => {
-    const userEmail = ((req.headers['x-user-email'] as string) || req.body.userEmail || req.body.installedBy || '').toLowerCase().trim();
-    const userRole = ((req.headers['x-user-role'] as string) || req.body.userRole || '').toLowerCase().trim();
+    const userEmail = ((req.headers['x-user-email'] as string) || (req.query.userEmail as string) || req.body.userEmail || req.body.installedBy || '').toLowerCase().trim();
+    const userRole = ((req.headers['x-user-role'] as string) || (req.query.userRole as string) || req.body.userRole || '').toLowerCase().trim();
     if (userRole === 'admin') return true;
     if (userEmail && ADMIN_EMAILS_LIST.includes(userEmail)) return true;
     if (userEmail.includes('admin') || userEmail.includes('dlaniger')) return true;
     return false;
   };
+
+  // GET /api/devices - List devices with firmware info
+  app.get("/api/devices", async (req, res) => {
+    try {
+      const { propertyId, includeTestProperties } = req.query;
+      const isAdminReq = verifyDeviceAdmin(req);
+      let devices = await getOrInitServerDevices();
+
+      // Non-ADMINS should not have visibility to: SmartLocks, IoT Gateways & Badges, Climate Thermostats, Safety & Sensors
+      if (!isAdminReq) {
+        const restrictedCategories = ['smartlock', 'gateway', 'thermostat', 'sensor'];
+        devices = devices.filter((d: any) => !restrictedCategories.includes(d.category));
+      }
+
+      if (propertyId && typeof propertyId === "string" && propertyId !== "all") {
+        devices = devices.filter((d: any) => d.propertyId === propertyId);
+      }
+
+      if (includeTestProperties !== "true" || !isAdminReq) {
+        devices = devices.filter((d: any) => 
+          d.propertyId !== "oceanview-paradise-villa" && 
+          d.propertyId !== "mountain-retreat-cabin"
+        );
+      }
+
+      res.json({
+        success: true,
+        devices,
+        total: devices.length,
+        isAdmin: isAdminReq,
+        outdatedCount: isAdminReq ? devices.filter((d: any) => d.firmware?.updateAvailable).length : 0,
+        criticalCount: isAdminReq ? devices.filter((d: any) => d.firmware?.criticalSecurityUpdate).length : 0,
+        note: !isAdminReq ? "Non-ADMIN users do not have visibility to SmartLocks, IoT Gateways & Badges, Climate Thermostats, or Safety & Sensors." : undefined
+      });
+    } catch (err: any) {
+      console.error("[API] Error fetching devices:", err.message);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
 
   // POST /api/devices/update-firmware - Apply OTA firmware update (ONLY ADMINS)
   app.post("/api/devices/update-firmware", async (req, res) => {
@@ -5233,6 +5242,14 @@ async function startServer() {
 
       if (!device) {
         return res.status(404).json({ error: "Device not found." });
+      }
+
+      const restrictedCategories = ['smartlock', 'gateway', 'thermostat', 'sensor'];
+      if (!verifyDeviceAdmin(req) && restrictedCategories.includes(device.category)) {
+        return res.status(403).json({
+          success: false,
+          error: "Access Denied: Diagnostics for SmartLocks, IoT Gateways & Badges, Climate Thermostats, and Safety & Sensors are restricted to Property Administrators."
+        });
       }
 
       const latency = Math.floor(12 + Math.random() * 26);

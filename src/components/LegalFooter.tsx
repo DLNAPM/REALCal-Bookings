@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, isAdminEmail } from '../contexts/AuthContext';
 
 export const LegalFooter: React.FC = () => {
     const { user } = useAuth();
@@ -19,7 +19,7 @@ export const LegalFooter: React.FC = () => {
                 <Link to="/alerts-and-events" className="text-xs text-slate-500 hover:text-indigo-600 font-bold uppercase tracking-widest transition-colors">
                     Alerts &amp; Events
                 </Link>
-                {user && (
+                {user && (user.role === 'admin' || isAdminEmail(user.email)) && (
                   <Link to="/device-settings" className="text-xs text-slate-500 hover:text-indigo-600 font-bold uppercase tracking-widest transition-colors">
                       Device Settings
                   </Link>

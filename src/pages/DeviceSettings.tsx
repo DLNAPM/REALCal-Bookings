@@ -108,7 +108,13 @@ export function DeviceSettings() {
   // Filter devices based on accessible properties, selected category, status, and search
   const filteredDevices = useMemo(() => {
     return devices.filter(dev => {
-      // 1. Property access check
+      // 1. Non-Admin Category Restriction (SmartLocks, IoT Gateways & Badges, Climate Thermostats, Safety & Sensors)
+      const RESTRICTED_CATEGORIES: string[] = ['smartlock', 'gateway', 'thermostat', 'sensor'];
+      if (!isAdmin && RESTRICTED_CATEGORIES.includes(dev.category)) {
+        return false;
+      }
+
+      // 2. Property access check
       const prop = KNOWN_PROPERTY_PROFILES.find(p => p.id === dev.propertyId);
       if (prop?.isTestProperty && !isAdmin) {
         return false;
@@ -117,7 +123,7 @@ export function DeviceSettings() {
         return false;
       }
 
-      // 2. Category check
+      // 3. Category check
       if (selectedCategory !== 'all' && dev.category !== selectedCategory) {
         return false;
       }
@@ -430,6 +436,171 @@ export function DeviceSettings() {
                 className="w-full py-3 px-6 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-2xl text-xs transition-colors inline-block"
               >
                 Return to Home
+              </Link>
+            </div>
+          </div>
+        </main>
+
+        <LegalFooter />
+      </div>
+    );
+  }
+
+  // 3. Non-ADMIN Gate: Non-ADMINS should not have visibility to:
+  //    SmartLocks, IoT Gateways & Badges, Climate Thermostats, Safety & Sensors
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900 justify-between">
+        <header className="pt-6 px-6 max-w-7xl mx-auto w-full z-10 relative">
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-white rounded-2xl shadow-xs border border-slate-200 py-3 px-5">
+            <Link to="/" className="flex items-center gap-2 sm:gap-3 hover:opacity-85 transition-opacity">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200">
+                <CalendarIcon size={18} />
+              </div>
+              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-800">
+                REALCal <span className="text-indigo-600">Bookings</span>
+              </h1>
+            </Link>
+
+            <div className="flex items-center gap-3">
+              <Link to="/my-bookings" className="text-xs font-bold text-slate-600 hover:text-indigo-600 flex items-center gap-1.5 transition-colors">
+                <CalendarIcon size={14} className="text-indigo-500" /> My Bookings
+              </Link>
+              <Link to="/alerts-and-events" className="text-xs font-bold text-slate-600 hover:text-indigo-600 flex items-center gap-1.5 transition-colors">
+                <Compass size={14} /> Alerts &amp; Events
+              </Link>
+              <div className="flex items-center gap-2 bg-slate-50 py-1 pl-1 pr-3 rounded-full border border-slate-200">
+                {user.photoURL && (
+                  <img src={user.photoURL} alt="Avatar" className="w-6 h-6 rounded-full" referrerPolicy="no-referrer" />
+                )}
+                <span className="text-xs font-semibold text-slate-700 truncate max-w-[90px]">
+                  {user.displayName ? user.displayName.split(' ')[0] : 'Guest'}
+                </span>
+                <span className="text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-md font-bold">
+                  Guest
+                </span>
+                <button onClick={() => signOut()} className="text-slate-400 hover:text-red-500 transition-colors p-1 cursor-pointer" title="Sign Out">
+                  <LogOut size={13} />
+                </button>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <main className="flex-1 max-w-4xl mx-auto w-full px-6 py-10">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 sm:p-10">
+            <div className="flex items-start sm:items-center gap-4 mb-6">
+              <div className="w-14 h-14 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 shrink-0 shadow-xs">
+                <ShieldAlert size={28} />
+              </div>
+              <div>
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 border border-amber-200 text-amber-700 text-[11px] font-bold rounded-lg uppercase tracking-wider mb-1">
+                  <Lock size={12} /> Administrator Access Required
+                </div>
+                <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+                  Restricted Device Settings
+                </h2>
+                <p className="text-sm text-slate-600 mt-1">
+                  Non-ADMIN users do not have visibility to the following Device Settings categories:
+                </p>
+              </div>
+            </div>
+
+            {/* The 4 Restricted Categories Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 my-6">
+              <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-start gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-indigo-100/70 text-indigo-700 flex items-center justify-center shrink-0">
+                  <Lock size={20} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-bold text-slate-900">SmartLocks</h3>
+                    <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-200 text-slate-700 rounded-md">Admin Only</span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                    Yamiry keyless deadbolt firmware, motor calibration, tamper alerts, and physical hardware telemetry.
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-start gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-blue-100/70 text-blue-700 flex items-center justify-center shrink-0">
+                  <Server size={20} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-bold text-slate-900">IoT Gateways &amp; Badges</h3>
+                    <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-200 text-slate-700 rounded-md">Admin Only</span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                    Central Wi-Fi/BLE cloud bridge relays, Zigbee coordinators, and physical RFID/BLE keycard badges.
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-start gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-emerald-100/70 text-emerald-700 flex items-center justify-center shrink-0">
+                  <Thermometer size={20} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-bold text-slate-900">Climate Thermostats</h3>
+                    <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-200 text-slate-700 rounded-md">Admin Only</span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                    Central HVAC smart thermostats, heating/cooling schedules, compressor limits, and ROM firmware.
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-start gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-purple-100/70 text-purple-700 flex items-center justify-center shrink-0">
+                  <Activity size={20} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-bold text-slate-900">Safety &amp; Sensors</h3>
+                    <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-200 text-slate-700 rounded-md">Admin Only</span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                    Connected Smoke/CO detectors, freeze monitors, flood sensors, noise decibel monitors, and door contacts.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Guest Guidance Banner */}
+            <div className="p-5 rounded-2xl bg-indigo-50/60 border border-indigo-100 text-slate-700 text-xs leading-relaxed flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <ShieldCheck size={20} className="text-indigo-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold text-slate-900 text-sm">Need your door entry code or check-in instructions?</p>
+                  <p className="text-slate-600 mt-0.5">
+                    Your personal keyless door PIN, Wi-Fi network password, and arrival itinerary are safely accessible in your verified booking details.
+                  </p>
+                </div>
+              </div>
+              <Link
+                to="/my-bookings"
+                className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs whitespace-nowrap shadow-xs transition-colors shrink-0"
+              >
+                Go to My Bookings
+              </Link>
+            </div>
+
+            {/* Navigation Buttons */}
+            <div className="flex flex-wrap items-center gap-3 mt-8 pt-6 border-t border-slate-100">
+              <Link
+                to="/"
+                className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs transition-colors"
+              >
+                Return to Home
+              </Link>
+              <Link
+                to="/alerts-and-events"
+                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-colors"
+              >
+                Explore Alerts &amp; Events
               </Link>
             </div>
           </div>
@@ -759,7 +930,7 @@ export function DeviceSettings() {
             {[
               { id: 'all', label: 'All Categories' },
               { id: 'smartlock', label: 'SmartLocks (Yamiry)' },
-              { id: 'gateway', label: 'IoT Gateways & Bridges' },
+              { id: 'gateway', label: 'IoT Gateways & Badges' },
               { id: 'thermostat', label: 'Climate Thermostats' },
               { id: 'sensor', label: 'Safety & Sensors' },
             ].map(cat => (

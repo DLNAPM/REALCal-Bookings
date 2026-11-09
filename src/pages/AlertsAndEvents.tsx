@@ -571,7 +571,7 @@ export function AlertsAndEvents() {
               <Star size={14} className="text-amber-500 fill-amber-500/30" /> Reviews
             </Link>
 
-            {user && (
+            {isAdmin && (
               <Link 
                 to="/device-settings" 
                 className="text-slate-600 hover:text-indigo-600 font-bold hidden sm:flex items-center gap-1 text-xs sm:text-sm px-2.5 py-1.5 rounded-lg hover:bg-slate-100 transition-colors"
