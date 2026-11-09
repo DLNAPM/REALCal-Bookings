@@ -6,7 +6,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { 
   Calendar as CalendarIcon, Key, LogOut, ChevronRight, Lock, BellRing, 
   ShieldCheck, MessageSquare, HelpCircle, MapPin, Ticket, Sparkles, 
-  Music, Trophy, Compass, Smile, RotateCw, RefreshCw, CheckCircle2, Star
+  Music, Trophy, Compass, Smile, RotateCw, RefreshCw, CheckCircle2, Star,
+  Cpu
 } from 'lucide-react';
 import { Property, getImageUrl } from '../types';
 import { PrivacyPolicyModal } from '../components/PrivacyPolicyModal';
@@ -189,6 +190,14 @@ export const Home: React.FC = () => {
                                     <span className="hidden md:inline">My Bookings</span>
                                 </Link>
                                 <Link 
+                                  to="/device-settings" 
+                                  className="text-slate-600 hover:text-indigo-600 font-bold flex items-center gap-1.5 text-xs sm:text-sm transition-colors rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 hover:bg-slate-50"
+                                  title="Device Settings & Firmware"
+                                >
+                                    <Cpu size={15} className="text-indigo-600"/>
+                                    <span className="hidden md:inline">Device Settings</span>
+                                </Link>
+                                <Link 
                                   to="/alerts-and-events"
                                   className="text-slate-600 hover:text-indigo-600 font-bold flex items-center gap-1.5 text-xs sm:text-sm transition-colors rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 hover:bg-slate-50"
                                   title="Upcoming Local Alerts and Events"
@@ -245,6 +254,12 @@ export const Home: React.FC = () => {
                             </div>
                         ) : (
                             <div className="flex items-center gap-3 sm:gap-4">
+                                <Link 
+                                  to="/device-settings"
+                                  className="text-slate-500 hover:text-indigo-600 font-bold text-[10px] sm:text-xs uppercase tracking-widest transition-colors flex items-center gap-1"
+                                >
+                                    <Cpu size={14} className="text-indigo-600"/> Devices
+                                </Link>
                                 <Link 
                                   to="/alerts-and-events"
                                   className="text-slate-500 hover:text-indigo-600 font-bold text-[10px] sm:text-xs uppercase tracking-widest transition-colors flex items-center gap-1"

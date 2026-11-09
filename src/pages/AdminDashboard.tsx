@@ -6,7 +6,7 @@ import { Navigate, useNavigate, Link } from 'react-router-dom';
 import { format, eachDayOfInterval, parseISO, addDays } from 'date-fns';
 import { cn } from '../lib/utils';
 import { BlackoutDate, PricingRule, Booking, Property, PropertyManager, PropertyImage, getImageUrl, getImageRoomNumber, DiscountCode, SurveyResponse, Review, Lease } from '../types';
-import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight, RefreshCw, MessageSquare, CheckCircle, Loader2, FileText, XCircle, HelpCircle, MapPin, Upload, Database, Ticket, Send, Clock, Bell, BellRing, FileCheck, RotateCw, CheckSquare, Copy, Search, X, AlertTriangle, Video, Eraser, Pencil, Sparkles, Megaphone, Building } from 'lucide-react';
+import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight, RefreshCw, MessageSquare, CheckCircle, Loader2, FileText, XCircle, HelpCircle, MapPin, Upload, Database, Ticket, Send, Clock, Bell, BellRing, FileCheck, RotateCw, CheckSquare, Copy, Search, X, AlertTriangle, Video, Eraser, Pencil, Sparkles, Megaphone, Building, Cpu } from 'lucide-react';
 import { AdvertisementFlyerModal } from '../components/AdvertisementFlyerModal';
 import { ProofOfResidencyModal } from '../components/ProofOfResidencyModal';
 import { AdminAlarmsBanner, AdminAlarmsModal } from '../components/AdminAlarmsPanel';
@@ -3527,6 +3527,14 @@ C.&S.H. Group Properties, LLC
             </Link>
             
             <div className="flex items-center gap-2 sm:gap-4 flex-wrap justify-center sm:justify-end w-full sm:w-auto">
+              <Link 
+                to="/device-settings" 
+                className="text-slate-700 hover:text-indigo-600 font-bold flex items-center gap-1.5 text-xs sm:text-sm transition-colors rounded-xl px-3 py-1.5 bg-white border border-slate-200 shadow-2xs hover:border-indigo-300"
+                title="Device Settings & Firmware Management"
+              >
+                <Cpu size={15} className="text-indigo-600" />
+                <span>Device Settings</span>
+              </Link>
               <div className="flex items-center gap-2 bg-white py-1 pl-1 pr-2 sm:pr-4 rounded-full border border-slate-200 shadow-sm">
                   {user?.photoURL && <img src={user.photoURL} alt="Avatar" className="w-6 h-6 sm:w-8 sm:h-8 rounded-full" referrerPolicy="no-referrer" />}
                   <div className="text-left hidden xs:block">

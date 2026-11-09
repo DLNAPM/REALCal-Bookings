@@ -263,4 +263,70 @@ export interface SystemIncident {
   updatedAt?: any;
 }
 
+export type DeviceCategory = 'smartlock' | 'gateway' | 'thermostat' | 'sensor' | 'controller';
+
+export interface DeviceFirmwareInfo {
+  currentVersion: string;
+  latestVersion: string;
+  releaseDate: string;
+  updateAvailable: boolean;
+  criticalSecurityUpdate?: boolean;
+  channel: 'stable' | 'beta';
+  sizeBytes: number;
+  releaseNotes: string[];
+  sha256Checksum: string;
+  minBatteryPercent: number;
+}
+
+export interface FirmwareUpdateLogEntry {
+  id: string;
+  fromVersion: string;
+  toVersion: string;
+  installedAt: string;
+  installedBy: string;
+  status: 'success' | 'failed' | 'rolled_back';
+  durationSeconds?: number;
+  notes?: string;
+}
+
+export interface SmartDevice {
+  id: string;
+  propertyId: string;
+  propertyName: string;
+  name: string;
+  category: DeviceCategory;
+  model: string;
+  manufacturer: string;
+  serialNumber: string;
+  macAddress: string;
+  ipAddress?: string;
+  hardwareRevision: string;
+  chipset: string;
+  locationRoom?: string;
+  batteryPercent: number; // 0-100 or -1 if AC hardwired
+  powerSource: 'battery' | 'ac_hardwired' | 'poe';
+  signalStrengthDbm: number; // e.g. -54 dBm
+  connectionType: 'wifi' | 'ble' | 'zigbee' | 'zwave';
+  status: 'online' | 'updating' | 'offline' | 'warning';
+  lastHeartbeat: string;
+  firmware: DeviceFirmwareInfo;
+  autoUpdateEnabled: boolean;
+  autoUpdateWindow: string; // e.g. "03:00 - 05:00"
+  updateHistory?: FirmwareUpdateLogEntry[];
+  selfTestReport?: {
+    lastTestedAt: string;
+    passed: boolean;
+    latencyMs: number;
+    diagnostics: {
+      keypadOk?: boolean;
+      motorLatchOk?: boolean;
+      tamperSwitchOk?: boolean;
+      bleBeaconOk?: boolean;
+      storageOk?: boolean;
+      voltageLevel?: number;
+    };
+  };
+}
+
+
 

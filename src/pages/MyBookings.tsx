@@ -5,7 +5,7 @@ import { YamiryLockGuide } from '../components/YamiryLockGuide';
 import { collection, query, where, getDocs, doc, updateDoc, getDoc, serverTimestamp, deleteDoc, setDoc } from 'firebase/firestore';
 import { Booking, Property, getImageUrl } from '../types';
 import { useNavigate, Link } from 'react-router-dom';
-import { ChevronLeft, Calendar as CalendarIcon, XCircle, CheckCircle, CheckCircle2, Lock, Home, MapPin, Edit3, X, Trash2, Printer, CreditCard, Loader2, AlertCircle, ArrowUpDown, Receipt, Star, MessageSquare } from 'lucide-react';
+import { ChevronLeft, Calendar as CalendarIcon, XCircle, CheckCircle, CheckCircle2, Lock, Home, MapPin, Edit3, X, Trash2, Printer, CreditCard, Loader2, AlertCircle, ArrowUpDown, Receipt, Star, MessageSquare, Cpu } from 'lucide-react';
 import { parseISO, differenceInHours } from 'date-fns';
 import { Calendar } from '../components/Calendar';
 import { LegalFooter } from '../components/LegalFooter';
@@ -894,9 +894,19 @@ export const MyBookings: React.FC = () => {
                     <Link to="/" className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 font-bold transition-colors">
                         <div className="bg-slate-100 p-1.5 rounded-lg"><ChevronLeft size={18} /></div> Back to Home
                     </Link>
-                    <div className="font-bold text-slate-800 flex items-center gap-2">
-                        <CalendarIcon size={18} className="text-indigo-500" />
-                        My Bookings
+                    <div className="flex items-center gap-4">
+                        <Link 
+                            to="/device-settings" 
+                            className="text-xs sm:text-sm font-bold text-slate-600 hover:text-indigo-600 flex items-center gap-1.5 transition-colors"
+                            title="Device Settings & Firmware"
+                        >
+                            <Cpu size={15} className="text-indigo-600" />
+                            <span>Device Settings</span>
+                        </Link>
+                        <div className="font-bold text-slate-800 flex items-center gap-2">
+                            <CalendarIcon size={18} className="text-indigo-500" />
+                            My Bookings
+                        </div>
                     </div>
                 </div>
             </header>

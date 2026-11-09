@@ -19,6 +19,9 @@ export const LegalFooter: React.FC = () => {
                 <Link to="/alerts-and-events" className="text-xs text-slate-500 hover:text-indigo-600 font-bold uppercase tracking-widest transition-colors">
                     Alerts &amp; Events
                 </Link>
+                <Link to="/device-settings" className="text-xs text-slate-500 hover:text-indigo-600 font-bold uppercase tracking-widest transition-colors">
+                    Device Settings &amp; Firmware
+                </Link>
                 <Link to="/reviews" className="text-xs text-slate-500 hover:text-indigo-600 font-bold uppercase tracking-widest transition-colors">
                     Guest Reviews
                 </Link>

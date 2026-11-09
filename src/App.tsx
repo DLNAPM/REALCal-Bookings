@@ -21,6 +21,7 @@ import { PayInvoice } from './pages/PayInvoice';
 import { Reviews } from './pages/Reviews';
 import { Survey } from './pages/Survey';
 import { AlertsAndEvents } from './pages/AlertsAndEvents';
+import { DeviceSettings } from './pages/DeviceSettings';
 import { HelpModal } from './components/HelpModal';
 
 export default function App() {
@@ -35,6 +36,8 @@ export default function App() {
            <Route path="/itinerary/:id" element={<Itinerary />} />
            <Route path="/admin" element={<AdminDashboard />} />
            <Route path="/my-bookings" element={<MyBookings />} />
+           <Route path="/device-settings" element={<DeviceSettings />} />
+           <Route path="/devices" element={<DeviceSettings />} />
            <Route path="/pay-invoice/:bookingId" element={<PayInvoice />} />
            <Route path="/pay-invoice" element={<PayInvoice />} />
            <Route path="/reviews" element={<Reviews />} />
