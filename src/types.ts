@@ -109,6 +109,14 @@ export interface Booking {
   sentRenewalNotificationAt?: string;
   sentSurveyEmail?: boolean;
   sentSurveyEmailAt?: string;
+  referralNumber?: string;
+  referralLetterId?: string;
+  referrerType?: ReferralRecipientType;
+  referrerName?: string;
+  referrerEmail?: string;
+  referralOwedAmount?: number;
+  referralPayoutStatus?: 'owed' | 'paid';
+  referralPaidAt?: string;
 }
 
 export interface GlobalSettings {
@@ -327,6 +335,71 @@ export interface SmartDevice {
     };
   };
 }
+
+export type ReferralRecipientType = 'individual' | 'business';
+export type ReferralLetterStatus = 'draft' | 'published';
+export type ReferralFeeType = 'flat' | 'percentage';
+
+export interface ReferralLetter {
+  id: string;
+  recipientType: ReferralRecipientType;
+  status: ReferralLetterStatus;
+  referralNumber: string;
+  // Individual fields
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  // Business Corporation fields
+  businessName?: string;
+  attentionFirstName?: string;
+  attentionLastName?: string;
+  streetAddress?: string;
+  cityStateZip?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  // Fee details
+  referralFee: number;
+  referralFeeType?: ReferralFeeType;
+  // Letter customization
+  customOpeningNote?: string;
+  customClosingNote?: string;
+  letterDate?: string;
+  publishedAt?: string;
+  lastEmailedAt?: string;
+  lastEmailedTo?: string;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ReferralLedgerEntry {
+  id: string;
+  referralNumber: string;
+  referralLetterId: string;
+  recipientType: ReferralRecipientType;
+  referrerName: string;
+  referrerEmail: string;
+  referrerPhone?: string;
+  bookingId: string;
+  bookingRef?: string;
+  guestName: string;
+  guestEmail?: string;
+  propertyId?: string;
+  propertyName: string;
+  roomSummary?: string;
+  checkIn: string;
+  checkOut: string;
+  bookingTotal: number;
+  owedAmount: number;
+  feeDescription?: string;
+  status: 'owed' | 'paid';
+  paidAt?: string;
+  paymentNotes?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
 
 
 

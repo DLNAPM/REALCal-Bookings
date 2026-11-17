@@ -5,12 +5,13 @@ import { collection, query, onSnapshot, addDoc, serverTimestamp, getDocs, doc, d
 import { Navigate, useNavigate, Link } from 'react-router-dom';
 import { format, eachDayOfInterval, parseISO, addDays } from 'date-fns';
 import { cn } from '../lib/utils';
-import { BlackoutDate, PricingRule, Booking, Property, PropertyManager, PropertyImage, getImageUrl, getImageRoomNumber, DiscountCode, SurveyResponse, Review, Lease } from '../types';
+import { BlackoutDate, PricingRule, Booking, Property, PropertyManager, PropertyImage, getImageUrl, getImageRoomNumber, DiscountCode, SurveyResponse, Review, Lease, ReferralLetter } from '../types';
 import { Users, FileDown, TrendingUp, Settings, Plus, Image as ImageIcon, Trash2, Phone, Mail, Calendar as CalendarIcon, DollarSign, LogOut, ArrowLeft, ArrowRight, RefreshCw, MessageSquare, CheckCircle, Loader2, FileText, XCircle, HelpCircle, MapPin, Upload, Database, Ticket, Send, Clock, Bell, BellRing, FileCheck, RotateCw, CheckSquare, Copy, Search, X, AlertTriangle, Video, Eraser, Pencil, Sparkles, Megaphone, Building, Cpu } from 'lucide-react';
 import { AdvertisementFlyerModal } from '../components/AdvertisementFlyerModal';
 import { ProofOfResidencyModal } from '../components/ProofOfResidencyModal';
 import { AdminAlarmsBanner, AdminAlarmsModal } from '../components/AdminAlarmsPanel';
 import { AdminSurveyReminders } from '../components/AdminSurveyReminders';
+import { AdminReferralLetters } from '../components/AdminReferralLetters';
 import { INITIAL_REVIEWS } from '../data/initialReviews';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -161,6 +162,8 @@ export const AdminDashboard: React.FC = () => {
   const [manualGuestPhone, setManualGuestPhone] = useState<string>('');
   const [manualTotalPrice, setManualTotalPrice] = useState<string>('');
   const [manualAccessCode, setManualAccessCode] = useState<string>('');
+  const [publishedReferralLetters, setPublishedReferralLetters] = useState<ReferralLetter[]>([]);
+  const [manualReferralNumber, setManualReferralNumber] = useState<string>('');
   const [editingAccessCodeId, setEditingAccessCodeId] = useState<string | null>(null);
   const [editHasSmartLock, setEditHasSmartLock] = useState<boolean>(false);
   const [createHasSmartLock, setCreateHasSmartLock] = useState<boolean>(false);
@@ -1772,6 +1775,7 @@ export const AdminDashboard: React.FC = () => {
      setManualGuestPhone('');
      setManualTotalPrice('');
      setManualAccessCode('');
+     setManualReferralNumber('');
 
      setCreateInvoiceForPayment(false);
      setShowInvoiceTemplate(false);
@@ -1892,6 +1896,26 @@ export const AdminDashboard: React.FC = () => {
          grandTotal: grandTotalAmount
       };
 
+      const cleanManualRef = (pendingBookingData.referralNumber || manualReferralNumber || '').trim().toUpperCase();
+      let resolvedReferralInfo: any = null;
+      if (cleanManualRef) {
+        try {
+          const refRes = await fetch('/api/referral-letters/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ referralNumber: cleanManualRef })
+          });
+          if (refRes.ok) {
+            const refData = await refRes.json();
+            if (refData.valid) {
+              resolvedReferralInfo = refData;
+            }
+          }
+        } catch (refCheckErr) {
+          console.warn('Manual invoice referral verify warning:', refCheckErr);
+        }
+      }
+
       const payload: any = {
          userId: payloadUserId,
          propertyId,
@@ -1909,6 +1933,23 @@ export const AdminDashboard: React.FC = () => {
          invoiceDetails,
          invoiceEmailed: true
       };
+
+      if (resolvedReferralInfo) {
+         const owedAmt =
+           resolvedReferralInfo.referralFeeType === 'percentage'
+             ? Math.round((grandTotalAmount * (Number(resolvedReferralInfo.referralFee || 0) / 100)) * 100) / 100
+             : Math.round(Number(resolvedReferralInfo.referralFee || 0) * 100) / 100;
+         payload.referralNumber = resolvedReferralInfo.referralNumber;
+         payload.referralLetterId = resolvedReferralInfo.referralLetterId;
+         payload.referrerType = resolvedReferralInfo.recipientType;
+         payload.referrerName = resolvedReferralInfo.referrerName;
+         payload.referrerEmail = resolvedReferralInfo.referrerEmail;
+         payload.referralOwedAmount = owedAmt;
+         payload.referralPayoutStatus = 'owed';
+      } else if (cleanManualRef) {
+         payload.referralNumber = cleanManualRef;
+         payload.referralPayoutStatus = 'owed';
+      }
 
       if (accessCode) payload.accessCode = accessCode;
 
@@ -2105,6 +2146,37 @@ C.&S.H. Group Properties, LLC
 
       await setDoc(doc(db, 'bookings', bookingId), payload);
 
+      if (payload.referralNumber) {
+        try {
+          await fetch('/api/referral-ledger/record', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-user-email': user?.email || '',
+              'x-user-role': user?.role || 'admin'
+            },
+            body: JSON.stringify({
+              bookingId,
+              bookingRef: bookingId.substring(0, 8).toUpperCase(),
+              referralNumber: payload.referralNumber,
+              guestName: guestName || 'Guest',
+              guestEmail,
+              propertyId,
+              propertyName,
+              roomSummary:
+                selectedBedroomObjects.length > 0
+                  ? selectedBedroomObjects.map((r: any) => `Room ${r.roomNumber}`).join(', ')
+                  : 'Full Property',
+              checkIn,
+              checkOut,
+              bookingTotalDollars: grandTotalAmount
+            })
+          });
+        } catch (refLedErr) {
+          console.warn('Referral ledger record warning (invoice booking):', refLedErr);
+        }
+      }
+
       try {
           const checkOutDate = new Date(checkOut + 'T12:00:00');
           const dayAfterDate = new Date(checkOutDate);
@@ -2171,6 +2243,7 @@ C.&S.H. Group Properties, LLC
       setManualBookingRooms([]);
       setManualBookingCheckIn('');
       setManualBookingCheckOut('');
+      setManualReferralNumber('');
       setCreateInvoiceForPayment(false);
       setShowInvoiceTemplate(false);
       setPendingBookingData(null);
@@ -2217,6 +2290,7 @@ C.&S.H. Group Properties, LLC
             guestPhone,
             totalPrice: totalAmountStr,
             accessCode: manualAccessCode,
+            referralNumber: (fd.get('referralNumber') as string || manualReferralNumber || '').trim().toUpperCase(),
             manualBookingRooms,
             formElement: e.target as HTMLFormElement
         });
@@ -2269,13 +2343,34 @@ C.&S.H. Group Properties, LLC
 
         const selectedBedroomObjects = (prop?.bedrooms || []).filter(b => manualBookingRooms.includes(b.roomNumber));
 
+        const cleanManualRef = ((fd.get('referralNumber') as string) || manualReferralNumber || '').trim().toUpperCase();
+        let resolvedReferralInfo: any = null;
+        if (cleanManualRef) {
+          try {
+            const refRes = await fetch('/api/referral-letters/verify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ referralNumber: cleanManualRef })
+            });
+            if (refRes.ok) {
+              const refData = await refRes.json();
+              if (refData.valid) {
+                resolvedReferralInfo = refData;
+              }
+            }
+          } catch (refVerifyErr) {
+            console.warn('Manual booking referral verify warning:', refVerifyErr);
+          }
+        }
+
+        const totalBookingDollars = Number(totalAmountStr || 0);
         const payload: any = {
            userId: payloadUserId,
            propertyId: formPropId,
            checkIn,
            checkOut,
            status: 'confirmed',
-           totalPrice: Math.round(Number(totalAmountStr) * 100),
+           totalPrice: Math.round(totalBookingDollars * 100),
            guestName: guestName || '',
            guestEmail: guestEmail,
            guestPhone: guestPhone,
@@ -2285,10 +2380,58 @@ C.&S.H. Group Properties, LLC
            updatedAt: serverTimestamp()
         };
 
+        if (resolvedReferralInfo) {
+           const owedAmt =
+             resolvedReferralInfo.referralFeeType === 'percentage'
+               ? Math.round((totalBookingDollars * (Number(resolvedReferralInfo.referralFee || 0) / 100)) * 100) / 100
+               : Math.round(Number(resolvedReferralInfo.referralFee || 0) * 100) / 100;
+           payload.referralNumber = resolvedReferralInfo.referralNumber;
+           payload.referralLetterId = resolvedReferralInfo.referralLetterId;
+           payload.referrerType = resolvedReferralInfo.recipientType;
+           payload.referrerName = resolvedReferralInfo.referrerName;
+           payload.referrerEmail = resolvedReferralInfo.referrerEmail;
+           payload.referralOwedAmount = owedAmt;
+           payload.referralPayoutStatus = 'owed';
+        } else if (cleanManualRef) {
+           payload.referralNumber = cleanManualRef;
+           payload.referralPayoutStatus = 'owed';
+        }
+
         if (accessCode) payload.accessCode = accessCode;
 
         // Save Booking
         await setDoc(doc(db, 'bookings', bookingId), payload);
+
+        if (payload.referralNumber) {
+          try {
+            await fetch('/api/referral-ledger/record', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-user-email': user?.email || '',
+                'x-user-role': user?.role || 'admin'
+              },
+              body: JSON.stringify({
+                bookingId,
+                bookingRef: bookingId.substring(0, 8).toUpperCase(),
+                referralNumber: payload.referralNumber,
+                guestName: guestName || 'Guest',
+                guestEmail,
+                propertyId: formPropId,
+                propertyName: prop?.name || 'Property',
+                roomSummary:
+                  selectedBedroomObjects.length > 0
+                    ? selectedBedroomObjects.map((r: any) => `Room ${r.roomNumber}`).join(', ')
+                    : 'Full Property',
+                checkIn,
+                checkOut,
+                bookingTotalDollars: totalBookingDollars
+              })
+            });
+          } catch (refLedErr) {
+            console.warn('Referral ledger record warning (manual booking):', refLedErr);
+          }
+        }
 
         // Auto-add Blackout for the day after checkout for maintenance/cleaning
         try {
@@ -2364,6 +2507,7 @@ C.&S.H. Group Properties, LLC
         setManualBookingRooms([]);
         setManualBookingCheckIn('');
         setManualBookingCheckOut('');
+        setManualReferralNumber('');
 
     } catch (err: any) { alert(err.message); }
   }
@@ -3598,6 +3742,16 @@ C.&S.H. Group Properties, LLC
                         >
                           <Sparkles size={14} className="text-amber-300 animate-pulse" /> Digital 1-Pager Ad
                         </button>
+                        <button
+                          onClick={() => {
+                            const el = document.getElementById('admin-referral-letter-section');
+                            if (el) el.scrollIntoView({ behavior: 'smooth' });
+                          }}
+                          className="text-xs bg-emerald-50 text-emerald-900 hover:bg-emerald-100 border border-emerald-300 font-bold px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer whitespace-nowrap"
+                          title="Draft, Review, Publish Referral Letters (Individual & Business) & Commission Ledger"
+                        >
+                          <FileText size={14} className="text-emerald-700" /> Referral Letter
+                        </button>
                         <div className="relative group">
                             <button onClick={handleSeedTestData} className="text-xs bg-indigo-100 text-indigo-700 font-bold px-3 py-1.5 rounded-lg hover:bg-indigo-200 transition-colors flex items-center gap-1">
                                Seed Test Data
@@ -4348,6 +4502,26 @@ C.&S.H. Group Properties, LLC
                       placeholder="Auto / Custom" 
                       className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm font-mono focus:ring-2 focus:ring-indigo-200 outline-none" 
                    />
+                </div>
+                <div className="lg:col-span-2">
+                   <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Referral Number <span className="font-normal text-slate-400">(Optional)</span></label>
+                   <input
+                      name="referralNumber"
+                      list="published-referral-numbers-list"
+                      value={manualReferralNumber}
+                      onChange={e => setManualReferralNumber(e.target.value.toUpperCase())}
+                      placeholder="e.g. REF-IND-123456AB"
+                      className="w-full border border-slate-200 rounded-xl p-2.5 mt-1 bg-white shadow-sm text-sm font-mono focus:ring-2 focus:ring-emerald-200 outline-none"
+                   />
+                   <datalist id="published-referral-numbers-list">
+                      {publishedReferralLetters.map(l => (
+                        <option key={l.id} value={l.referralNumber}>
+                          {l.recipientType === 'business'
+                            ? `${l.businessName} (${l.referralFeeType === 'percentage' ? `${l.referralFee}%` : `$${l.referralFee}`})`
+                            : `${l.firstName} ${l.lastName} (${l.referralFeeType === 'percentage' ? `${l.referralFee}%` : `$${l.referralFee}`})`}
+                        </option>
+                      ))}
+                   </datalist>
                 </div>
                 <div className="md:col-span-2 lg:col-span-8 flex flex-col md:flex-row justify-between items-center gap-4 mt-2">
                    <div className="flex items-center gap-3">
@@ -5514,6 +5688,14 @@ C.&S.H. Group Properties, LLC
                onUpdateLease={handleUpdateLeaseFromReminders}
              />
           </div>
+
+          {/* Referral Letter Generator, Draft/Publish & Commission Ledger */}
+          <AdminReferralLetters
+            currentUser={user}
+            bookings={bookings}
+            properties={properties}
+            onPublishedLettersUpdate={setPublishedReferralLetters}
+          />
 
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm mt-8">
              <div className="flex justify-between items-center mb-6">

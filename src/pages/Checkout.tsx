@@ -60,6 +60,21 @@ export const Checkout: React.FC = () => {
   const [discountSuccess, setDiscountSuccess] = useState<string | null>(null);
   const [validatingDiscount, setValidatingDiscount] = useState(false);
 
+  // Referral Number attribution states
+  const [referralCodeText, setReferralCodeText] = useState('');
+  const [appliedReferral, setAppliedReferral] = useState<{
+    referralLetterId: string;
+    referralNumber: string;
+    recipientType: 'individual' | 'business';
+    referrerName: string;
+    referrerEmail: string;
+    referralFee: number;
+    referralFeeType: 'flat' | 'percentage';
+  } | null>(null);
+  const [referralError, setReferralError] = useState<string | null>(null);
+  const [referralSuccess, setReferralSuccess] = useState<string | null>(null);
+  const [validatingReferral, setValidatingReferral] = useState(false);
+
   const finalPriceDetails = React.useMemo(() => {
     if (!localPriceDetails) return null;
     if (!appliedDiscountCode) return localPriceDetails;
@@ -113,7 +128,11 @@ export const Checkout: React.FC = () => {
       const snap = await getDocs(q);
 
       if (snap.empty) {
-        setDiscountError(`Invalid discount code "${codeToSearch}".`);
+        if (codeToSearch.startsWith('REF-')) {
+          setDiscountError(`"${codeToSearch}" looks like a Referral Number. Enter it in the Referral Number section below to credit your referrer.`);
+        } else {
+          setDiscountError(`Invalid discount code "${codeToSearch}".`);
+        }
         setAppliedDiscountCode(null);
         return;
       }
@@ -165,6 +184,52 @@ export const Checkout: React.FC = () => {
     setDiscountCodeText('');
     setDiscountSuccess(null);
     setDiscountError(null);
+  };
+
+  const handleApplyReferralCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanCode = referralCodeText.trim().toUpperCase();
+    if (!cleanCode) return;
+
+    setValidatingReferral(true);
+    setReferralError(null);
+    setReferralSuccess(null);
+
+    try {
+      const res = await fetch('/api/referral-letters/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ referralNumber: cleanCode })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.valid) {
+        setAppliedReferral(null);
+        setReferralError(data.error || `Referral Number "${cleanCode}" was not found or is not yet published.`);
+        return;
+      }
+
+      setAppliedReferral({
+        referralLetterId: data.referralLetterId,
+        referralNumber: data.referralNumber,
+        recipientType: data.recipientType,
+        referrerName: data.referrerName,
+        referrerEmail: data.referrerEmail,
+        referralFee: Number(data.referralFee || 0),
+        referralFeeType: data.referralFeeType || 'flat'
+      });
+      setReferralSuccess(`Referral Number "${data.referralNumber}" verified (${data.referrerName}).`);
+    } catch (err: any) {
+      setReferralError(`Could not verify Referral Number: ${err.message}`);
+    } finally {
+      setValidatingReferral(false);
+    }
+  };
+
+  const handleRemoveReferralCode = () => {
+    setAppliedReferral(null);
+    setReferralCodeText('');
+    setReferralSuccess(null);
+    setReferralError(null);
   };
 
   // Clean up booking on unmount if it was created but not completed (abandoned)
@@ -338,6 +403,21 @@ export const Checkout: React.FC = () => {
       }
       if (accessCode) {
         payload.accessCode = accessCode;
+      }
+
+      if (appliedReferral) {
+        const totalForFee = Number(finalPriceDetails?.grandTotal || upfrontAmount || 0);
+        const owedAmt =
+          appliedReferral.referralFeeType === 'percentage'
+            ? Math.round((totalForFee * (Number(appliedReferral.referralFee || 0) / 100)) * 100) / 100
+            : Math.round(Number(appliedReferral.referralFee || 0) * 100) / 100;
+        payload.referralNumber = appliedReferral.referralNumber;
+        payload.referralLetterId = appliedReferral.referralLetterId;
+        payload.referrerType = appliedReferral.recipientType;
+        payload.referrerName = appliedReferral.referrerName;
+        payload.referrerEmail = appliedReferral.referrerEmail;
+        payload.referralOwedAmount = owedAmt;
+        payload.referralPayoutStatus = 'owed';
       }
 
       if (finalPriceDetails && finalPriceDetails.nights > 60) {
@@ -563,6 +643,64 @@ export const Checkout: React.FC = () => {
                      )}
                      {discountSuccess && (
                         <p className="text-emerald-400 text-xs mt-1 pl-1 font-semibold">✓ {discountSuccess}</p>
+                     )}
+                  </form>
+               )}
+            </div>
+
+            {/* Referral Number Attribution Box */}
+            <div className="mt-6 border-t border-slate-800 pt-6">
+               <h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-widest block mb-2">
+                  Referred by an Individual or Business?
+               </h4>
+               <p className="text-[11px] text-slate-400 mb-3 leading-relaxed">
+                  Enter your Referral Number from a C&amp;SH Group Properties referral letter (Optional).
+               </p>
+               {appliedReferral ? (
+                  <div className="flex items-center justify-between bg-emerald-950/40 border border-emerald-800 rounded-2xl p-3">
+                     <div>
+                        <div className="font-mono font-extrabold text-sm text-emerald-300">
+                           {appliedReferral.referralNumber}
+                        </div>
+                        <div className="text-[11px] text-emerald-400 font-medium">
+                           Referrer: {appliedReferral.referrerName}
+                        </div>
+                     </div>
+                     <button
+                        type="button"
+                        onClick={handleRemoveReferralCode}
+                        className="text-xs text-emerald-300 hover:text-emerald-100 font-bold px-2.5 py-1 rounded-lg bg-emerald-900/40 hover:bg-emerald-900/70 transition-all cursor-pointer"
+                     >
+                        Remove
+                     </button>
+                  </div>
+               ) : (
+                  <form onSubmit={handleApplyReferralCode} className="space-y-2">
+                     <div className="flex gap-2">
+                        <input
+                           type="text"
+                           value={referralCodeText}
+                           onChange={(e) => {
+                              setReferralCodeText(e.target.value.toUpperCase().replace(/\s+/g, ''));
+                              setReferralError(null);
+                              setReferralSuccess(null);
+                           }}
+                           placeholder="e.g. REF-IND-123456AB"
+                           className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white placeholder:text-slate-600 font-mono focus:outline-hidden focus:border-emerald-500 uppercase font-bold"
+                        />
+                        <button
+                           type="submit"
+                           disabled={validatingReferral || !referralCodeText.trim()}
+                           className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-500 text-white font-bold text-xs px-4 rounded-xl transition-all cursor-pointer flex items-center justify-center min-w-[70px]"
+                        >
+                           {validatingReferral ? '...' : 'Apply'}
+                        </button>
+                     </div>
+                     {referralError && (
+                        <p className="text-rose-400 text-xs mt-1 pl-1 font-semibold">⚠️ {referralError}</p>
+                     )}
+                     {referralSuccess && (
+                        <p className="text-emerald-400 text-xs mt-1 pl-1 font-semibold">✓ {referralSuccess}</p>
                      )}
                   </form>
                )}

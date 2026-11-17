@@ -1898,6 +1898,558 @@ async function createInvoicePDF(booking: any, propertyName: string, priceDetails
   });
 }
 
+// ==========================================
+// REFERRAL LETTER & COMMISSION LEDGER HELPERS
+// ==========================================
+const REFERRAL_LETTERS_FILE = path.resolve(process.cwd(), "data", "referral_letters.json");
+const REFERRAL_LEDGER_FILE = path.resolve(process.cwd(), "data", "referral_ledger.json");
+
+function getLocalReferralLetters(): any[] {
+  try {
+    if (fs.existsSync(REFERRAL_LETTERS_FILE)) {
+      return JSON.parse(fs.readFileSync(REFERRAL_LETTERS_FILE, "utf-8"));
+    }
+  } catch (e) {
+    console.warn("[Referrals] Error reading local referral letters file:", e);
+  }
+  return [];
+}
+
+function writeLocalReferralLetters(list: any[]) {
+  try {
+    const dataDir = path.dirname(REFERRAL_LETTERS_FILE);
+    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+    fs.writeFileSync(REFERRAL_LETTERS_FILE, JSON.stringify(list, null, 2), "utf-8");
+  } catch (e) {
+    console.error("[Referrals] Error writing local referral letters:", e);
+  }
+}
+
+function saveLocalReferralLetter(letter: any) {
+  const current = getLocalReferralLetters();
+  const idx = current.findIndex((item: any) => item.id === letter.id);
+  if (idx >= 0) {
+    current[idx] = { ...current[idx], ...letter };
+  } else {
+    current.unshift(letter);
+  }
+  writeLocalReferralLetters(current);
+  return current;
+}
+
+function deleteLocalReferralLetter(id: string) {
+  const current = getLocalReferralLetters();
+  const next = current.filter((item: any) => item.id !== id);
+  writeLocalReferralLetters(next);
+  return next;
+}
+
+function getLocalReferralLedger(): any[] {
+  try {
+    if (fs.existsSync(REFERRAL_LEDGER_FILE)) {
+      return JSON.parse(fs.readFileSync(REFERRAL_LEDGER_FILE, "utf-8"));
+    }
+  } catch (e) {
+    console.warn("[Referrals] Error reading local referral ledger file:", e);
+  }
+  return [];
+}
+
+function writeLocalReferralLedger(list: any[]) {
+  try {
+    const dataDir = path.dirname(REFERRAL_LEDGER_FILE);
+    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+    fs.writeFileSync(REFERRAL_LEDGER_FILE, JSON.stringify(list, null, 2), "utf-8");
+  } catch (e) {
+    console.error("[Referrals] Error writing local referral ledger:", e);
+  }
+}
+
+function saveLocalReferralLedgerEntry(entry: any) {
+  const current = getLocalReferralLedger();
+  const idx = current.findIndex(
+    (item: any) =>
+      item.id === entry.id ||
+      (item.bookingId && entry.bookingId && item.bookingId === entry.bookingId && item.referralNumber === entry.referralNumber)
+  );
+  if (idx >= 0) {
+    current[idx] = { ...current[idx], ...entry };
+  } else {
+    current.unshift(entry);
+  }
+  writeLocalReferralLedger(current);
+  return current;
+}
+
+function generateAutoReferralNumber(recipientType: string = 'individual'): string {
+  const prefix = recipientType === 'business' ? 'REF-BUS' : 'REF-IND';
+  const randomDigits = Math.floor(100000 + Math.random() * 900000);
+  const suffix = Math.random().toString(36).substring(2, 4).toUpperCase();
+  return `${prefix}-${randomDigits}${suffix}`;
+}
+
+async function getAllReferralLettersMerged(): Promise<any[]> {
+  const localLetters = getLocalReferralLetters();
+  let fsLetters: any[] = [];
+  if (db) {
+    try {
+      const snap = await db.collection("referral_letters").get();
+      fsLetters = snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
+    } catch (e: any) {
+      console.warn("[Referrals] Firestore get referral_letters warning:", e.message);
+    }
+  }
+  const map = new Map<string, any>();
+  [...fsLetters, ...localLetters].forEach((item: any) => {
+    if (item?.id && !map.has(item.id)) {
+      map.set(item.id, item);
+    }
+  });
+  return Array.from(map.values()).sort(
+    (a, b) => new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime()
+  );
+}
+
+async function getAllReferralLedgerMerged(): Promise<any[]> {
+  const localLedger = getLocalReferralLedger();
+  let fsLedger: any[] = [];
+  if (db) {
+    try {
+      const snap = await db.collection("referral_ledger").get();
+      fsLedger = snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
+    } catch (e: any) {
+      console.warn("[Referrals] Firestore get referral_ledger warning:", e.message);
+    }
+  }
+  const map = new Map<string, any>();
+  [...fsLedger, ...localLedger].forEach((item: any) => {
+    const key = item.bookingId ? `${item.bookingId}::${item.referralNumber}` : item.id;
+    if (key && !map.has(key)) {
+      map.set(key, item);
+    }
+  });
+  return Array.from(map.values()).sort(
+    (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+  );
+}
+
+async function recordReferralClaimFromBooking({
+  bookingId,
+  bookingRef,
+  referralNumber,
+  guestName,
+  guestEmail,
+  propertyId,
+  propertyName,
+  roomSummary,
+  checkIn,
+  checkOut,
+  bookingTotalDollars,
+}: {
+  bookingId: string;
+  bookingRef?: string;
+  referralNumber: string;
+  guestName: string;
+  guestEmail?: string;
+  propertyId?: string;
+  propertyName?: string;
+  roomSummary?: string;
+  checkIn: string;
+  checkOut: string;
+  bookingTotalDollars: number;
+}) {
+  if (!referralNumber || !bookingId) return null;
+  const cleanCode = referralNumber.trim().toUpperCase();
+  const letters = await getAllReferralLettersMerged();
+  const matchedLetter = letters.find(
+    (l: any) => (l.referralNumber || '').toUpperCase() === cleanCode && l.status === 'published'
+  );
+  if (!matchedLetter) return null;
+
+  const isBusiness = matchedLetter.recipientType === 'business';
+  const referrerName = isBusiness
+    ? `${matchedLetter.businessName || 'Business Partner'}${matchedLetter.attentionFirstName || matchedLetter.attentionLastName ? ` (Attn: ${matchedLetter.attentionFirstName || ''} ${matchedLetter.attentionLastName || ''})`.trim() : ''}`
+    : `${matchedLetter.firstName || ''} ${matchedLetter.lastName || ''}`.trim() || 'Referred Individual';
+
+  const referrerEmail = isBusiness ? (matchedLetter.contactEmail || '') : (matchedLetter.email || '');
+  const referrerPhone = isBusiness ? (matchedLetter.contactPhone || '') : (matchedLetter.phone || '');
+  const feeValue = Number(matchedLetter.referralFee || 0);
+  const feeType = matchedLetter.referralFeeType || 'flat';
+  const owedAmount =
+    feeType === 'percentage'
+      ? Math.round((bookingTotalDollars * (feeValue / 100)) * 100) / 100
+      : Math.round(feeValue * 100) / 100;
+
+  const feeDescription =
+    feeType === 'percentage'
+      ? `${feeValue}% of Booking ($${bookingTotalDollars.toFixed(2)})`
+      : `Flat ${isBusiness ? 'Bus.' : 'Ind.'} Referral Fee ($${feeValue.toFixed(2)})`;
+
+  // Preserve status if already paid
+  const existingEntries = await getAllReferralLedgerMerged();
+  const existing = existingEntries.find(
+    (e: any) => e.bookingId === bookingId && (e.referralNumber || '').toUpperCase() === cleanCode
+  );
+
+  const entryId = existing?.id || `ref-claim-${bookingId}`;
+  const nowIso = new Date().toISOString();
+  const entry = {
+    id: entryId,
+    referralNumber: cleanCode,
+    referralLetterId: matchedLetter.id,
+    recipientType: matchedLetter.recipientType,
+    referrerName,
+    referrerEmail,
+    referrerPhone,
+    bookingId,
+    bookingRef: bookingRef || bookingId.substring(0, 8).toUpperCase(),
+    guestName: guestName || 'Guest',
+    guestEmail: guestEmail || '',
+    propertyId: propertyId || '',
+    propertyName: propertyName || 'Stonewall Villa',
+    roomSummary: roomSummary || 'Standard Accommodation',
+    checkIn: checkIn || '',
+    checkOut: checkOut || '',
+    bookingTotal: Number(bookingTotalDollars || 0),
+    owedAmount,
+    feeDescription,
+    status: existing?.status || 'owed',
+    paidAt: existing?.paidAt || null,
+    paymentNotes: existing?.paymentNotes || '',
+    createdAt: existing?.createdAt || nowIso,
+    updatedAt: nowIso
+  };
+
+  saveLocalReferralLedgerEntry(entry);
+
+  if (db) {
+    try {
+      await db.collection("referral_ledger").doc(entryId).set(entry, { merge: true });
+      await db.collection("bookings").doc(bookingId).set(
+        {
+          referralNumber: cleanCode,
+          referralLetterId: matchedLetter.id,
+          referrerType: matchedLetter.recipientType,
+          referrerName,
+          referrerEmail,
+          referralOwedAmount: owedAmount,
+          referralPayoutStatus: entry.status,
+        },
+        { merge: true }
+      );
+    } catch (dbErr: any) {
+      console.warn("[Referrals] Firestore ledger sync warning:", dbErr.message);
+    }
+  }
+
+  return entry;
+}
+
+function getFormattedReferralLetterParts(letter: any) {
+  const isBusiness = letter.recipientType === 'business';
+  const letterDate = letter.letterDate
+    ? new Date(letter.letterDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+    : new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+  const feeVal = Number(letter.referralFee || 0);
+  const feeDisplay =
+    letter.referralFeeType === 'percentage'
+      ? `${feeVal}% of completed booking total`
+      : `$${feeVal.toFixed(2)} USD per completed referral booking`;
+
+  const recipientName = isBusiness
+    ? (letter.businessName || 'Corporate Partner')
+    : `${letter.firstName || ''} ${letter.lastName || ''}`.trim();
+
+  const attentionLine = isBusiness
+    ? `${letter.attentionFirstName || ''} ${letter.attentionLastName || ''}`.trim()
+    : '';
+
+  const salutation = isBusiness
+    ? `Dear ${attentionLine || recipientName},`
+    : `Dear ${letter.firstName || recipientName || 'Partner'},`;
+
+  const contactEmail = isBusiness ? (letter.contactEmail || '') : (letter.email || '');
+  const contactPhone = isBusiness ? (letter.contactPhone || '') : (letter.phone || '');
+
+  return {
+    isBusiness,
+    letterDate,
+    feeDisplay,
+    recipientName,
+    attentionLine,
+    salutation,
+    contactEmail,
+    contactPhone
+  };
+}
+
+function buildReferralLetterPlainText(letter: any): string {
+  const parts = getFormattedReferralLetterParts(letter);
+  const recipientBlock = parts.isBusiness
+    ? [
+        parts.recipientName,
+        parts.attentionLine ? `Attention To: ${parts.attentionLine}` : '',
+        letter.streetAddress || '',
+        letter.cityStateZip || '',
+        parts.contactEmail ? `Email: ${parts.contactEmail}` : '',
+        parts.contactPhone ? `Phone: ${parts.contactPhone}` : ''
+      ]
+        .filter(Boolean)
+        .join('\n')
+    : [
+        parts.recipientName,
+        parts.contactEmail ? `Email: ${parts.contactEmail}` : '',
+        parts.contactPhone ? `Phone: ${parts.contactPhone}` : ''
+      ]
+        .filter(Boolean)
+        .join('\n');
+
+  return `C&SH Group Properties, LLC
+Short-Term Executive & Partner Lodging Program
+Date: ${parts.letterDate}
+Referral Number: ${letter.referralNumber}
+
+${recipientBlock}
+
+Subject: Official Short-Term Rental Referral Partnership & Compensation Agreement (${letter.referralNumber})
+
+${parts.salutation}
+
+${letter.customOpeningNote ? `${letter.customOpeningNote}\n\n` : ''}C&SH Group Properties, LLC is pleased to extend this official Referral Partnership Letter inviting you to refer qualified guests to our portfolio of private, keyless luxury suites and residential accommodations.
+
+C&SH Group Properties, LLC is open to short Term Rental related to:
+  * Traveling Nurses
+  * Individuals who experience water damage in their home and need temporary housing during repair
+  * Flight Attendants
+  * Musician housing who will perform at St. James Live 5 miles away
+
+Referral Fee & Tracking Terms:
+- Assigned Referral Number: ${letter.referralNumber}
+- ${parts.isBusiness ? 'Bus. Referral Fee' : 'Ind. Referral Fee'}: ${parts.feeDisplay}
+
+When a guest books a room or stay using your assigned Referral Number (${letter.referralNumber}) at checkout or through Housing Management, the booking is automatically recorded in our Referral Ledger and your referral commission is marked as owed to ${parts.isBusiness ? parts.recipientName : parts.recipientName}.
+
+${letter.customClosingNote ? `${letter.customClosingNote}\n\n` : ''}We appreciate your partnership and look forward to welcoming your referred guests with quiet comfort, automated smart-lock entry, and dependable hospitality.
+
+Sincerely
+Housing Management
+C&SH Group Properties, LLC
+E:candsh@cashgroupproperties.com
+P:404-910-3194
+`;
+}
+
+function buildReferralLetterEmailHtml(letter: any): string {
+  const parts = getFormattedReferralLetterParts(letter);
+  const feeLabel = parts.isBusiness ? 'Bus. Referral Fee' : 'Ind. Referral Fee';
+
+  return `
+  <div style="font-family: Georgia, 'Times New Roman', serif; max-width: 720px; margin: 0 auto; padding: 40px 36px; background: #ffffff; color: #0f172a; border: 1px solid #e2e8f0; border-radius: 12px;">
+    <div style="border-bottom: 2px solid #0f172a; padding-bottom: 18px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-start;">
+      <div>
+        <div style="font-family: Arial, sans-serif; font-size: 20px; font-weight: 800; color: #0f172a; letter-spacing: -0.02em;">C&amp;SH Group Properties, LLC</div>
+        <div style="font-family: Arial, sans-serif; font-size: 12px; color: #475569; margin-top: 4px;">E: candsh@cashgroupproperties.com &nbsp;&bull;&nbsp; P: 404-910-3194</div>
+      </div>
+      <div style="text-align: right; font-family: Arial, sans-serif;">
+        <div style="font-size: 11px; color: #64748b; font-weight: 700; text-transform: uppercase;">Referral Number</div>
+        <div style="font-size: 15px; font-weight: 800; color: #4338ca; font-family: monospace; margin-top: 2px;">${letter.referralNumber}</div>
+        <div style="font-size: 11px; color: #64748b; margin-top: 4px;">${parts.letterDate}</div>
+      </div>
+    </div>
+
+    <div style="font-family: Arial, sans-serif; font-size: 13px; line-height: 1.6; color: #334155; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 18px; margin-bottom: 22px;">
+      <div style="font-weight: 700; color: #0f172a; font-size: 14px;">${parts.recipientName}</div>
+      ${parts.isBusiness && parts.attentionLine ? `<div><strong>Attention To:</strong> ${parts.attentionLine}</div>` : ''}
+      ${parts.isBusiness && letter.streetAddress ? `<div>${letter.streetAddress}</div>` : ''}
+      ${parts.isBusiness && letter.cityStateZip ? `<div>${letter.cityStateZip}</div>` : ''}
+      ${parts.contactEmail ? `<div>Email: ${parts.contactEmail}</div>` : ''}
+      ${parts.contactPhone ? `<div>Phone: ${parts.contactPhone}</div>` : ''}
+    </div>
+
+    <p style="font-family: Arial, sans-serif; font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 16px;">
+      Re: Short-Term Rental Referral Partnership &amp; Fee Agreement (${letter.referralNumber})
+    </p>
+
+    <p style="font-size: 15px; line-height: 1.7; margin-bottom: 14px;">${parts.salutation}</p>
+
+    ${letter.customOpeningNote ? `<p style="font-size: 15px; line-height: 1.7; margin-bottom: 14px;">${letter.customOpeningNote}</p>` : ''}
+
+    <p style="font-size: 15px; line-height: 1.7; margin-bottom: 14px;">
+      C&amp;SH Group Properties, LLC is pleased to establish this formal referral arrangement welcoming qualified guests and corporate placements to our clean, private, smart-lock equipped residential accommodations.
+    </p>
+
+    <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 16px 20px; margin: 18px 0;">
+      <p style="font-family: Arial, sans-serif; font-size: 13px; font-weight: 700; color: #0f172a; margin: 0 0 10px 0;">
+        C&amp;SH Group Properties, LLC is open to short Term Rental related to:
+      </p>
+      <ul style="font-family: Arial, sans-serif; font-size: 13px; color: #1e293b; line-height: 1.8; margin: 0; padding-left: 20px;">
+        <li><strong>Traveling Nurses</strong></li>
+        <li><strong>Individuals who experience water damage in their home and need temporary housing during repair</strong></li>
+        <li><strong>Flight Attendants</strong></li>
+        <li><strong>Musician housing who will perform at St. James Live 5 miles away</strong></li>
+      </ul>
+    </div>
+
+    <div style="background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 8px; padding: 14px 18px; margin: 18px 0; font-family: Arial, sans-serif;">
+      <div style="font-size: 12px; font-weight: 700; color: #312e81; margin-bottom: 6px;">Referral Compensation &amp; Redemption</div>
+      <div style="font-size: 13px; color: #1e1b4b; line-height: 1.6;">
+        <div><strong>Assigned Referral Number:</strong> <span style="font-family: monospace; font-weight: 700;">${letter.referralNumber}</span></div>
+        <div><strong>${feeLabel}:</strong> ${parts.feeDisplay}</div>
+        <div style="margin-top: 6px; font-size: 12px; color: #3730a3;">
+          Please instruct referred guests to enter Referral Number <strong>${letter.referralNumber}</strong> when booking a room. Confirmed bookings are tracked directly in our Referral Commission Ledger.
+        </div>
+      </div>
+    </div>
+
+    ${letter.customClosingNote ? `<p style="font-size: 15px; line-height: 1.7; margin-bottom: 16px;">${letter.customClosingNote}</p>` : ''}
+
+    <div style="margin-top: 28px; padding-top: 18px; border-top: 1px solid #e2e8f0; font-family: Arial, sans-serif; font-size: 13px; line-height: 1.7; color: #0f172a;">
+      <div>Sincerely</div>
+      <div style="font-weight: 700; margin-top: 4px;">Housing Management</div>
+      <div style="font-weight: 700;">C&amp;SH Group Properties, LLC</div>
+      <div>E:candsh@cashgroupproperties.com</div>
+      <div>P:404-910-3194</div>
+    </div>
+  </div>`;
+}
+
+async function createReferralLetterPDF(letter: any): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    try {
+      const parts = getFormattedReferralLetterParts(letter);
+      const doc = new PDFDocument({ margin: 54, size: 'LETTER' });
+      const buffers: Buffer[] = [];
+      doc.on('data', buffers.push.bind(buffers));
+      doc.on('end', () => resolve(Buffer.concat(buffers)));
+
+      // Header Band
+      doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(18).text('C&SH Group Properties, LLC', 54, 52);
+      doc.font('Helvetica').fontSize(9.5).fillColor('#475569').text('E:candsh@cashgroupproperties.com  |  P:404-910-3194', 54, 74);
+
+      doc.font('Helvetica-Bold').fontSize(9).fillColor('#64748b').text('REFERRAL NUMBER', 380, 52, { width: 178, align: 'right' });
+      doc.font('Courier-Bold').fontSize(13).fillColor('#4338ca').text(letter.referralNumber || 'N/A', 380, 64, { width: 178, align: 'right' });
+      doc.font('Helvetica').fontSize(9).fillColor('#475569').text(parts.letterDate, 380, 81, { width: 178, align: 'right' });
+
+      doc.strokeColor('#0f172a').lineWidth(1.5).moveTo(54, 100).lineTo(558, 100).stroke();
+
+      // Recipient Address Block
+      let y = 118;
+      doc.rect(54, y, 504, parts.isBusiness ? 92 : 60).fillAndStroke('#f8fafc', '#e2e8f0');
+      let ry = y + 12;
+      doc.font('Helvetica-Bold').fontSize(11).fillColor('#0f172a').text(parts.recipientName, 68, ry);
+      ry += 15;
+      if (parts.isBusiness) {
+        if (parts.attentionLine) {
+          doc.font('Helvetica-Bold').fontSize(9.5).fillColor('#334155').text(`Attention To: ${parts.attentionLine}`, 68, ry);
+          ry += 13;
+        }
+        if (letter.streetAddress) {
+          doc.font('Helvetica').fontSize(9.5).fillColor('#334155').text(letter.streetAddress, 68, ry);
+          ry += 13;
+        }
+        if (letter.cityStateZip) {
+          doc.font('Helvetica').fontSize(9.5).fillColor('#334155').text(letter.cityStateZip, 68, ry);
+          ry += 13;
+        }
+      }
+      const contactLine = [
+        parts.contactEmail ? `Email: ${parts.contactEmail}` : '',
+        parts.contactPhone ? `Phone: ${parts.contactPhone}` : ''
+      ].filter(Boolean).join('   |   ');
+      if (contactLine) {
+        doc.font('Helvetica').fontSize(9).fillColor('#475569').text(contactLine, 68, ry);
+      }
+
+      y += parts.isBusiness ? 110 : 78;
+
+      // Subject & Salutation
+      doc.font('Helvetica-Bold').fontSize(11).fillColor('#0f172a').text(
+        `Re: Short-Term Rental Referral Partnership & Compensation Notice (${letter.referralNumber})`,
+        54,
+        y,
+        { width: 504 }
+      );
+      y = doc.y + 14;
+
+      doc.font('Times-Roman').fontSize(11.5).fillColor('#0f172a').text(parts.salutation, 54, y);
+      y = doc.y + 10;
+
+      if (letter.customOpeningNote) {
+        doc.font('Times-Roman').fontSize(11).fillColor('#1e293b').text(letter.customOpeningNote, 54, y, { width: 504, lineGap: 3 });
+        y = doc.y + 10;
+      }
+
+      doc.font('Times-Roman').fontSize(11).fillColor('#1e293b').text(
+        'C&SH Group Properties, LLC is pleased to extend this formal Referral Partnership Letter inviting your referrals for quiet, clean, keyless short-term rental accommodations.',
+        54,
+        y,
+        { width: 504, lineGap: 3 }
+      );
+      y = doc.y + 14;
+
+      // Highlight Box
+      const boxStartY = y;
+      doc.rect(54, boxStartY, 504, 108).fillAndStroke('#f8fafc', '#cbd5e1');
+      doc.font('Helvetica-Bold').fontSize(10).fillColor('#0f172a').text(
+        'C&SH Group Properties, LLC is open to short Term Rental related to:',
+        68,
+        boxStartY + 12,
+        { width: 476 }
+      );
+
+      const highlights = [
+        '• Traveling Nurses',
+        '• Individuals who experience water damage in their home and need temporary housing during repair',
+        '• Flight Attendants',
+        '• Musician housing who will perform at St. James Live 5 miles away'
+      ];
+      let hy = boxStartY + 30;
+      highlights.forEach((h) => {
+        doc.font('Helvetica').fontSize(9.5).fillColor('#1e293b').text(h, 74, hy, { width: 468 });
+        hy = doc.y + 4;
+      });
+
+      y = boxStartY + 122;
+
+      // Fee & Tracking Box
+      const feeLabel = parts.isBusiness ? 'Bus. Referral Fee' : 'Ind. Referral Fee';
+      doc.rect(54, y, 504, 72).fillAndStroke('#eef2ff', '#c7d2fe');
+      doc.font('Helvetica-Bold').fontSize(10).fillColor('#312e81').text('Referral Compensation & Ledger Tracking', 68, y + 10);
+      doc.font('Helvetica').fontSize(9.5).fillColor('#1e1b4b').text(
+        `Referral Number: ${letter.referralNumber}    |    ${feeLabel}: ${parts.feeDisplay}`,
+        68,
+        y + 27,
+        { width: 476 }
+      );
+      doc.font('Helvetica').fontSize(9).fillColor('#3730a3').text(
+        `Guests booking a room should enter Referral Number ${letter.referralNumber} at checkout so our ledger tracks and credits the exact referral fee owed.`,
+        68,
+        y + 44,
+        { width: 476 }
+      );
+
+      y += 88;
+
+      if (letter.customClosingNote) {
+        doc.font('Times-Roman').fontSize(11).fillColor('#1e293b').text(letter.customClosingNote, 54, y, { width: 504, lineGap: 3 });
+        y = doc.y + 14;
+      }
+
+      // Signature Block (Exact wording requested)
+      doc.font('Helvetica').fontSize(10.5).fillColor('#0f172a').text('Sincerely', 54, y);
+      doc.font('Helvetica-Bold').fontSize(10.5).text('Housing Management', 54, y + 16);
+      doc.font('Helvetica-Bold').fontSize(10.5).text('C&SH Group Properties, LLC', 54, y + 31);
+      doc.font('Helvetica').fontSize(10).fillColor('#334155').text('E:candsh@cashgroupproperties.com', 54, y + 46);
+      doc.font('Helvetica').fontSize(10).fillColor('#334155').text('P:404-910-3194', 54, y + 60);
+
+      doc.end();
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
 async function startServer() {
   const app = express();
 
@@ -3320,6 +3872,34 @@ async function startServer() {
       // Update the booking document in Firestore
       await bookingRef.update(updatePayload);
       const updatedBooking = { ...booking, ...updatePayload };
+
+      // Record referral ledger claim if booking used a Referral Number
+      if (booking.referralNumber) {
+        try {
+          const bookingTotalDollars = Number(
+            booking.priceDetails?.grandTotal || (booking.totalPrice ? booking.totalPrice / 100 : 0)
+          );
+          const roomSummary =
+            booking.selectedBedrooms && booking.selectedBedrooms.length > 0
+              ? booking.selectedBedrooms.map((r: any) => `Room ${r.roomNumber || r}`).join(', ')
+              : 'Full Property';
+          await recordReferralClaimFromBooking({
+            bookingId,
+            bookingRef: booking.bookingRef || '',
+            referralNumber: booking.referralNumber,
+            guestName: booking.guestName || 'Guest',
+            guestEmail: booking.guestEmail || '',
+            propertyId: booking.propertyId || '',
+            propertyName: propSnap.exists ? (propSnap.data()?.name || booking.propertyName || 'Property') : (booking.propertyName || 'Property'),
+            roomSummary,
+            checkIn: booking.checkIn || '',
+            checkOut: booking.checkOut || '',
+            bookingTotalDollars
+          });
+        } catch (refErr: any) {
+          console.warn("[Server] Referral claim logging warning:", refErr.message);
+        }
+      }
 
       res.json({
         success: true,
@@ -5317,6 +5897,387 @@ async function startServer() {
       });
     } catch (err: any) {
       console.error("[API] Error updating device settings:", err.message);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // ==========================================
+  // REFERRAL LETTER & COMMISSION LEDGER ROUTES
+  // ==========================================
+
+  // GET /api/referral-letters - List all draft and published referral letters (ADMIN ONLY)
+  app.get("/api/referral-letters", async (req, res) => {
+    try {
+      if (!verifyDeviceAdmin(req)) {
+        return res.status(403).json({ success: false, error: "Administrator access required." });
+      }
+      const letters = await getAllReferralLettersMerged();
+      res.json({ success: true, letters });
+    } catch (err: any) {
+      console.error("[API] Error loading referral letters:", err.message);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // POST /api/referral-letters - Save Draft or Publish Referral Letter (ADMIN ONLY)
+  app.post("/api/referral-letters", async (req, res) => {
+    try {
+      if (!verifyDeviceAdmin(req)) {
+        return res.status(403).json({ success: false, error: "Administrator access required." });
+      }
+      const data = req.body || {};
+      const recipientType = data.recipientType === 'business' ? 'business' : 'individual';
+      const status = data.status === 'published' ? 'published' : 'draft';
+
+      const id = data.id || `ref-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+      const existingLetters = await getAllReferralLettersMerged();
+      const existing = existingLetters.find((l: any) => l.id === id);
+
+      let referralNumber = (data.referralNumber || '').trim().toUpperCase();
+      if (!referralNumber) {
+        referralNumber = existing?.referralNumber || generateAutoReferralNumber(recipientType);
+      }
+
+      // Ensure referral number uniqueness across different records
+      const conflict = existingLetters.find(
+        (l: any) => l.id !== id && (l.referralNumber || '').toUpperCase() === referralNumber
+      );
+      if (conflict) {
+        referralNumber = generateAutoReferralNumber(recipientType);
+      }
+
+      const nowIso = new Date().toISOString();
+      const letterPayload: any = {
+        id,
+        recipientType,
+        status,
+        referralNumber,
+        firstName: (data.firstName || '').trim(),
+        lastName: (data.lastName || '').trim(),
+        email: (data.email || '').trim(),
+        phone: (data.phone || '').trim(),
+        businessName: (data.businessName || '').trim(),
+        attentionFirstName: (data.attentionFirstName || '').trim(),
+        attentionLastName: (data.attentionLastName || '').trim(),
+        streetAddress: (data.streetAddress || '').trim(),
+        cityStateZip: (data.cityStateZip || '').trim(),
+        contactEmail: (data.contactEmail || '').trim(),
+        contactPhone: (data.contactPhone || '').trim(),
+        referralFee: Number(data.referralFee || 0),
+        referralFeeType: data.referralFeeType === 'percentage' ? 'percentage' : 'flat',
+        customOpeningNote: (data.customOpeningNote || '').trim(),
+        customClosingNote: (data.customClosingNote || '').trim(),
+        letterDate: data.letterDate || existing?.letterDate || nowIso.split('T')[0],
+        publishedAt: status === 'published' ? (existing?.publishedAt || nowIso) : existing?.publishedAt || null,
+        lastEmailedAt: existing?.lastEmailedAt || null,
+        lastEmailedTo: existing?.lastEmailedTo || null,
+        createdBy: data.createdBy || existing?.createdBy || 'Admin',
+        createdAt: existing?.createdAt || nowIso,
+        updatedAt: nowIso
+      };
+
+      saveLocalReferralLetter(letterPayload);
+
+      if (db) {
+        try {
+          await db.collection("referral_letters").doc(id).set(letterPayload, { merge: true });
+        } catch (dbErr: any) {
+          console.warn("[Referrals] Firestore save referral_letters warning:", dbErr.message);
+        }
+      }
+
+      res.json({ success: true, letter: letterPayload });
+    } catch (err: any) {
+      console.error("[API] Error saving referral letter:", err.message);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // DELETE /api/referral-letters/:id - Delete referral letter (ADMIN ONLY)
+  app.delete("/api/referral-letters/:id", async (req, res) => {
+    try {
+      if (!verifyDeviceAdmin(req)) {
+        return res.status(403).json({ success: false, error: "Administrator access required." });
+      }
+      const { id } = req.params;
+      deleteLocalReferralLetter(id);
+      if (db) {
+        try {
+          await db.collection("referral_letters").doc(id).delete();
+        } catch (dbErr: any) {
+          console.warn("[Referrals] Firestore delete warning:", dbErr.message);
+        }
+      }
+      res.json({ success: true });
+    } catch (err: any) {
+      console.error("[API] Error deleting referral letter:", err.message);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // POST /api/referral-letters/verify - Verify a Referral Number during Guest Checkout or Admin Booking
+  app.post("/api/referral-letters/verify", async (req, res) => {
+    try {
+      const code = (req.body?.referralNumber || '').trim().toUpperCase();
+      if (!code) {
+        return res.status(400).json({ valid: false, error: "Please enter a Referral Number." });
+      }
+      const letters = await getAllReferralLettersMerged();
+      const matched = letters.find((l: any) => (l.referralNumber || '').toUpperCase() === code);
+      if (!matched) {
+        return res.status(404).json({ valid: false, error: `Referral Number "${code}" was not found.` });
+      }
+      if (matched.status !== 'published') {
+        return res.status(400).json({ valid: false, error: `Referral Number "${code}" is currently a draft and has not been published yet.` });
+      }
+
+      const isBusiness = matched.recipientType === 'business';
+      const referrerName = isBusiness
+        ? (matched.businessName || 'Corporate Partner')
+        : `${matched.firstName || ''} ${matched.lastName || ''}`.trim();
+
+      res.json({
+        valid: true,
+        letter: {
+          id: matched.id,
+          referralNumber: matched.referralNumber,
+          recipientType: matched.recipientType,
+          referrerName,
+          referrerEmail: isBusiness ? matched.contactEmail : matched.email,
+          referralFee: Number(matched.referralFee || 0),
+          referralFeeType: matched.referralFeeType || 'flat'
+        }
+      });
+    } catch (err: any) {
+      console.error("[API] Error verifying referral number:", err.message);
+      res.status(500).json({ valid: false, error: err.message });
+    }
+  });
+
+  // POST /api/referral-letters/pdf - Download genuine PDF of a published Referral Letter (ADMIN ONLY)
+  app.post("/api/referral-letters/pdf", async (req, res) => {
+    try {
+      if (!verifyDeviceAdmin(req)) {
+        return res.status(403).json({ success: false, error: "Administrator access required." });
+      }
+      const { letterId, letter: providedLetter } = req.body || {};
+      let targetLetter = providedLetter;
+      if (letterId) {
+        const all = await getAllReferralLettersMerged();
+        const found = all.find((l: any) => l.id === letterId);
+        if (found) targetLetter = found;
+      }
+      if (!targetLetter) {
+        return res.status(404).json({ error: "Referral letter not found." });
+      }
+      if (targetLetter.status !== 'published') {
+        return res.status(400).json({ error: "Please publish the draft Referral Letter before saving as PDF." });
+      }
+
+      const pdfBuffer = await createReferralLetterPDF(targetLetter);
+      const safeRef = (targetLetter.referralNumber || 'REFERRAL').replace(/[^a-zA-Z0-9_-]/g, '');
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="Referral-Letter-${safeRef}.pdf"`);
+      res.send(pdfBuffer);
+    } catch (err: any) {
+      console.error("[API] Error generating referral letter PDF:", err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /api/referral-letters/send-email - Email a published Referral Letter with PDF attached (ADMIN ONLY)
+  app.post("/api/referral-letters/send-email", async (req, res) => {
+    try {
+      if (!verifyDeviceAdmin(req)) {
+        return res.status(403).json({ success: false, error: "Administrator access required." });
+      }
+      const { letterId, to, cc, subject, letter: providedLetter } = req.body || {};
+      let targetLetter = providedLetter;
+      if (letterId) {
+        const all = await getAllReferralLettersMerged();
+        const found = all.find((l: any) => l.id === letterId);
+        if (found) targetLetter = found;
+      }
+      if (!targetLetter) {
+        return res.status(404).json({ error: "Referral letter not found." });
+      }
+      if (targetLetter.status !== 'published') {
+        return res.status(400).json({ error: "Please review and publish the draft Referral Letter before emailing." });
+      }
+
+      const parts = getFormattedReferralLetterParts(targetLetter);
+      const recipientEmail = (to || parts.contactEmail || '').trim();
+      if (!recipientEmail) {
+        return res.status(400).json({ error: "Recipient email address is required." });
+      }
+
+      const emailSubject =
+        (subject || '').trim() ||
+        `C&SH Group Properties, LLC — Short-Term Rental Referral Letter (${targetLetter.referralNumber})`;
+      const html = buildReferralLetterEmailHtml(targetLetter);
+      const text = buildReferralLetterPlainText(targetLetter);
+      const pdfBuffer = await createReferralLetterPDF(targetLetter);
+      const safeRef = (targetLetter.referralNumber || 'REFERRAL').replace(/[^a-zA-Z0-9_-]/g, '');
+
+      const smtpHost = process.env.SMTP_HOST;
+      let simulated = false;
+      let sendResult: any = null;
+
+      if (!smtpHost) {
+        simulated = true;
+        console.warn("[Referrals] SMTP_HOST not set. Simulating referral letter email delivery to", recipientEmail);
+      } else {
+        sendResult = await sendSmtpEmail({
+          to: recipientEmail,
+          cc: cc || undefined,
+          subject: emailSubject,
+          text,
+          html,
+          attachments: [
+            {
+              filename: `Referral-Letter-${safeRef}.pdf`,
+              content: pdfBuffer,
+              contentType: 'application/pdf'
+            }
+          ]
+        });
+      }
+
+      const nowIso = new Date().toISOString();
+      const updatedLetter = {
+        ...targetLetter,
+        lastEmailedAt: nowIso,
+        lastEmailedTo: recipientEmail,
+        updatedAt: nowIso
+      };
+      saveLocalReferralLetter(updatedLetter);
+      if (db && updatedLetter.id) {
+        try {
+          await db.collection("referral_letters").doc(updatedLetter.id).set(updatedLetter, { merge: true });
+        } catch {}
+      }
+
+      res.json({
+        success: true,
+        simulated,
+        result: sendResult,
+        letter: updatedLetter,
+        message: simulated
+          ? `Referral Letter dispatch simulated to ${recipientEmail} (SMTP_HOST not configured in preview).`
+          : `Referral Letter successfully emailed to ${recipientEmail} with PDF attached.`
+      });
+    } catch (err: any) {
+      console.error("[API] Error emailing referral letter:", err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/referral-ledger - List all referral commission ledger entries (ADMIN ONLY)
+  app.get("/api/referral-ledger", async (req, res) => {
+    try {
+      if (!verifyDeviceAdmin(req)) {
+        return res.status(403).json({ success: false, error: "Administrator access required." });
+      }
+      const entries = await getAllReferralLedgerMerged();
+      res.json({ success: true, entries });
+    } catch (err: any) {
+      console.error("[API] Error fetching referral ledger:", err.message);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // POST /api/referral-ledger/record - Record a booking claim against a Referral Number
+  app.post("/api/referral-ledger/record", async (req, res) => {
+    try {
+      const {
+        bookingId,
+        bookingRef,
+        referralNumber,
+        guestName,
+        guestEmail,
+        propertyId,
+        propertyName,
+        roomSummary,
+        checkIn,
+        checkOut,
+        bookingTotalDollars
+      } = req.body || {};
+
+      if (!bookingId || !referralNumber) {
+        return res.status(400).json({ success: false, error: "bookingId and referralNumber are required." });
+      }
+
+      const entry = await recordReferralClaimFromBooking({
+        bookingId,
+        bookingRef,
+        referralNumber,
+        guestName,
+        guestEmail,
+        propertyId,
+        propertyName,
+        roomSummary,
+        checkIn,
+        checkOut,
+        bookingTotalDollars: Number(bookingTotalDollars || 0)
+      });
+
+      if (!entry) {
+        return res.status(404).json({ success: false, error: "Published Referral Number not found." });
+      }
+
+      res.json({ success: true, entry });
+    } catch (err: any) {
+      console.error("[API] Error recording referral ledger entry:", err.message);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // POST /api/referral-ledger/:id/status - Mark ledger entry Paid or Owed (ADMIN ONLY)
+  app.post("/api/referral-ledger/:id/status", async (req, res) => {
+    try {
+      if (!verifyDeviceAdmin(req)) {
+        return res.status(403).json({ success: false, error: "Administrator access required." });
+      }
+      const { id } = req.params;
+      const { status, paymentNotes } = req.body || {};
+      const nextStatus = status === 'paid' ? 'paid' : 'owed';
+
+      const all = await getAllReferralLedgerMerged();
+      const target = all.find((item: any) => item.id === id);
+      if (!target) {
+        return res.status(404).json({ success: false, error: "Ledger entry not found." });
+      }
+
+      const nowIso = new Date().toISOString();
+      const updated = {
+        ...target,
+        status: nextStatus,
+        paidAt: nextStatus === 'paid' ? (target.paidAt || nowIso) : null,
+        paymentNotes: paymentNotes !== undefined ? paymentNotes : target.paymentNotes || '',
+        updatedAt: nowIso
+      };
+
+      saveLocalReferralLedgerEntry(updated);
+      if (db) {
+        try {
+          await db.collection("referral_ledger").doc(id).set(updated, { merge: true });
+          if (updated.bookingId) {
+            await db.collection("bookings").doc(updated.bookingId).set(
+              {
+                referralPayoutStatus: nextStatus,
+                referralPaidAt: updated.paidAt || null,
+              },
+              { merge: true }
+            );
+          }
+        } catch (dbErr: any) {
+          console.warn("[Referrals] Firestore status update warning:", dbErr.message);
+        }
+      }
+
+      res.json({ success: true, entry: updated });
+    } catch (err: any) {
+      console.error("[API] Error updating referral ledger status:", err.message);
       res.status(500).json({ success: false, error: err.message });
     }
   });
