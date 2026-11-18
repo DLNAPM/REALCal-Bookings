@@ -2033,6 +2033,184 @@ async function getAllReferralLedgerMerged(): Promise<any[]> {
   );
 }
 
+async function sendReferralBookingNotifications({
+  entry,
+  letter
+}: {
+  entry: any;
+  letter: any;
+}) {
+  const isBusiness = letter?.recipientType === 'business' || entry?.recipientType === 'business';
+  const contactName = isBusiness
+    ? [letter?.attentionFirstName, letter?.attentionLastName].filter(Boolean).join(' ').trim() ||
+      letter?.businessName ||
+      entry?.referrerName ||
+      'Referral Partner'
+    : [letter?.firstName, letter?.lastName].filter(Boolean).join(' ').trim() ||
+      entry?.referrerName ||
+      'Referral Partner';
+
+  const contactEmail = (
+    (isBusiness ? letter?.contactEmail : letter?.email) ||
+    entry?.referrerEmail ||
+    ''
+  ).trim();
+
+  const rawPhone = (
+    (isBusiness ? letter?.contactPhone : letter?.phone) ||
+    entry?.referrerPhone ||
+    ''
+  ).trim();
+  const formattedPhone = rawPhone ? formatPhoneToE164(rawPhone) : '';
+
+  const feeStr = `$${Number(entry?.owedAmount || 0).toFixed(2)}`;
+  const refCode = entry?.referralNumber || letter?.referralNumber || '';
+  const propName = entry?.propertyName || 'C&SH Group Properties';
+  const roomSummary = entry?.roomSummary || 'Accommodation';
+  const checkIn = entry?.checkIn || 'TBD';
+  const checkOut = entry?.checkOut || 'TBD';
+  const guestName = entry?.guestName || 'Guest';
+  const bookingRef = entry?.bookingRef || entry?.bookingId?.substring(0, 8).toUpperCase() || '';
+
+  const smsBody = `C&SH Group Properties, LLC Referral Notice: Hi ${contactName}, ${guestName} completed a booking (#${bookingRef}) at ${propName} (${checkIn} to ${checkOut}) using Referral Number ${refCode}. Your Referral Fee of ${feeStr} is recorded and you will receive your Referral Fee 7 to 14 days after Guest checks out (${checkOut}). Questions? P:404-910-3194 E:candsh@cashgroupproperties.com`;
+
+  const emailSubject = `Referral Fee Notice (${refCode}): Guest Booking Completed — Payout 7 to 14 Days After Check-Out`;
+  const emailHtml = `
+  <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 14px; overflow: hidden; background: #ffffff; color: #0f172a;">
+    <div style="background: #0f172a; color: #ffffff; padding: 24px 28px;">
+      <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #a5b4fc; font-weight: 700;">C&amp;SH Group Properties, LLC</div>
+      <h2 style="margin: 6px 0 0 0; font-size: 20px; font-weight: 800;">Referral Booking Confirmation &amp; Payout Notice</h2>
+    </div>
+    <div style="padding: 26px 28px; font-size: 14px; line-height: 1.65;">
+      <p style="margin-top: 0;">Dear <strong>${contactName}</strong>,</p>
+      <p>
+        Thank you for partnering with <strong>C&amp;SH Group Properties, LLC</strong>. A guest has just completed a reservation using your Referral Number <strong style="font-family: monospace; color: #4338ca;">${refCode}</strong>.
+      </p>
+
+      <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; padding: 16px 20px; margin: 18px 0;">
+        <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; color: #475569; margin-bottom: 10px;">Booking &amp; Referral Summary</div>
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+          <tr><td style="padding: 4px 0; color: #64748b;">Referral Number:</td><td style="padding: 4px 0; text-align: right; font-weight: 700; font-family: monospace; color: #4338ca;">${refCode}</td></tr>
+          <tr><td style="padding: 4px 0; color: #64748b;">Guest Name:</td><td style="padding: 4px 0; text-align: right; font-weight: 700;">${guestName}</td></tr>
+          <tr><td style="padding: 4px 0; color: #64748b;">Booking Reference:</td><td style="padding: 4px 0; text-align: right; font-weight: 700; font-family: monospace;">#${bookingRef}</td></tr>
+          <tr><td style="padding: 4px 0; color: #64748b;">Property / Room:</td><td style="padding: 4px 0; text-align: right; font-weight: 700;">${propName} (${roomSummary})</td></tr>
+          <tr><td style="padding: 4px 0; color: #64748b;">Stay Dates:</td><td style="padding: 4px 0; text-align: right; font-weight: 700;">${checkIn} to ${checkOut}</td></tr>
+          <tr><td style="padding: 8px 0 2px 0; border-top: 1px solid #cbd5e1; color: #0f172a; font-weight: 700;">Referral Fee Earned:</td><td style="padding: 8px 0 2px 0; border-top: 1px solid #cbd5e1; text-align: right; font-size: 16px; font-weight: 800; color: #047857; font-family: monospace;">${feeStr}</td></tr>
+        </table>
+      </div>
+
+      <div style="background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 10px; padding: 14px 18px; margin: 18px 0; color: #065f46; font-size: 13px;">
+        <strong>Payout Schedule:</strong> You will receive your Referral Fee of <strong>${feeStr}</strong> <strong>7 to 14 days after Guest checks out</strong> (scheduled check-out: <strong>${checkOut}</strong>).
+      </div>
+
+      <p style="font-size: 13px; color: #475569; margin-bottom: 0;">
+        Sincerely,<br/>
+        <strong>Housing Management</strong><br/>
+        <strong>C&amp;SH Group Properties, LLC</strong><br/>
+        E: candsh@cashgroupproperties.com<br/>
+        P: 404-910-3194
+      </p>
+    </div>
+  </div>`;
+
+  let emailSent = false;
+  let emailSimulated = false;
+  let smsSent = false;
+  let smsSimulated = false;
+
+  // 1. Send Email Notification
+  if (contactEmail) {
+    if (process.env.SMTP_HOST) {
+      try {
+        await sendSmtpEmail({
+          to: contactEmail,
+          subject: emailSubject,
+          html: emailHtml,
+          text: smsBody
+        });
+        emailSent = true;
+        console.log(`[Referrals] Booking referral email sent to ${contactEmail} for ${refCode}`);
+      } catch (mailErr: any) {
+        console.error(`[Referrals] Failed sending booking referral email to ${contactEmail}:`, mailErr.message);
+      }
+    } else {
+      emailSent = true;
+      emailSimulated = true;
+      console.warn(`[Referrals] SMTP_HOST not configured. Simulated booking referral email to ${contactEmail}: ${smsBody}`);
+    }
+  }
+
+  // 2. Send Text (SMS) Notification
+  if (formattedPhone) {
+    const tSid = process.env.TWILIO_ACCOUNT_SID;
+    const tTok = process.env.TWILIO_AUTH_TOKEN;
+    const tFrom = process.env.TWILIO_PHONE_NUMBER;
+    if (tSid && tTok && tSid.startsWith('AC') && !tSid.includes('PROVIDE_REAL') && tFrom) {
+      try {
+        const twilioPkg = await import('twilio');
+        const twilio = twilioPkg.default || twilioPkg;
+        const twilioClient = (twilio as any)(tSid, tTok);
+        await twilioClient.messages.create({
+          body: smsBody,
+          from: tFrom,
+          to: formattedPhone
+        });
+        smsSent = true;
+        console.log(`[Referrals] Booking referral SMS sent to ${formattedPhone} for ${refCode}`);
+      } catch (smsErr: any) {
+        console.error(`[Referrals] Failed sending booking referral SMS to ${formattedPhone}:`, smsErr.message);
+      }
+    } else {
+      smsSent = true;
+      smsSimulated = true;
+      console.warn(`[Referrals] Twilio not configured. Simulated booking referral SMS to ${formattedPhone}: ${smsBody}`);
+    }
+  }
+
+  const notifiedAt = new Date().toISOString();
+  const recipientSummary = [contactEmail, formattedPhone].filter(Boolean).join(' / ');
+  const updatedEntry = {
+    ...entry,
+    referralNotificationSent: Boolean(emailSent || smsSent),
+    referralNotificationSentAt: (emailSent || smsSent) ? notifiedAt : entry.referralNotificationSentAt || null,
+    referralNotificationEmailSent: emailSent,
+    referralNotificationEmailSimulated: emailSimulated,
+    referralNotificationSmsSent: smsSent,
+    referralNotificationSmsSimulated: smsSimulated,
+    referralNotificationRecipient: recipientSummary || contactName,
+    updatedAt: notifiedAt
+  };
+
+  saveLocalReferralLedgerEntry(updatedEntry);
+  if (db && entry.id) {
+    try {
+      await db.collection("referral_ledger").doc(entry.id).set(updatedEntry, { merge: true });
+      if (entry.bookingId) {
+        await db.collection("bookings").doc(entry.bookingId).set(
+          {
+            referralNotificationSent: updatedEntry.referralNotificationSent,
+            referralNotificationSentAt: updatedEntry.referralNotificationSentAt
+          },
+          { merge: true }
+        );
+      }
+    } catch (syncErr: any) {
+      console.warn("[Referrals] Firestore notification metadata sync warning:", syncErr.message);
+    }
+  }
+
+  return {
+    entry: updatedEntry,
+    emailSent,
+    emailSimulated,
+    smsSent,
+    smsSimulated,
+    recipientEmail: contactEmail,
+    recipientPhone: formattedPhone,
+    notifiedAt
+  };
+}
+
 async function recordReferralClaimFromBooking({
   bookingId,
   bookingRef,
@@ -2045,6 +2223,7 @@ async function recordReferralClaimFromBooking({
   checkIn,
   checkOut,
   bookingTotalDollars,
+  notifyReferrer = true,
 }: {
   bookingId: string;
   bookingRef?: string;
@@ -2057,6 +2236,7 @@ async function recordReferralClaimFromBooking({
   checkIn: string;
   checkOut: string;
   bookingTotalDollars: number;
+  notifyReferrer?: boolean;
 }) {
   if (!referralNumber || !bookingId) return null;
   const cleanCode = referralNumber.trim().toUpperCase();
@@ -2085,7 +2265,7 @@ async function recordReferralClaimFromBooking({
       ? `${feeValue}% of Booking ($${bookingTotalDollars.toFixed(2)})`
       : `Flat ${isBusiness ? 'Bus.' : 'Ind.'} Referral Fee ($${feeValue.toFixed(2)})`;
 
-  // Preserve status if already paid
+  // Preserve status & notification state if already recorded
   const existingEntries = await getAllReferralLedgerMerged();
   const existing = existingEntries.find(
     (e: any) => e.bookingId === bookingId && (e.referralNumber || '').toUpperCase() === cleanCode
@@ -2093,7 +2273,7 @@ async function recordReferralClaimFromBooking({
 
   const entryId = existing?.id || `ref-claim-${bookingId}`;
   const nowIso = new Date().toISOString();
-  const entry = {
+  const entry: any = {
     id: entryId,
     referralNumber: cleanCode,
     referralLetterId: matchedLetter.id,
@@ -2116,6 +2296,13 @@ async function recordReferralClaimFromBooking({
     status: existing?.status || 'owed',
     paidAt: existing?.paidAt || null,
     paymentNotes: existing?.paymentNotes || '',
+    referralNotificationSent: existing?.referralNotificationSent || false,
+    referralNotificationSentAt: existing?.referralNotificationSentAt || null,
+    referralNotificationEmailSent: existing?.referralNotificationEmailSent || false,
+    referralNotificationEmailSimulated: existing?.referralNotificationEmailSimulated || false,
+    referralNotificationSmsSent: existing?.referralNotificationSmsSent || false,
+    referralNotificationSmsSimulated: existing?.referralNotificationSmsSimulated || false,
+    referralNotificationRecipient: existing?.referralNotificationRecipient || '',
     createdAt: existing?.createdAt || nowIso,
     updatedAt: nowIso
   };
@@ -2139,6 +2326,16 @@ async function recordReferralClaimFromBooking({
       );
     } catch (dbErr: any) {
       console.warn("[Referrals] Firestore ledger sync warning:", dbErr.message);
+    }
+  }
+
+  // Send Email & SMS notifications to Referral Contact Person if not yet notified
+  if (notifyReferrer && !existing?.referralNotificationSentAt) {
+    try {
+      const notifResult = await sendReferralBookingNotifications({ entry, letter: matchedLetter });
+      return notifResult.entry;
+    } catch (notifErr: any) {
+      console.warn("[Referrals] Referral booking notification warning:", notifErr.message);
     }
   }
 
@@ -2228,7 +2425,7 @@ Referral Fee & Tracking Terms:
 - Assigned Referral Number: ${letter.referralNumber}
 - ${parts.isBusiness ? 'Bus. Referral Fee' : 'Ind. Referral Fee'}: ${parts.feeDisplay}
 
-When a guest books a room or stay using your assigned Referral Number (${letter.referralNumber}) at checkout or through Housing Management, the booking is automatically recorded in our Referral Ledger and your referral commission is marked as owed to ${parts.isBusiness ? parts.recipientName : parts.recipientName}.
+When a guest books a room or stay using your assigned Referral Number (${letter.referralNumber}) at checkout or through Housing Management, the booking is automatically recorded in our Referral Ledger and your referral commission is marked as owed to ${parts.recipientName}. You will receive your Referral Fee 7 to 14 days after the Guest checks out.
 
 ${letter.customClosingNote ? `${letter.customClosingNote}\n\n` : ''}We appreciate your partnership and look forward to welcoming your referred guests with quiet comfort, automated smart-lock entry, and dependable hospitality.
 
@@ -2238,6 +2435,13 @@ C&SH Group Properties, LLC
 E:candsh@cashgroupproperties.com
 P:404-910-3194
 `;
+}
+
+function buildReferralLetterSmsText(letter: any): string {
+  const parts = getFormattedReferralLetterParts(letter);
+  const greetingName = parts.isBusiness && parts.attentionLine ? parts.attentionLine : parts.recipientName;
+  const feeLabel = parts.isBusiness ? 'Bus. Referral Fee' : 'Ind. Referral Fee';
+  return `C&SH Group Properties, LLC — Referral Letter (${letter.referralNumber}): Hi ${greetingName}, thank you for partnering with us! Open to short-term rentals for Traveling Nurses, Water Damage Temp Housing, Flight Attendants & Musicians performing at St. James Live (5 mi away). ${feeLabel}: ${parts.feeDisplay}. Share code ${letter.referralNumber} with guests at booking; Referral Fees are paid 7 to 14 days after guest checks out. Sincerely, Housing Management E:candsh@cashgroupproperties.com P:404-910-3194`;
 }
 
 function buildReferralLetterEmailHtml(letter: any): string {
@@ -2297,7 +2501,7 @@ function buildReferralLetterEmailHtml(letter: any): string {
         <div><strong>Assigned Referral Number:</strong> <span style="font-family: monospace; font-weight: 700;">${letter.referralNumber}</span></div>
         <div><strong>${feeLabel}:</strong> ${parts.feeDisplay}</div>
         <div style="margin-top: 6px; font-size: 12px; color: #3730a3;">
-          Please instruct referred guests to enter Referral Number <strong>${letter.referralNumber}</strong> when booking a room. Confirmed bookings are tracked directly in our Referral Commission Ledger.
+          Please instruct referred guests to enter Referral Number <strong>${letter.referralNumber}</strong> when booking a room. Confirmed bookings are tracked directly in our Referral Commission Ledger, and you will receive your Referral Fee <strong>7 to 14 days after Guest checks out</strong>.
         </div>
       </div>
     </div>
@@ -2423,7 +2627,7 @@ async function createReferralLetterPDF(letter: any): Promise<Buffer> {
         { width: 476 }
       );
       doc.font('Helvetica').fontSize(9).fillColor('#3730a3').text(
-        `Guests booking a room should enter Referral Number ${letter.referralNumber} at checkout so our ledger tracks and credits the exact referral fee owed.`,
+        `Guests booking a room should enter Referral Number ${letter.referralNumber} at checkout so our ledger tracks the fee owed. You will receive your Referral Fee 7 to 14 days after the Guest checks out.`,
         68,
         y + 44,
         { width: 476 }
@@ -4117,6 +4321,39 @@ async function startServer() {
         await sendInvoicePaymentAdminNotification(bookingId, updatedBookingData, activeDb);
         await sendInvoicePaymentGuestNotification(bookingId, updatedBookingData, activeDb);
         await updateGuestTollFreeAcceptIfNeeded(updatedBookingData, activeDb);
+
+        if (data.referralNumber) {
+          try {
+            let propName = data.propertyName || 'Property';
+            if (data.propertyId) {
+              const pSnap = await activeDb.collection('properties').doc(data.propertyId).get();
+              if (pSnap.exists && pSnap.data()?.name) propName = pSnap.data()?.name;
+            }
+            const bookingTotalDollars = Number(
+              data.invoiceDetails?.grandTotal || data.priceDetails?.grandTotal || (data.totalPrice ? data.totalPrice / 100 : 0)
+            );
+            const roomSummary =
+              data.selectedBedrooms && data.selectedBedrooms.length > 0
+                ? data.selectedBedrooms.map((r: any) => `Room ${r.roomNumber || r}`).join(', ')
+                : 'Full Property';
+            await recordReferralClaimFromBooking({
+              bookingId,
+              bookingRef: data.bookingRef || bookingId.substring(0, 8).toUpperCase(),
+              referralNumber: data.referralNumber,
+              guestName: data.guestName || 'Guest',
+              guestEmail: data.guestEmail || '',
+              propertyId: data.propertyId || '',
+              propertyName: propName,
+              roomSummary,
+              checkIn: data.checkIn || '',
+              checkOut: data.checkOut || '',
+              bookingTotalDollars,
+              notifyReferrer: true
+            });
+          } catch (refInvErr: any) {
+            console.warn('[Referrals] Invoice referral claim/notify warning:', refInvErr.message);
+          }
+        }
       }
 
       console.log(`[Server] Marked invoice for booking ${bookingId} as paid successfully.`);
@@ -6172,6 +6409,85 @@ async function startServer() {
     }
   });
 
+  // POST /api/referral-letters/send-sms - Send published Referral Letter summary via SMS (ADMIN ONLY)
+  app.post("/api/referral-letters/send-sms", async (req, res) => {
+    try {
+      if (!verifyDeviceAdmin(req)) {
+        return res.status(403).json({ success: false, error: "Administrator access required." });
+      }
+      const { letterId, phone, message: customMessage, letter: providedLetter } = req.body || {};
+      let targetLetter = providedLetter;
+      if (letterId) {
+        const all = await getAllReferralLettersMerged();
+        const found = all.find((l: any) => l.id === letterId);
+        if (found) targetLetter = found;
+      }
+      if (!targetLetter) {
+        return res.status(404).json({ error: "Referral letter not found." });
+      }
+      if (targetLetter.status !== 'published') {
+        return res.status(400).json({ error: "Please review and publish the draft Referral Letter before texting." });
+      }
+
+      const parts = getFormattedReferralLetterParts(targetLetter);
+      const rawPhone = (phone || parts.contactPhone || '').trim();
+      const formattedPhone = formatPhoneToE164(rawPhone);
+      if (!formattedPhone) {
+        return res.status(400).json({ error: "A valid phone number is required to send SMS." });
+      }
+
+      const smsText = (customMessage || '').trim() || buildReferralLetterSmsText(targetLetter);
+
+      const tSid = process.env.TWILIO_ACCOUNT_SID;
+      const tTok = process.env.TWILIO_AUTH_TOKEN;
+      const tFrom = process.env.TWILIO_PHONE_NUMBER;
+      let simulated = false;
+      let twilioSid: string | null = null;
+
+      if (tSid && tTok && tSid.startsWith('AC') && !tSid.includes('PROVIDE_REAL') && tFrom) {
+        const twilioPkg = await import('twilio');
+        const twilio = twilioPkg.default || twilioPkg;
+        const twilioClient = (twilio as any)(tSid, tTok);
+        const msgResp = await twilioClient.messages.create({
+          body: smsText,
+          from: tFrom,
+          to: formattedPhone
+        });
+        twilioSid = msgResp?.sid || null;
+      } else {
+        simulated = true;
+        console.warn("[Referrals] Twilio not configured. Simulating referral letter SMS to", formattedPhone);
+      }
+
+      const nowIso = new Date().toISOString();
+      const updatedLetter = {
+        ...targetLetter,
+        lastSmsSentAt: nowIso,
+        lastSmsSentTo: formattedPhone,
+        updatedAt: nowIso
+      };
+      saveLocalReferralLetter(updatedLetter);
+      if (db && updatedLetter.id) {
+        try {
+          await db.collection("referral_letters").doc(updatedLetter.id).set(updatedLetter, { merge: true });
+        } catch {}
+      }
+
+      res.json({
+        success: true,
+        simulated,
+        sid: twilioSid,
+        letter: updatedLetter,
+        message: simulated
+          ? `Referral Letter SMS simulated to ${formattedPhone} (Twilio credentials not configured in preview).`
+          : `Referral Letter text message successfully sent to ${formattedPhone}.`
+      });
+    } catch (err: any) {
+      console.error("[API] Error texting referral letter:", err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // GET /api/referral-ledger - List all referral commission ledger entries (ADMIN ONLY)
   app.get("/api/referral-ledger", async (req, res) => {
     try {
@@ -6200,7 +6516,8 @@ async function startServer() {
         roomSummary,
         checkIn,
         checkOut,
-        bookingTotalDollars
+        bookingTotalDollars,
+        skipNotification
       } = req.body || {};
 
       if (!bookingId || !referralNumber) {
@@ -6218,7 +6535,8 @@ async function startServer() {
         roomSummary,
         checkIn,
         checkOut,
-        bookingTotalDollars: Number(bookingTotalDollars || 0)
+        bookingTotalDollars: Number(bookingTotalDollars || 0),
+        notifyReferrer: !skipNotification
       });
 
       if (!entry) {
@@ -6228,6 +6546,46 @@ async function startServer() {
       res.json({ success: true, entry });
     } catch (err: any) {
       console.error("[API] Error recording referral ledger entry:", err.message);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // POST /api/referral-ledger/:id/notify - Send/Resend referral fee payout notification (Email & SMS) to Referral Contact Person
+  app.post("/api/referral-ledger/:id/notify", async (req, res) => {
+    try {
+      if (!verifyDeviceAdmin(req)) {
+        return res.status(403).json({ success: false, error: "Administrator access required." });
+      }
+      const { id } = req.params;
+      const entries = await getAllReferralLedgerMerged();
+      const targetEntry = entries.find((item: any) => item.id === id);
+      if (!targetEntry) {
+        return res.status(404).json({ success: false, error: "Ledger entry not found." });
+      }
+      const letters = await getAllReferralLettersMerged();
+      const matchedLetter =
+        letters.find((l: any) => l.id === targetEntry.referralLetterId) ||
+        letters.find((l: any) => (l.referralNumber || '').toUpperCase() === (targetEntry.referralNumber || '').toUpperCase());
+
+      const notif = await sendReferralBookingNotifications({
+        entry: targetEntry,
+        letter: matchedLetter || {}
+      });
+
+      res.json({
+        success: true,
+        entry: notif.entry,
+        emailSent: notif.emailSent,
+        emailSimulated: notif.emailSimulated,
+        smsSent: notif.smsSent,
+        smsSimulated: notif.smsSimulated,
+        message: `Referral booking notification sent (${[
+          notif.emailSent ? `Email to ${notif.recipientEmail}${notif.emailSimulated ? ' (simulated)' : ''}` : null,
+          notif.smsSent ? `SMS to ${notif.recipientPhone}${notif.smsSimulated ? ' (simulated)' : ''}` : null
+        ].filter(Boolean).join(', ') || 'recorded'}).`
+      });
+    } catch (err: any) {
+      console.error("[API] Error dispatching referral ledger notification:", err.message);
       res.status(500).json({ success: false, error: err.message });
     }
   });

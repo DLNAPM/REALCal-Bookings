@@ -19,7 +19,9 @@ import {
   Lock,
   Check,
   FileDown,
-  AlertCircle
+  AlertCircle,
+  MessageSquare,
+  BellRing
 } from 'lucide-react';
 import {
   Booking,
@@ -102,11 +104,29 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
   const [emailSubject, setEmailSubject] = useState<string>('');
   const [sendingEmail, setSendingEmail] = useState<boolean>(false);
 
+  // Text (SMS) Modal State
+  const [showSmsModal, setShowSmsModal] = useState<boolean>(false);
+  const [smsTargetLetter, setSmsTargetLetter] = useState<ReferralLetter | null>(null);
+  const [smsToPhone, setSmsToPhone] = useState<string>('');
+  const [smsBody, setSmsBody] = useState<string>('');
+  const [sendingSms, setSendingSms] = useState<boolean>(false);
+
+  // Approve & Publish Options Modal State (Email, Text, Download, or Just Save)
+  const [showPublishOptionsModal, setShowPublishOptionsModal] = useState<boolean>(false);
+  const [publishActionChoice, setPublishActionChoice] = useState<'email' | 'text' | 'download' | 'save'>('save');
+  const [publishEmailTo, setPublishEmailTo] = useState<string>('');
+  const [publishEmailCc, setPublishEmailCc] = useState<string>('candsh@cashgroupproperties.com');
+  const [publishEmailSubject, setPublishEmailSubject] = useState<string>('');
+  const [publishSmsPhone, setPublishSmsPhone] = useState<string>('');
+  const [publishSmsMessage, setPublishSmsMessage] = useState<string>('');
+  const [processingPublishChoice, setProcessingPublishChoice] = useState<boolean>(false);
+
   // Directory & Ledger filters
   const [directorySearch, setDirectorySearch] = useState<string>('');
   const [ledgerFilter, setLedgerFilter] = useState<'all' | 'owed' | 'paid'>('all');
   const [ledgerSearch, setLedgerSearch] = useState<string>('');
   const [updatingLedgerId, setUpdatingLedgerId] = useState<string | null>(null);
+  const [notifyingLedgerId, setNotifyingLedgerId] = useState<string | null>(null);
 
   const adminHeaders = useMemo(
     () => ({
@@ -611,7 +631,7 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
   <div class="fee-box">
     <div><strong>Referral Number:</strong> <span style="font-family: monospace;">${l.referralNumber}</span></div>
     <div><strong>${isBus ? 'Bus. Referral Fee' : 'Ind. Referral Fee'}:</strong> ${feeDisplay}</div>
-    <div style="margin-top: 6px; font-size: 12px; color: #3730a3;">Guests booking a room should enter Referral Number <strong>${l.referralNumber}</strong> so that our commission ledger tracks the referral fee owed.</div>
+    <div style="margin-top: 6px; font-size: 12px; color: #3730a3;">Guests booking a room should enter Referral Number <strong>${l.referralNumber}</strong> so that our commission ledger tracks the referral fee owed. You will receive your Referral Fee <strong>7 to 14 days after Guest checks out</strong>.</div>
   </div>
   ${l.customClosingNote ? `<p style="font-size: 15px; line-height: 1.65;">${l.customClosingNote}</p>` : ''}
   <div class="sig">
@@ -715,11 +735,189 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
     }
   };
 
+  const buildDefaultSmsMessage = (l: ReferralLetter): string => {
+    const isBus = l.recipientType === 'business';
+    const recipientName = isBus
+      ? [l.attentionFirstName, l.attentionLastName].filter(Boolean).join(' ').trim() || l.businessName || 'Partner'
+      : [l.firstName, l.lastName].filter(Boolean).join(' ').trim() || 'Partner';
+    const feeVal = Number(l.referralFee || 0);
+    const feeText = l.referralFeeType === 'percentage' ? `${feeVal}% of completed booking` : `$${feeVal.toFixed(2)} USD`;
+    const feeLabel = isBus ? 'Bus. Referral Fee' : 'Ind. Referral Fee';
+    return `C&SH Group Properties, LLC — Referral Letter (${l.referralNumber}): Hi ${recipientName}, we welcome short-term rental referrals for Traveling Nurses, Water Damage Temp Housing, Flight Attendants & Musicians performing at St. James Live (5 mi away). ${feeLabel}: ${feeText}. Guests enter Referral Number ${l.referralNumber} at booking; Referral Fees are paid 7 to 14 days after Guest checks out. Sincerely, Housing Management E:candsh@cashgroupproperties.com P:404-910-3194`;
+  };
+
+  const openSmsModal = (letterObj: ReferralLetter) => {
+    if (letterObj.status !== 'published') {
+      setFeedbackBanner({
+        type: 'info',
+        message: 'Please review the draft and click "Approve & Publish Referral Letter" before texting.'
+      });
+      return;
+    }
+    const targetPhone =
+      letterObj.recipientType === 'business' ? letterObj.contactPhone || '' : letterObj.phone || '';
+    setSmsTargetLetter(letterObj);
+    setSmsToPhone(targetPhone);
+    setSmsBody(buildDefaultSmsMessage(letterObj));
+    setShowSmsModal(true);
+  };
+
+  const handleSendReferralSms = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!smsTargetLetter || !smsToPhone.trim()) return;
+    setSendingSms(true);
+    try {
+      const res = await fetch('/api/referral-letters/send-sms', {
+        method: 'POST',
+        headers: adminHeaders,
+        body: JSON.stringify({
+          letterId: smsTargetLetter.id !== 'preview-unsaved' ? smsTargetLetter.id : undefined,
+          letter: smsTargetLetter,
+          phone: smsToPhone.trim(),
+          message: smsBody.trim()
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to send referral SMS.');
+      }
+      setShowSmsModal(false);
+      await fetchReferralData();
+      setFeedbackBanner({
+        type: 'success',
+        message: data.message || `Referral Letter text message sent to ${smsToPhone.trim()}.`
+      });
+    } catch (err: any) {
+      setFeedbackBanner({ type: 'error', message: err.message });
+    } finally {
+      setSendingSms(false);
+    }
+  };
+
+  const openPublishOptionsModal = () => {
+    const err = validateForm();
+    if (err) {
+      setFeedbackBanner({ type: 'error', message: err });
+      return;
+    }
+    const targetEmail = recipientType === 'business' ? busEmail.trim() : indEmail.trim();
+    const targetPhone = recipientType === 'business' ? busPhone.trim() : indPhone.trim();
+    const previewAsPublished: ReferralLetter = {
+      ...activePreviewLetter,
+      status: 'published'
+    };
+    setPublishActionChoice('save');
+    setPublishEmailTo(targetEmail);
+    setPublishEmailCc(currentUser?.email || 'candsh@cashgroupproperties.com');
+    setPublishEmailSubject(
+      `C&SH Group Properties, LLC — Short-Term Rental Referral Letter (${referralNumber.trim().toUpperCase()})`
+    );
+    setPublishSmsPhone(targetPhone);
+    setPublishSmsMessage(buildDefaultSmsMessage(previewAsPublished));
+    setShowPublishOptionsModal(true);
+  };
+
+  const handleConfirmPublishChoice = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (publishActionChoice === 'email' && !publishEmailTo.trim()) {
+      setFeedbackBanner({ type: 'error', message: 'Please enter a recipient email address to email the letter.' });
+      return;
+    }
+    if (publishActionChoice === 'text' && !publishSmsPhone.trim()) {
+      setFeedbackBanner({ type: 'error', message: 'Please enter a valid mobile/phone number to text the letter.' });
+      return;
+    }
+
+    setProcessingPublishChoice(true);
+    setPublishing(true);
+    setFeedbackBanner(null);
+
+    try {
+      // Step 1: Approve, Publish & Save on backend
+      const payloadToSave = buildPayload('published');
+      // If user edited phone during Text flow and form phone was blank, persist it too
+      if (publishActionChoice === 'text' && publishSmsPhone.trim()) {
+        if (recipientType === 'business' && !busPhone.trim()) {
+          payloadToSave.contactPhone = publishSmsPhone.trim();
+          setBusPhone(publishSmsPhone.trim());
+        } else if (recipientType === 'individual' && !indPhone.trim()) {
+          payloadToSave.phone = publishSmsPhone.trim();
+          setIndPhone(publishSmsPhone.trim());
+        }
+      }
+
+      const saveRes = await fetch('/api/referral-letters', {
+        method: 'POST',
+        headers: adminHeaders,
+        body: JSON.stringify(payloadToSave)
+      });
+      const saveData = await saveRes.json();
+      if (!saveRes.ok || !saveData.success) {
+        throw new Error(saveData.error || 'Failed to approve & publish referral letter.');
+      }
+
+      const savedLetter: ReferralLetter = saveData.letter;
+      setEditingId(savedLetter.id);
+      setStatus(savedLetter.status);
+      setReferralNumber(savedLetter.referralNumber);
+
+      // Step 2: Run chosen action (Email, Text, Download, or Just Save)
+      let actionSummary = `Referral Letter ${savedLetter.referralNumber} approved, published, and saved.`;
+
+      if (publishActionChoice === 'email') {
+        const mailRes = await fetch('/api/referral-letters/send-email', {
+          method: 'POST',
+          headers: adminHeaders,
+          body: JSON.stringify({
+            letterId: savedLetter.id,
+            letter: savedLetter,
+            to: publishEmailTo.trim(),
+            cc: publishEmailCc.trim(),
+            subject: publishEmailSubject.trim()
+          })
+        });
+        const mailData = await mailRes.json();
+        if (!mailRes.ok || !mailData.success) {
+          throw new Error(mailData.error || 'Letter published, but failed to send email.');
+        }
+        actionSummary = `Referral Letter ${savedLetter.referralNumber} approved & published. ${mailData.message || `Emailed to ${publishEmailTo.trim()}.`}`;
+      } else if (publishActionChoice === 'text') {
+        const smsRes = await fetch('/api/referral-letters/send-sms', {
+          method: 'POST',
+          headers: adminHeaders,
+          body: JSON.stringify({
+            letterId: savedLetter.id,
+            letter: savedLetter,
+            phone: publishSmsPhone.trim(),
+            message: publishSmsMessage.trim()
+          })
+        });
+        const smsData = await smsRes.json();
+        if (!smsRes.ok || !smsData.success) {
+          throw new Error(smsData.error || 'Letter published, but failed to send text message.');
+        }
+        actionSummary = `Referral Letter ${savedLetter.referralNumber} approved & published. ${smsData.message || `Texted to ${publishSmsPhone.trim()}.`}`;
+      } else if (publishActionChoice === 'download') {
+        await handleSaveAsPdf(savedLetter);
+        actionSummary = `Referral Letter ${savedLetter.referralNumber} approved, published, and PDF downloaded.`;
+      }
+
+      setShowPublishOptionsModal(false);
+      await fetchReferralData();
+      setFeedbackBanner({ type: 'success', message: actionSummary });
+    } catch (err: any) {
+      setFeedbackBanner({ type: 'error', message: err.message || 'Error publishing referral letter.' });
+    } finally {
+      setProcessingPublishChoice(false);
+      setPublishing(false);
+    }
+  };
+
   const handleToggleLedgerStatus = async (entry: ReferralLedgerEntry) => {
     const nextStatus = entry.status === 'paid' ? 'owed' : 'paid';
     setUpdatingLedgerId(entry.id);
     try {
-      // Ensure entry exists on backend before updating if it came only from client bookings snapshot
+      // Ensure entry exists on backend before updating without triggering duplicate booking alert
       await fetch('/api/referral-ledger/record', {
         method: 'POST',
         headers: adminHeaders,
@@ -734,7 +932,8 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
           roomSummary: entry.roomSummary,
           checkIn: entry.checkIn,
           checkOut: entry.checkOut,
-          bookingTotalDollars: entry.bookingTotal
+          bookingTotalDollars: entry.bookingTotal,
+          skipNotification: true
         })
       });
 
@@ -752,6 +951,49 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
       setFeedbackBanner({ type: 'error', message: err.message });
     } finally {
       setUpdatingLedgerId(null);
+    }
+  };
+
+  const handleSendLedgerNotification = async (entry: ReferralLedgerEntry) => {
+    setNotifyingLedgerId(entry.id);
+    try {
+      // Ensure ledger entry exists in backend storage first
+      await fetch('/api/referral-ledger/record', {
+        method: 'POST',
+        headers: adminHeaders,
+        body: JSON.stringify({
+          bookingId: entry.bookingId,
+          bookingRef: entry.bookingRef,
+          referralNumber: entry.referralNumber,
+          guestName: entry.guestName,
+          guestEmail: entry.guestEmail,
+          propertyId: entry.propertyId,
+          propertyName: entry.propertyName,
+          roomSummary: entry.roomSummary,
+          checkIn: entry.checkIn,
+          checkOut: entry.checkOut,
+          bookingTotalDollars: entry.bookingTotal,
+          skipNotification: true
+        })
+      });
+
+      const res = await fetch(`/api/referral-ledger/${entry.id}/notify`, {
+        method: 'POST',
+        headers: adminHeaders
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to notify referral contact person.');
+      }
+      await fetchReferralData();
+      setFeedbackBanner({
+        type: 'success',
+        message: data.message || `Referral payout notification (7-14 days after guest check-out) sent for ${entry.referralNumber}.`
+      });
+    } catch (err: any) {
+      setFeedbackBanner({ type: 'error', message: err.message });
+    } finally {
+      setNotifyingLedgerId(null);
     }
   };
 
@@ -1326,7 +1568,7 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
                     <>
                       <CheckCircle2 size={15} className="text-emerald-600" />
                       <span className="text-emerald-900">
-                        Published &amp; Ready to Email / Save PDF / Print
+                        Published &amp; Ready to Email / Text / Download PDF / Print
                       </span>
                     </>
                   ) : (
@@ -1341,7 +1583,7 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
                 <p className="text-xs text-slate-600 mt-0.5">
                   {isPublishedCurrent
                     ? `Referral Number ${referralNumber} is active for guest bookings.`
-                    : 'Approve and publish this draft to unlock Email, Save as PDF, and Print actions.'}
+                    : 'Approve & publish this draft to choose Email, Text, Download PDF, or Save.'}
                 </p>
               </div>
 
@@ -1349,7 +1591,7 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
                 {!isPublishedCurrent ? (
                   <button
                     type="button"
-                    onClick={() => handleSaveLetter('published')}
+                    onClick={openPublishOptionsModal}
                     disabled={publishing || savingDraft}
                     className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-400 text-white text-xs font-bold rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
                   >
@@ -1373,12 +1615,12 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
               </div>
             </div>
 
-            {/* Publish-Gated Distribution Actions (Email / Save as PDF / Print) */}
+            {/* Publish-Gated Distribution Actions (Email / Text / Save as PDF / Print) */}
             <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl">
               <span className="text-xs font-semibold text-slate-600">
                 {isPublishedCurrent
                   ? 'Distribution Actions:'
-                  : 'Distribution Locked (Publish Draft to Unlock):'}
+                  : 'Distribution Locked (Approve & Publish to Unlock):'}
               </span>
               <div className="flex flex-wrap items-center gap-2">
                 <button
@@ -1393,7 +1635,22 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
                   )}
                 >
                   {isPublishedCurrent ? <Mail size={14} /> : <Lock size={13} />}
-                  <span>Email Referral Letter</span>
+                  <span>Email Letter</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => openSmsModal(activePreviewLetter)}
+                  disabled={!isPublishedCurrent}
+                  className={cn(
+                    'px-3.5 py-2 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors whitespace-nowrap',
+                    isPublishedCurrent
+                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer shadow-xs'
+                      : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                  )}
+                >
+                  {isPublishedCurrent ? <MessageSquare size={14} /> : <Lock size={13} />}
+                  <span>Text Letter</span>
                 </button>
 
                 <button
@@ -1414,7 +1671,7 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
                   ) : (
                     <Lock size={13} />
                   )}
-                  <span>Save as PDF</span>
+                  <span>Download PDF</span>
                 </button>
 
                 <button
@@ -1525,7 +1782,7 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
                   <span className="font-bold">{previewFeeFormatted}</span>
                 </div>
                 <p className="text-indigo-800/90 leading-relaxed">
-                  When a guest books a room using Referral Number <strong>{referralNumber}</strong>, the reservation is recorded in our Referral Commission Ledger and your referral fee is marked as owed to {previewRecipientName}.
+                  When a guest books a room using Referral Number <strong>{referralNumber}</strong>, the reservation is recorded in our Referral Commission Ledger and your referral fee is marked as owed to {previewRecipientName}. You will receive your Referral Fee <strong>7 to 14 days after the Guest checks out</strong>, along with an automated Email &amp; Text notification once a guest completes a booking with your referral number.
                 </p>
               </div>
 
@@ -1680,9 +1937,17 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
                                 </button>
                                 <button
                                   type="button"
+                                  onClick={() => openSmsModal(l)}
+                                  className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg cursor-pointer"
+                                  title="Text (SMS) Letter"
+                                >
+                                  <MessageSquare size={13} />
+                                </button>
+                                <button
+                                  type="button"
                                   onClick={() => handleSaveAsPdf(l)}
                                   className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg cursor-pointer"
-                                  title="Save as PDF"
+                                  title="Download PDF"
                                 >
                                   <Download size={13} />
                                 </button>
@@ -1886,27 +2151,62 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
                             )}
                           </div>
                         ) : (
-                          <span className="font-bold text-amber-700">Owed / Unpaid</span>
+                          <div>
+                            <span className="font-bold text-amber-700">Owed / Unpaid</span>
+                            <div className="text-[11px] text-slate-500">
+                              Due 7–14 days post check-out
+                            </div>
+                          </div>
+                        )}
+                        {entry.referralNotificationSent && (
+                          <div className="text-[11px] text-indigo-700 font-medium mt-0.5 flex items-center gap-1">
+                            <BellRing size={11} />
+                            <span>
+                              Notified{' '}
+                              {[
+                                entry.referralNotificationEmailSent ? 'Email' : null,
+                                entry.referralNotificationSmsSent ? 'SMS' : null
+                              ]
+                                .filter(Boolean)
+                                .join(' & ')}
+                            </span>
+                          </div>
                         )}
                       </td>
                       <td className="px-4 py-3 text-right whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={() => handleToggleLedgerStatus(entry)}
-                          disabled={updatingLedgerId === entry.id}
-                          className={cn(
-                            'px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer whitespace-nowrap',
-                            entry.status === 'paid'
-                              ? 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                              : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
-                          )}
-                        >
-                          {updatingLedgerId === entry.id
-                            ? 'Updating...'
-                            : entry.status === 'paid'
-                            ? 'Mark Owed'
-                            : 'Mark Paid'}
-                        </button>
+                        <div className="inline-flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleSendLedgerNotification(entry)}
+                            disabled={notifyingLedgerId === entry.id}
+                            className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-lg transition-colors cursor-pointer whitespace-nowrap flex items-center gap-1"
+                            title="Send / Resend Email & SMS Referral Fee Notification (7-14 days after check-out)"
+                          >
+                            {notifyingLedgerId === entry.id ? (
+                              <Loader2 size={12} className="animate-spin" />
+                            ) : (
+                              <BellRing size={12} />
+                            )}
+                            <span>{entry.referralNotificationSent ? 'Resend Alert' : 'Notify Contact'}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleLedgerStatus(entry)}
+                            disabled={updatingLedgerId === entry.id}
+                            className={cn(
+                              'px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer whitespace-nowrap',
+                              entry.status === 'paid'
+                                ? 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                                : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
+                            )}
+                          >
+                            {updatingLedgerId === entry.id
+                              ? 'Updating...'
+                              : entry.status === 'paid'
+                              ? 'Mark Owed'
+                              : 'Mark Paid'}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -1914,6 +2214,233 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Approve & Publish Referral Letter Choice Modal (Email, Text, Download, or Just Save) */}
+      {showPublishOptionsModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-xl overflow-hidden my-8">
+            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <div>
+                <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <CheckCircle2 size={16} className="text-emerald-600" />
+                  Approve &amp; Publish Referral Letter ({referralNumber})
+                </h4>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Choose whether to Email, Text, Download PDF, or Just Save upon publishing.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPublishOptionsModal(false)}
+                className="text-slate-400 hover:text-slate-700 text-xs font-bold cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmPublishChoice} className="p-6 space-y-5 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setPublishActionChoice('email')}
+                  className={cn(
+                    'p-3.5 rounded-2xl border text-left transition-all cursor-pointer flex items-start gap-3',
+                    publishActionChoice === 'email'
+                      ? 'border-indigo-600 bg-indigo-50/70 ring-2 ring-indigo-600/20'
+                      : 'border-slate-200 bg-white hover:border-slate-300'
+                  )}
+                >
+                  <div className={cn('p-2 rounded-xl shrink-0', publishActionChoice === 'email' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600')}>
+                    <Mail size={16} />
+                  </div>
+                  <div>
+                    <div className="font-bold text-slate-900 text-xs">Email Letter</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">
+                      Publish &amp; email HTML + PDF letter to contact.
+                    </div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setPublishActionChoice('text')}
+                  className={cn(
+                    'p-3.5 rounded-2xl border text-left transition-all cursor-pointer flex items-start gap-3',
+                    publishActionChoice === 'text'
+                      ? 'border-emerald-600 bg-emerald-50/70 ring-2 ring-emerald-600/20'
+                      : 'border-slate-200 bg-white hover:border-slate-300'
+                  )}
+                >
+                  <div className={cn('p-2 rounded-xl shrink-0', publishActionChoice === 'text' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600')}>
+                    <MessageSquare size={16} />
+                  </div>
+                  <div>
+                    <div className="font-bold text-slate-900 text-xs">Text (SMS) Letter</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">
+                      Publish &amp; send SMS referral letter summary.
+                    </div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setPublishActionChoice('download')}
+                  className={cn(
+                    'p-3.5 rounded-2xl border text-left transition-all cursor-pointer flex items-start gap-3',
+                    publishActionChoice === 'download'
+                      ? 'border-slate-900 bg-slate-100 ring-2 ring-slate-900/15'
+                      : 'border-slate-200 bg-white hover:border-slate-300'
+                  )}
+                >
+                  <div className={cn('p-2 rounded-xl shrink-0', publishActionChoice === 'download' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600')}>
+                    <Download size={16} />
+                  </div>
+                  <div>
+                    <div className="font-bold text-slate-900 text-xs">Download Letter (PDF)</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">
+                      Publish &amp; immediately download PDF copy.
+                    </div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setPublishActionChoice('save')}
+                  className={cn(
+                    'p-3.5 rounded-2xl border text-left transition-all cursor-pointer flex items-start gap-3',
+                    publishActionChoice === 'save'
+                      ? 'border-indigo-600 bg-indigo-50/70 ring-2 ring-indigo-600/20'
+                      : 'border-slate-200 bg-white hover:border-slate-300'
+                  )}
+                >
+                  <div className={cn('p-2 rounded-xl shrink-0', publishActionChoice === 'save' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600')}>
+                    <Check size={16} />
+                  </div>
+                  <div>
+                    <div className="font-bold text-slate-900 text-xs">Just Save (Publish Only)</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">
+                      Save as published; distribute later anytime.
+                    </div>
+                  </div>
+                </button>
+              </div>
+
+              {publishActionChoice === 'email' && (
+                <div className="space-y-3 p-4 bg-slate-50 border border-slate-200 rounded-2xl">
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">
+                      Recipient Email Address *
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      value={publishEmailTo}
+                      onChange={(e) => setPublishEmailTo(e.target.value)}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">CC (Optional)</label>
+                    <input
+                      type="email"
+                      value={publishEmailCc}
+                      onChange={(e) => setPublishEmailCc(e.target.value)}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Email Subject *</label>
+                    <input
+                      type="text"
+                      required
+                      value={publishEmailSubject}
+                      onChange={(e) => setPublishEmailSubject(e.target.value)}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {publishActionChoice === 'text' && (
+                <div className="space-y-3 p-4 bg-emerald-50/50 border border-emerald-200 rounded-2xl">
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">
+                      Recipient Phone Number (for SMS) *
+                    </label>
+                    <input
+                      type="tel"
+                      required
+                      value={publishSmsPhone}
+                      onChange={(e) => setPublishSmsPhone(e.target.value)}
+                      placeholder="(404) 555-0192"
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Text Message Body</label>
+                    <textarea
+                      rows={4}
+                      value={publishSmsMessage}
+                      onChange={(e) => setPublishSmsMessage(e.target.value)}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {publishActionChoice === 'download' && (
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-600">
+                  The letter will be marked <strong>Published</strong> and <span className="font-mono font-bold">Referral-Letter-{referralNumber}.pdf</span> will download immediately.
+                </div>
+              )}
+
+              {publishActionChoice === 'save' && (
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-600">
+                  The letter will be approved, published, and saved so Referral Number <span className="font-mono font-bold text-indigo-700">{referralNumber}</span> becomes active for guest bookings. You can Email, Text, Download PDF, or Print anytime afterward.
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowPublishOptionsModal(false)}
+                  disabled={processingPublishChoice}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-900 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={processingPublishChoice}
+                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-400 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 cursor-pointer"
+                >
+                  {processingPublishChoice ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" /> Processing...
+                    </>
+                  ) : publishActionChoice === 'email' ? (
+                    <>
+                      <Send size={14} /> Approve, Publish &amp; Email
+                    </>
+                  ) : publishActionChoice === 'text' ? (
+                    <>
+                      <MessageSquare size={14} /> Approve, Publish &amp; Send Text
+                    </>
+                  ) : publishActionChoice === 'download' ? (
+                    <>
+                      <Download size={14} /> Approve, Publish &amp; Download PDF
+                    </>
+                  ) : (
+                    <>
+                      <Check size={14} /> Approve, Publish &amp; Just Save
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
@@ -1992,6 +2519,78 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
                   ) : (
                     <>
                       <Send size={14} /> Send Referral Letter
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Text (SMS) Referral Letter Modal */}
+      {showSmsModal && smsTargetLetter && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-lg overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <MessageSquare size={16} className="text-emerald-600" />
+                Text Published Referral Letter ({smsTargetLetter.referralNumber})
+              </h4>
+              <button
+                type="button"
+                onClick={() => setShowSmsModal(false)}
+                className="text-slate-400 hover:text-slate-700 text-xs font-bold cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+
+            <form onSubmit={handleSendReferralSms} className="p-6 space-y-4 text-xs">
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">
+                  Recipient Phone Number ({smsTargetLetter.recipientType === 'business' ? 'Contact Phone' : 'Referral Phone'}) *
+                </label>
+                <input
+                  type="tel"
+                  required
+                  value={smsToPhone}
+                  onChange={(e) => setSmsToPhone(e.target.value)}
+                  placeholder="(404) 555-0192"
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">SMS Text Content *</label>
+                <textarea
+                  rows={5}
+                  required
+                  value={smsBody}
+                  onChange={(e) => setSmsBody(e.target.value)}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs leading-relaxed focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowSmsModal(false)}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-900 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={sendingSms}
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-400 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 cursor-pointer"
+                >
+                  {sendingSms ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" /> Sending Text...
+                    </>
+                  ) : (
+                    <>
+                      <MessageSquare size={14} /> Send Text Message
                     </>
                   )}
                 </button>

@@ -368,6 +368,8 @@ export interface ReferralLetter {
   publishedAt?: string;
   lastEmailedAt?: string;
   lastEmailedTo?: string;
+  lastSmsSentAt?: string;
+  lastSmsSentTo?: string;
   createdBy?: string;
   createdAt: string;
   updatedAt: string;
@@ -396,6 +398,13 @@ export interface ReferralLedgerEntry {
   status: 'owed' | 'paid';
   paidAt?: string;
   paymentNotes?: string;
+  referralNotificationSent?: boolean;
+  referralNotificationSentAt?: string;
+  referralNotificationEmailSent?: boolean;
+  referralNotificationEmailSimulated?: boolean;
+  referralNotificationSmsSent?: boolean;
+  referralNotificationSmsSimulated?: boolean;
+  referralNotificationRecipient?: string;
   createdAt: string;
   updatedAt?: string;
 }
