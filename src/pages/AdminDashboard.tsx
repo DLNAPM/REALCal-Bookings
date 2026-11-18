@@ -5717,7 +5717,13 @@ C.&S.H. Group Properties, LLC
             currentUser={user}
             bookings={bookings}
             properties={properties}
+            propertyManagers={propertyManagers}
+            ceoName={ceoName}
+            ceoContact={ceoContact}
+            pmName={pmName}
+            pmContact={pmContact}
             defaultContactPhone={contactUsPhone}
+            defaultContactEmail={contactUsEmail}
           />
 
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm mt-8">

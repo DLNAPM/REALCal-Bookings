@@ -16,7 +16,7 @@ import {
   CheckCircle2,
   MapPin
 } from 'lucide-react';
-import { Booking, Property } from '../types';
+import { Booking, Property, PropertyManager } from '../types';
 import { EventItem, fetchLiveEventsForProperty } from '../data/events';
 import { KNOWN_PROPERTY_PROFILES, resolvePropertyProfile } from '../data/propertyLocations';
 import { cn } from '../lib/utils';
@@ -25,7 +25,13 @@ interface AdminEventsLineupProps {
   currentUser: { email?: string; displayName?: string; role?: string } | null;
   bookings: Booking[];
   properties: Property[];
+  propertyManagers?: PropertyManager[];
+  ceoName?: string;
+  ceoContact?: string;
+  pmName?: string;
+  pmContact?: string;
   defaultContactPhone?: string;
+  defaultContactEmail?: string;
 }
 
 type LineupCategoryKey = 'sports' | 'nightlife' | 'family' | 'kids';
@@ -57,6 +63,44 @@ interface BookedGuestRecipient {
   stayStatus: 'In-House Now' | 'Upcoming Stay' | 'Recent Stay';
 }
 
+interface LeadershipEmailRecipient {
+  key: string;
+  name: string;
+  email: string;
+}
+
+const LEADERSHIP_ROLE_WORDS = new Set([
+  'ceo', 'cfo', 'coo', 'cto', 'vp', 'pm', 'gm', 'rm',
+  'admin', 'administrator', 'manager', 'mgr', 'property', 'management',
+  'housing', 'director', 'president', 'founder', 'owner', 'co-founder',
+  'lead', 'senior', 'sr', 'jr', 'ii', 'iii', 'iv', 'mr', 'mrs', 'ms',
+  'miss', 'dr', 'prof', 'inactive', 'active', 'agent', 'broker',
+  'coordinator', 'supervisor', 'executive', 'officer', 'chief', 'partner',
+  'associates', 'associate', 'saved', 'leadership'
+]);
+
+const extractLeadershipFirstLastName = (raw?: string): string => {
+  const cleaned = (raw || '')
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/\[[^\]]*\]/g, ' ')
+    .replace(/[-–—|,/:]+/g, ' ')
+    .trim();
+  if (!cleaned) return '';
+  const tokens = cleaned
+    .split(/\s+/)
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .filter((t) => !LEADERSHIP_ROLE_WORDS.has(t.replace(/\./g, '').toLowerCase()));
+  if (tokens.length === 0) return '';
+  if (tokens.length === 1) return tokens[0];
+  return `${tokens[0]} ${tokens[tokens.length - 1]}`;
+};
+
+const extractEmailFromText = (raw?: string): string => {
+  const match = (raw || '').match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  return match ? match[0].trim() : '';
+};
+
 const formatPhoneDisplay = (raw?: string, fallback = '404-910-3194'): string => {
   const trimmed = (raw || '').trim();
   if (!trimmed) return fallback;
@@ -74,7 +118,13 @@ export const AdminEventsLineup: React.FC<AdminEventsLineupProps> = ({
   currentUser,
   bookings,
   properties,
+  propertyManagers = [],
+  ceoName,
+  ceoContact,
+  pmName,
+  pmContact,
   defaultContactPhone,
+  defaultContactEmail,
 }) => {
   // Property edition choices (Firestore properties + known profiles)
   const propertyOptions = useMemo(() => {
@@ -138,6 +188,7 @@ export const AdminEventsLineup: React.FC<AdminEventsLineupProps> = ({
 
   const [includeRecentGuests, setIncludeRecentGuests] = useState<boolean>(false);
   const [selectedRecipientKeys, setSelectedRecipientKeys] = useState<Set<string>>(new Set());
+  const [selectedLeadershipKeys, setSelectedLeadershipKeys] = useState<Set<string>>(new Set());
   const [customRecipientEmail, setCustomRecipientEmail] = useState<string>('');
   const [customRecipientPhone, setCustomRecipientPhone] = useState<string>('');
   const [customRecipientName, setCustomRecipientName] = useState<string>('');
@@ -288,6 +339,70 @@ export const AdminEventsLineup: React.FC<AdminEventsLineupProps> = ({
       return rank[a.stayStatus] - rank[b.stayStatus];
     });
   }, [bookings, properties, includeRecentGuests]);
+
+  // Derive Leadership contacts cleanly from property managers, CEO/PM settings, and official desk email
+  const leadershipContacts = useMemo<LeadershipEmailRecipient[]>(() => {
+    const items: LeadershipEmailRecipient[] = [];
+    const seenEmails = new Set<string>();
+
+    const addLeader = (rawName: string | undefined, rawEmail: string | undefined, fallbackName: string) => {
+      const email = extractEmailFromText(rawEmail);
+      if (!email) return;
+      const lower = email.toLowerCase();
+      if (seenEmails.has(lower)) return;
+      seenEmails.add(lower);
+      const cleanName = extractLeadershipFirstLastName(rawName) || (rawName || '').trim() || fallbackName;
+      items.push({
+        key: `leader:${lower}`,
+        name: cleanName,
+        email,
+      });
+    };
+
+    const enabledManagers = propertyManagers.filter((m) => m.enabled !== false);
+    const managerPool = enabledManagers.length > 0 ? enabledManagers : propertyManagers;
+    managerPool.forEach((m) => addLeader(m.name, m.email, 'Leadership Member'));
+
+    addLeader(ceoName || 'Cynthia Robinson', ceoContact, 'Cynthia Robinson');
+    addLeader(pmName || 'Markus Vance', pmContact, 'Markus Vance');
+    addLeader('C&SH Housing Management', defaultContactEmail, 'C&SH Housing Management');
+    addLeader('C&SH Housing Management', 'candsh@cashgroupproperties.com', 'C&SH Housing Management');
+
+    return items;
+  }, [propertyManagers, ceoName, ceoContact, pmName, pmContact, defaultContactEmail]);
+
+  const emailGuestsList = useMemo(
+    () => currentBookedGuests.filter((g) => Boolean(g.email)),
+    [currentBookedGuests]
+  );
+
+  const allLeadershipChecked =
+    leadershipContacts.length > 0 &&
+    leadershipContacts.every((l) => selectedLeadershipKeys.has(l.key));
+  const someLeadershipChecked =
+    leadershipContacts.some((l) => selectedLeadershipKeys.has(l.key));
+
+  const allCurrentGuestsChecked =
+    emailGuestsList.length > 0 &&
+    emailGuestsList.every((g) => selectedRecipientKeys.has(g.key));
+  const someCurrentGuestsChecked =
+    emailGuestsList.some((g) => selectedRecipientKeys.has(g.key));
+
+  const toggleAllLeadership = (checked: boolean) => {
+    if (checked) {
+      setSelectedLeadershipKeys(new Set(leadershipContacts.map((l) => l.key)));
+    } else {
+      setSelectedLeadershipKeys(new Set());
+    }
+  };
+
+  const toggleAllEmailGuests = (checked: boolean) => {
+    if (checked) {
+      setSelectedRecipientKeys(new Set(emailGuestsList.map((g) => g.key)));
+    } else {
+      setSelectedRecipientKeys(new Set());
+    }
+  };
 
   // Select all current booked guests by default when modal opens or guest list refreshes
   const selectAllAvailableGuests = (mode: 'email' | 'sms') => {
@@ -488,6 +603,7 @@ export const AdminEventsLineup: React.FC<AdminEventsLineupProps> = ({
 
   const openEmailModal = () => {
     selectAllAvailableGuests('email');
+    setSelectedLeadershipKeys(new Set());
     setEmailCc('candsh@cashgroupproperties.com');
     setEmailSubject(`${editionTitle || 'THE EVENTS LINEUP'} — ${activeProperty?.name || 'Stonewall Villa'} (${windowLabel})`);
     setShowEmailModal(true);
@@ -501,21 +617,37 @@ export const AdminEventsLineup: React.FC<AdminEventsLineupProps> = ({
 
   const handleSendEmail = async (e: React.FormEvent) => {
     e.preventDefault();
-    const recipients: { name: string; email: string }[] = currentBookedGuests
+    const recipientMap = new Map<string, { name: string; email: string }>();
+
+    leadershipContacts
+      .filter((l) => selectedLeadershipKeys.has(l.key) && l.email)
+      .forEach((l) => {
+        recipientMap.set(l.email.toLowerCase(), { name: l.name, email: l.email });
+      });
+
+    currentBookedGuests
       .filter((g) => selectedRecipientKeys.has(g.key) && g.email)
-      .map((g) => ({ name: g.name, email: g.email }));
+      .forEach((g) => {
+        const lower = g.email.toLowerCase();
+        if (!recipientMap.has(lower)) {
+          recipientMap.set(lower, { name: g.name, email: g.email });
+        }
+      });
 
     if (customRecipientEmail.trim()) {
-      recipients.push({
+      const customEmail = customRecipientEmail.trim();
+      recipientMap.set(customEmail.toLowerCase(), {
         name: customRecipientName.trim() || 'Guest',
-        email: customRecipientEmail.trim(),
+        email: customEmail,
       });
     }
+
+    const recipients = Array.from(recipientMap.values());
 
     if (recipients.length === 0) {
       setFeedback({
         type: 'error',
-        message: 'Select at least one booked guest or enter an email address.',
+        message: 'Select Leadership, Current Guests, or enter an email address.',
       });
       return;
     }
@@ -975,158 +1107,269 @@ export const AdminEventsLineup: React.FC<AdminEventsLineupProps> = ({
         </article>
       )}
 
-      {/* Email Events LineUp to Current Booked Guests Modal */}
-      {showEmailModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-xl overflow-hidden my-8">
-            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-              <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <Mail size={16} className="text-indigo-600" />
-                Email Events LineUp to Current Booked Guests
-              </h4>
-              <button
-                type="button"
-                onClick={() => setShowEmailModal(false)}
-                className="text-slate-400 hover:text-slate-700 text-xs font-bold cursor-pointer"
-              >
-                Close
-              </button>
-            </div>
+      {/* Email Events LineUp Modal (Leadership and/or All Current Guests) */}
+      {showEmailModal && (() => {
+        const selectedLeadershipCount = leadershipContacts.filter((l) => selectedLeadershipKeys.has(l.key)).length;
+        const selectedGuestsCount = emailGuestsList.filter((g) => selectedRecipientKeys.has(g.key)).length;
+        const extraCount = customRecipientEmail.trim() ? 1 : 0;
+        const totalSelectedCount = selectedLeadershipCount + selectedGuestsCount + extraCount;
 
-            <form onSubmit={handleSendEmail} className="p-6 space-y-4 text-xs">
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-bold text-slate-800 flex items-center gap-1.5">
-                  <Users size={14} className="text-indigo-600" />
-                  Current Booked Guests ({currentBookedGuests.filter((g) => g.email).length} with email)
-                </span>
-                <label className="flex items-center gap-1.5 text-slate-600 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={includeRecentGuests}
-                    onChange={(e) => setIncludeRecentGuests(e.target.checked)}
-                    className="rounded border-slate-300"
-                  />
-                  <span>Include past stays</span>
-                </label>
+        const sendButtonLabel =
+          selectedLeadershipCount > 0 && selectedGuestsCount > 0
+            ? `Email Leadership & Guests + PDF (${totalSelectedCount})`
+            : selectedLeadershipCount > 0 && selectedGuestsCount === 0
+            ? `Email Leadership + PDF (${totalSelectedCount})`
+            : `Email Guests + PDF (${totalSelectedCount})`;
+
+        return (
+          <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-2xl overflow-hidden my-8">
+              <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <Mail size={16} className="text-indigo-600" />
+                  Email Events LineUp + PDF
+                </h4>
+                <button
+                  type="button"
+                  onClick={() => setShowEmailModal(false)}
+                  className="text-slate-400 hover:text-slate-700 text-xs font-bold cursor-pointer"
+                >
+                  Close
+                </button>
               </div>
 
-              <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-2xl divide-y divide-slate-100 bg-slate-50/50">
-                {currentBookedGuests.filter((g) => g.email).length === 0 ? (
-                  <div className="p-4 text-center text-slate-500">
-                    No active booked guests with email addresses found. Add an email below to send directly.
+              <form onSubmit={handleSendEmail} className="p-6 space-y-4 text-xs max-h-[85vh] overflow-y-auto">
+                {/* Master Audience Check-Boxes: Leadership and/or All Current Guests */}
+                <div className="space-y-2">
+                  <div className="font-bold text-slate-800">
+                    Choose Recipients (select Leadership, All Current Guests, or both)
                   </div>
-                ) : (
-                  currentBookedGuests
-                    .filter((g) => g.email)
-                    .map((g) => (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <label
+                      className={cn(
+                        'flex items-start gap-3 p-3.5 rounded-2xl border cursor-pointer transition-colors',
+                        allLeadershipChecked || someLeadershipChecked
+                          ? 'bg-indigo-50/70 border-indigo-300'
+                          : 'bg-slate-50 border-slate-200 hover:bg-white'
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={allLeadershipChecked}
+                        onChange={(e) => toggleAllLeadership(e.target.checked)}
+                        className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <div className="min-w-0">
+                        <div className="font-bold text-slate-900">Email to Leadership</div>
+                        <div className="text-slate-600 mt-0.5">
+                          {selectedLeadershipCount} of {leadershipContacts.length} leadership contact{leadershipContacts.length === 1 ? '' : 's'} selected
+                        </div>
+                      </div>
+                    </label>
+
+                    <label
+                      className={cn(
+                        'flex items-start gap-3 p-3.5 rounded-2xl border cursor-pointer transition-colors',
+                        allCurrentGuestsChecked || someCurrentGuestsChecked
+                          ? 'bg-emerald-50/60 border-emerald-300'
+                          : 'bg-slate-50 border-slate-200 hover:bg-white'
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={allCurrentGuestsChecked}
+                        onChange={(e) => toggleAllEmailGuests(e.target.checked)}
+                        className="mt-0.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                      />
+                      <div className="min-w-0">
+                        <div className="font-bold text-slate-900">Email to All Current Guests</div>
+                        <div className="text-slate-600 mt-0.5">
+                          {selectedGuestsCount} of {emailGuestsList.length} booked guest{emailGuestsList.length === 1 ? '' : 's'} selected
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Leadership Individual Selection */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-slate-800">
+                      Leadership Contacts ({selectedLeadershipCount} / {leadershipContacts.length})
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => toggleAllLeadership(!allLeadershipChecked)}
+                      className="text-indigo-600 hover:underline font-semibold cursor-pointer"
+                    >
+                      {allLeadershipChecked ? 'Uncheck all leadership' : 'Select all leadership'}
+                    </button>
+                  </div>
+                  <div className="max-h-36 overflow-y-auto border border-slate-200 rounded-2xl divide-y divide-slate-100 bg-slate-50/50">
+                    {leadershipContacts.map((l) => (
                       <label
-                        key={g.key}
-                        className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-white cursor-pointer"
+                        key={l.key}
+                        className="flex items-center justify-between gap-3 px-4 py-2 hover:bg-white cursor-pointer"
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
                           <input
                             type="checkbox"
-                            checked={selectedRecipientKeys.has(g.key)}
+                            checked={selectedLeadershipKeys.has(l.key)}
                             onChange={(e) => {
-                              setSelectedRecipientKeys((prev) => {
+                              setSelectedLeadershipKeys((prev) => {
                                 const next = new Set(prev);
-                                if (e.target.checked) next.add(g.key);
-                                else next.delete(g.key);
+                                if (e.target.checked) next.add(l.key);
+                                else next.delete(l.key);
                                 return next;
                               });
                             }}
-                            className="rounded border-slate-300"
+                            className="rounded border-slate-300 text-indigo-600"
                           />
                           <div className="min-w-0">
-                            <div className="font-bold text-slate-900 truncate">
-                              {g.name} &middot; <span className="text-indigo-700 font-normal">{g.stayStatus}</span>
-                            </div>
-                            <div className="text-slate-500 truncate">
-                              {g.email} &middot; {g.propertyName} ({g.checkIn} to {g.checkOut})
-                            </div>
+                            <span className="font-bold text-slate-900">{l.name}</span>{' '}
+                            <span className="text-slate-500">&middot; {l.email}</span>
                           </div>
                         </div>
                       </label>
-                    ))
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">Add Guest Name (Optional)</label>
-                  <input
-                    type="text"
-                    value={customRecipientName}
-                    onChange={(e) => setCustomRecipientName(e.target.value)}
-                    placeholder="Guest Name"
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs"
-                  />
+                    ))}
+                  </div>
                 </div>
+
+                {/* Current Booked Guests Individual Selection */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                      <Users size={14} className="text-indigo-600" />
+                      Current Booked Guests ({selectedGuestsCount} / {emailGuestsList.length} with email)
+                    </span>
+                    <label className="flex items-center gap-1.5 text-slate-600 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={includeRecentGuests}
+                        onChange={(e) => setIncludeRecentGuests(e.target.checked)}
+                        className="rounded border-slate-300"
+                      />
+                      <span>Include past stays</span>
+                    </label>
+                  </div>
+
+                  <div className="max-h-40 overflow-y-auto border border-slate-200 rounded-2xl divide-y divide-slate-100 bg-slate-50/50">
+                    {emailGuestsList.length === 0 ? (
+                      <div className="p-4 text-center text-slate-500">
+                        No active booked guests with email addresses found. You can still email Leadership or add an email below.
+                      </div>
+                    ) : (
+                      emailGuestsList.map((g) => (
+                        <label
+                          key={g.key}
+                          className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-white cursor-pointer"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <input
+                              type="checkbox"
+                              checked={selectedRecipientKeys.has(g.key)}
+                              onChange={(e) => {
+                                setSelectedRecipientKeys((prev) => {
+                                  const next = new Set(prev);
+                                  if (e.target.checked) next.add(g.key);
+                                  else next.delete(g.key);
+                                  return next;
+                                });
+                              }}
+                              className="rounded border-slate-300"
+                            />
+                            <div className="min-w-0">
+                              <div className="font-bold text-slate-900 truncate">
+                                {g.name} &middot; <span className="text-indigo-700 font-normal">{g.stayStatus}</span>
+                              </div>
+                              <div className="text-slate-500 truncate">
+                                {g.email} &middot; {g.propertyName} ({g.checkIn} to {g.checkOut})
+                              </div>
+                            </div>
+                          </div>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Add Recipient Name (Optional)</label>
+                    <input
+                      type="text"
+                      value={customRecipientName}
+                      onChange={(e) => setCustomRecipientName(e.target.value)}
+                      placeholder="Guest or Leader Name"
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Add Additional Email (Optional)</label>
+                    <input
+                      type="email"
+                      value={customRecipientEmail}
+                      onChange={(e) => setCustomRecipientEmail(e.target.value)}
+                      placeholder="recipient@example.com"
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs"
+                    />
+                  </div>
+                </div>
+
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">Add Guest Email (Optional)</label>
+                  <label className="font-bold text-slate-700 block mb-1">CC (Optional)</label>
                   <input
                     type="email"
-                    value={customRecipientEmail}
-                    onChange={(e) => setCustomRecipientEmail(e.target.value)}
-                    placeholder="guest@example.com"
+                    value={emailCc}
+                    onChange={(e) => setEmailCc(e.target.value)}
                     className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs"
                   />
                 </div>
-              </div>
 
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">CC (Optional)</label>
-                <input
-                  type="email"
-                  value={emailCc}
-                  onChange={(e) => setEmailCc(e.target.value)}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs"
-                />
-              </div>
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Email Subject *</label>
+                  <input
+                    type="text"
+                    required
+                    value={emailSubject}
+                    onChange={(e) => setEmailSubject(e.target.value)}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold"
+                  />
+                </div>
 
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Email Subject *</label>
-                <input
-                  type="text"
-                  required
-                  value={emailSubject}
-                  onChange={(e) => setEmailSubject(e.target.value)}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold"
-                />
-              </div>
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-600">
+                  Sends the formatted HTML concierge Events LineUp plus an attached printable PDF copy divided into Sports, Nightlife &amp; Concerts, Family, and Kids.
+                </div>
 
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-600">
-                Sends the formatted HTML concierge Events LineUp plus an attached printable PDF copy divided into Sports, Nightlife &amp; Concerts, Family, and Kids.
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setShowEmailModal(false)}
-                  className="px-4 py-2 font-bold text-slate-600 hover:text-slate-900 cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={sendingEmail}
-                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-400 text-white font-bold rounded-xl flex items-center gap-1.5 cursor-pointer"
-                >
-                  {sendingEmail ? (
-                    <>
-                      <Loader2 size={14} className="animate-spin" /> Sending...
-                    </>
-                  ) : (
-                    <>
-                      <Send size={14} /> Email LineUp + PDF
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
+                <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setShowEmailModal(false)}
+                    className="px-4 py-2 font-bold text-slate-600 hover:text-slate-900 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={sendingEmail || totalSelectedCount === 0}
+                    className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-400 text-white font-bold rounded-xl flex items-center gap-1.5 cursor-pointer"
+                  >
+                    {sendingEmail ? (
+                      <>
+                        <Loader2 size={14} className="animate-spin" /> Sending...
+                      </>
+                    ) : (
+                      <>
+                        <Send size={14} /> {sendButtonLabel}
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Text (SMS + PDF) Events LineUp to Current Booked Guests Modal */}
       {showSmsModal && (

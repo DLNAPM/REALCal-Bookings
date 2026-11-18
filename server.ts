@@ -7224,11 +7224,23 @@ async function startServer() {
       }
       const { publication, recipients, cc, subject } = req.body || {};
       const pub = sanitizeEventsLineupPub(publication);
-      const validRecipients = Array.isArray(recipients)
-        ? recipients.filter((r: any) => r?.email && String(r.email).trim())
-        : [];
+      const seenEmails = new Set<string>();
+      const validRecipients: { name: string; email: string }[] = [];
+      if (Array.isArray(recipients)) {
+        for (const r of recipients) {
+          const email = r?.email ? String(r.email).trim() : '';
+          if (!email) continue;
+          const lower = email.toLowerCase();
+          if (seenEmails.has(lower)) continue;
+          seenEmails.add(lower);
+          validRecipients.push({
+            name: String(r?.name || 'Valued Recipient').trim(),
+            email,
+          });
+        }
+      }
       if (validRecipients.length === 0) {
-        return res.status(400).json({ error: "Select at least one booked guest with an email address." });
+        return res.status(400).json({ error: "Select at least one recipient (Leadership or Guest) with an email address." });
       }
 
       saveLocalEventsLineup(pub);
@@ -7249,8 +7261,8 @@ async function startServer() {
       const results: { email: string; name: string; sent: boolean; simulated: boolean }[] = [];
 
       for (const rec of validRecipients) {
-        const toEmail = String(rec.email).trim();
-        const guestName = String(rec.name || 'Guest').trim();
+        const toEmail = rec.email;
+        const guestName = rec.name;
         const html = buildEventsLineupEmailHtml(pub, guestName);
         const text = buildEventsLineupPlainText(pub, guestName);
 
@@ -7284,8 +7296,8 @@ async function startServer() {
         pdfFilename: `Events-LineUp-${safeProp}.pdf`,
         results,
         message: simulated
-          ? `Events LineUp email + PDF simulated for ${results.length} booked guest(s) (SMTP_HOST not configured in preview).`
-          : `Events LineUp emailed with PDF attachment to ${results.length} booked guest(s).`,
+          ? `Events LineUp email + PDF simulated for ${results.length} recipient(s) (SMTP_HOST not configured in preview).`
+          : `Events LineUp emailed with PDF attachment to ${results.length} recipient(s).`,
       });
     } catch (err: any) {
       console.error("[API] Error emailing Events LineUp:", err.message);
