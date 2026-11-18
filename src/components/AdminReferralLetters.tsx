@@ -493,7 +493,6 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
     if (recipientType === 'individual') {
       if (!firstName.trim()) return 'Referral First Name is required.';
       if (!lastName.trim()) return 'Referral Last Name is required.';
-      if (!indEmail.trim()) return 'Referral Email Address is required.';
     } else {
       if (!businessName.trim()) return 'Referral Business Name is required.';
       if (!attentionFirstName.trim() || !attentionLastName.trim()) {
@@ -1448,7 +1447,7 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
 
                 <div>
                   <label className="text-xs font-semibold text-slate-700 block mb-1">
-                    Referral Email Address *
+                    Referral Email Address <span className="text-slate-400 font-normal">(Optional)</span>
                   </label>
                   <input
                     type="email"
@@ -1878,10 +1877,17 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
                     </div>
                   </>
                 )}
-                <div className="text-slate-600 pt-1">
-                  Email: <span className="font-semibold text-slate-800">{previewEmail || '[Email Address]'}</span>
-                  {previewPhone ? ` · Phone: ${previewPhone}` : ''}
-                </div>
+                {(previewEmail || previewPhone) && (
+                  <div className="text-slate-600 pt-1">
+                    {previewEmail && (
+                      <>
+                        Email: <span className="font-semibold text-slate-800">{previewEmail}</span>
+                      </>
+                    )}
+                    {previewEmail && previewPhone ? ' · ' : ''}
+                    {previewPhone ? `Phone: ${previewPhone}` : ''}
+                  </div>
+                )}
               </div>
 
               {/* Letter Subject */}
