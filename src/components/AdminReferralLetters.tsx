@@ -45,6 +45,33 @@ interface AdminReferralLettersProps {
   onPublishedLettersUpdate?: (publishedLetters: ReferralLetter[]) => void;
 }
 
+const LEADERSHIP_ROLE_WORDS = new Set([
+  'ceo', 'pm', 'cfo', 'coo', 'cto', 'vp', 'svp', 'evp', 'avp',
+  'admin', 'administrator', 'manager', 'mgr', 'property', 'management',
+  'housing', 'director', 'president', 'founder', 'owner', 'co-founder',
+  'lead', 'senior', 'sr', 'jr', 'ii', 'iii', 'iv', 'mr', 'mrs', 'ms',
+  'miss', 'dr', 'prof', 'inactive', 'active', 'agent', 'broker',
+  'coordinator', 'supervisor', 'executive', 'officer', 'chief', 'partner',
+  'associates', 'associate', 'saved', 'leadership'
+]);
+
+const extractLeadershipFirstLastName = (raw?: string): string => {
+  const cleaned = (raw || '')
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/\[[^\]]*\]/g, ' ')
+    .replace(/[-–—|,/:]+/g, ' ')
+    .trim();
+  if (!cleaned) return '';
+  const tokens = cleaned
+    .split(/\s+/)
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .filter((t) => !LEADERSHIP_ROLE_WORDS.has(t.replace(/\./g, '').toLowerCase()));
+  if (tokens.length === 0) return '';
+  if (tokens.length === 1) return tokens[0];
+  return `${tokens[0]} ${tokens[tokens.length - 1]}`;
+};
+
 const formatLeadershipPhone = (raw?: string, fallback = '404-910-3194'): string => {
   const trimmed = (raw || '').trim();
   if (!trimmed) return fallback;
@@ -119,18 +146,17 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
   const baseLeadershipOptions = useMemo(() => {
     const fallbackPhone = formatLeadershipPhone(defaultLeadershipPhone, '404-910-3194');
     const seen = new Set<string>();
-    const options: { name: string; phone: string; label?: string }[] = [];
+    const options: { name: string; phone: string }[] = [];
 
-    const addOption = (nameRaw?: string, phoneRaw?: string, label?: string) => {
-      const name = (nameRaw || '').trim();
+    const addOption = (nameRaw?: string, phoneRaw?: string) => {
+      const name = extractLeadershipFirstLastName(nameRaw);
       if (!name) return;
       const key = name.toLowerCase();
       if (seen.has(key)) return;
       seen.add(key);
       options.push({
         name,
-        phone: formatLeadershipPhone(phoneRaw, fallbackPhone),
-        label
+        phone: formatLeadershipPhone(phoneRaw, fallbackPhone)
       });
     };
 
@@ -141,27 +167,26 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
     });
 
     for (const mgr of sortedManagers) {
-      addOption(mgr.name, mgr.phone, mgr.enabled === false ? 'Inactive Manager' : 'Property Manager');
+      addOption(mgr.name, mgr.phone);
     }
 
-    addOption(ceoName || 'Cynthia S. H. Robinson', fallbackPhone, 'CEO');
-    addOption(pmName || 'Markus Vance', fallbackPhone, 'Property Manager');
+    addOption(ceoName || 'Cynthia S. H. Robinson', fallbackPhone);
+    addOption(pmName || 'Markus Vance', fallbackPhone);
 
     return options;
   }, [propertyManagers, ceoName, pmName, defaultLeadershipPhone]);
 
   const leadershipOptions = useMemo(() => {
-    const trimmed = leadershipName.trim();
+    const cleanCurrent = extractLeadershipFirstLastName(leadershipName);
     if (
-      trimmed &&
-      !baseLeadershipOptions.some((opt) => opt.name.toLowerCase() === trimmed.toLowerCase())
+      cleanCurrent &&
+      !baseLeadershipOptions.some((opt) => opt.name.toLowerCase() === cleanCurrent.toLowerCase())
     ) {
       return [
         ...baseLeadershipOptions,
         {
-          name: trimmed,
-          phone: formatLeadershipPhone(leadershipPhone || defaultLeadershipPhone, '404-910-3194'),
-          label: 'Saved'
+          name: cleanCurrent,
+          phone: formatLeadershipPhone(leadershipPhone || defaultLeadershipPhone, '404-910-3194')
         }
       ];
     }
@@ -176,8 +201,9 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
   }, [editingId, leadershipName, baseLeadershipOptions]);
 
   const handleLeadershipSelect = (selectedName: string) => {
-    const match = leadershipOptions.find((opt) => opt.name === selectedName);
-    setLeadershipName(selectedName);
+    const cleanSelected = extractLeadershipFirstLastName(selectedName) || selectedName;
+    const match = leadershipOptions.find((opt) => opt.name === cleanSelected);
+    setLeadershipName(cleanSelected);
     setLeadershipPhone(match?.phone || formatLeadershipPhone(defaultLeadershipPhone, '404-910-3194'));
   };
 
@@ -448,7 +474,8 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
     setCustomOpeningNote(l.customOpeningNote || '');
     setCustomClosingNote(l.customClosingNote || '');
     const defaultLeader = baseLeadershipOptions[0];
-    const resolvedName = (l.leadershipName || '').trim() || defaultLeader?.name || '';
+    const resolvedName =
+      extractLeadershipFirstLastName(l.leadershipName) || defaultLeader?.name || '';
     const matchedOpt = baseLeadershipOptions.find(
       (opt) => opt.name.toLowerCase() === resolvedName.toLowerCase()
     );
@@ -814,7 +841,7 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
       letterObj.recipientType === 'business' ? letterObj.contactEmail || '' : letterObj.email || '';
     setEmailTargetLetter(letterObj);
     setEmailTo(targetEmail);
-    setEmailCc(currentUser?.email || 'candsh@cashgroupproperties.com');
+    setEmailCc('candsh@cashgroupproperties.com');
     setEmailSubject(
       `C&SH Group Properties, LLC — Short-Term Rental Referral Letter (${letterObj.referralNumber})`
     );
@@ -929,7 +956,7 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
     };
     setPublishActionChoice('save');
     setPublishEmailTo(targetEmail);
-    setPublishEmailCc(currentUser?.email || 'candsh@cashgroupproperties.com');
+    setPublishEmailCc('candsh@cashgroupproperties.com');
     setPublishEmailSubject(
       `C&SH Group Properties, LLC — Short-Term Rental Referral Letter (${referralNumber.trim().toUpperCase()})`
     );
@@ -1950,8 +1977,7 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
                     >
                       {leadershipOptions.map((opt) => (
                         <option key={opt.name} value={opt.name}>
-                          {opt.name}
-                          {opt.label ? ` (${opt.label})` : ''} — {opt.phone}
+                          {opt.name} — {opt.phone}
                         </option>
                       ))}
                     </select>
@@ -2460,9 +2486,9 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
                     <MessageSquare size={16} />
                   </div>
                   <div>
-                    <div className="font-bold text-slate-900 text-xs">Text (SMS) Letter</div>
+                    <div className="font-bold text-slate-900 text-xs">Text (SMS) Letter + PDF</div>
                     <div className="text-[11px] text-slate-500 mt-0.5">
-                      Publish &amp; send SMS referral letter summary.
+                      Publish &amp; send text with PDF referral letter attached.
                     </div>
                   </div>
                 </button>
@@ -2569,6 +2595,9 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
                       onChange={(e) => setPublishSmsMessage(e.target.value)}
                       className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     />
+                  </div>
+                  <div className="p-2.5 bg-white border border-emerald-200 rounded-xl text-[11px] text-emerald-900">
+                    Attaches and sends the Published Referral Letter in PDF format (<span className="font-mono font-bold">Referral-Letter-{referralNumber}.pdf</span>) with your text message.
                   </div>
                 </div>
               )}
@@ -2752,6 +2781,10 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
                   onChange={(e) => setSmsBody(e.target.value)}
                   className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs leading-relaxed focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
+              </div>
+
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900 leading-relaxed">
+                Includes the Published Referral Letter in PDF format (<span className="font-mono font-bold">Referral-Letter-{smsTargetLetter.referralNumber}.pdf</span>) sent along with the text message.
               </div>
 
               <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">

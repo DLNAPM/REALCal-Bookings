@@ -2073,7 +2073,7 @@ async function sendReferralBookingNotifications({
   const guestName = entry?.guestName || 'Guest';
   const bookingRef = entry?.bookingRef || entry?.bookingId?.substring(0, 8).toUpperCase() || '';
 
-  const leadershipName = (letter?.leadershipName || '').trim();
+  const leadershipName = extractLeadershipFirstLastName(letter?.leadershipName);
   const leadershipPhone = (letter?.leadershipPhone || '').trim() || '404-910-3194';
 
   const smsBody = `C&SH Group Properties, LLC Referral Notice: Hi ${contactName}, ${guestName} completed a booking (#${bookingRef}) at ${propName} (${checkIn} to ${checkOut}) using Referral Number ${refCode}. Your Referral Fee of ${feeStr} is recorded and you will receive your Referral Fee 7 to 14 days after Guest checks out (${checkOut}). Questions? P:${leadershipPhone} E:candsh@cashgroupproperties.com`;
@@ -2347,6 +2347,33 @@ async function recordReferralClaimFromBooking({
   return entry;
 }
 
+const SERVER_LEADERSHIP_ROLE_WORDS = new Set([
+  'ceo', 'pm', 'cfo', 'coo', 'cto', 'vp', 'svp', 'evp', 'avp',
+  'admin', 'administrator', 'manager', 'mgr', 'property', 'management',
+  'housing', 'director', 'president', 'founder', 'owner', 'co-founder',
+  'lead', 'senior', 'sr', 'jr', 'ii', 'iii', 'iv', 'mr', 'mrs', 'ms',
+  'miss', 'dr', 'prof', 'inactive', 'active', 'agent', 'broker',
+  'coordinator', 'supervisor', 'executive', 'officer', 'chief', 'partner',
+  'associates', 'associate', 'saved', 'leadership'
+]);
+
+function extractLeadershipFirstLastName(raw?: string): string {
+  const cleaned = (raw || '')
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/\[[^\]]*\]/g, ' ')
+    .replace(/[-–—|,/:]+/g, ' ')
+    .trim();
+  if (!cleaned) return '';
+  const tokens = cleaned
+    .split(/\s+/)
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .filter((t) => !SERVER_LEADERSHIP_ROLE_WORDS.has(t.replace(/\./g, '').toLowerCase()));
+  if (tokens.length === 0) return '';
+  if (tokens.length === 1) return tokens[0];
+  return `${tokens[0]} ${tokens[tokens.length - 1]}`;
+}
+
 function getFormattedReferralLetterParts(letter: any) {
   const isBusiness = letter.recipientType === 'business';
   const letterDate = letter.letterDate
@@ -2373,7 +2400,7 @@ function getFormattedReferralLetterParts(letter: any) {
 
   const contactEmail = isBusiness ? (letter.contactEmail || '') : (letter.email || '');
   const contactPhone = isBusiness ? (letter.contactPhone || '') : (letter.phone || '');
-  const leadershipName = (letter.leadershipName || '').trim();
+  const leadershipName = extractLeadershipFirstLastName(letter.leadershipName);
   const leadershipPhone = (letter.leadershipPhone || '').trim() || '404-910-3194';
 
   return {
@@ -6232,7 +6259,7 @@ async function startServer() {
         referralFeeType: data.referralFeeType === 'percentage' ? 'percentage' : 'flat',
         customOpeningNote: (data.customOpeningNote || '').trim(),
         customClosingNote: (data.customClosingNote || '').trim(),
-        leadershipName: (data.leadershipName || '').trim(),
+        leadershipName: extractLeadershipFirstLastName(data.leadershipName),
         leadershipPhone: (data.leadershipPhone || '').trim() || '404-910-3194',
         letterDate: data.letterDate || existing?.letterDate || nowIso.split('T')[0],
         publishedAt: status === 'published' ? (existing?.publishedAt || nowIso) : existing?.publishedAt || null,
@@ -6352,6 +6379,32 @@ async function startServer() {
     }
   });
 
+  // GET /api/referral-letters/pdf/:id/:filename - Serve Published Referral Letter PDF for MMS/Text & sharing
+  app.get("/api/referral-letters/pdf/:id/:filename", async (req, res) => {
+    try {
+      const { id, filename } = req.params;
+      const all = await getAllReferralLettersMerged();
+      const targetLetter = all.find((l: any) => l.id === id);
+      if (!targetLetter) {
+        return res.status(404).json({ error: "Referral letter not found." });
+      }
+      if (targetLetter.status !== 'published') {
+        return res.status(403).json({ error: "Only published referral letters are accessible via PDF link." });
+      }
+      const safeRef = (targetLetter.referralNumber || 'REFERRAL').replace(/[^a-zA-Z0-9_-]/g, '');
+      if (filename && !filename.toUpperCase().includes(safeRef.toUpperCase())) {
+        return res.status(403).json({ error: "Invalid referral letter reference." });
+      }
+      const pdfBuffer = await createReferralLetterPDF(targetLetter);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `inline; filename="Referral-Letter-${safeRef}.pdf"`);
+      res.send(pdfBuffer);
+    } catch (err: any) {
+      console.error("[API] Error serving published referral letter PDF:", err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // POST /api/referral-letters/send-email - Email a published Referral Letter with PDF attached (ADMIN ONLY)
   app.post("/api/referral-letters/send-email", async (req, res) => {
     try {
@@ -6439,7 +6492,7 @@ async function startServer() {
     }
   });
 
-  // POST /api/referral-letters/send-sms - Send published Referral Letter summary via SMS (ADMIN ONLY)
+  // POST /api/referral-letters/send-sms - Send published Referral Letter via SMS/MMS with PDF file (ADMIN ONLY)
   app.post("/api/referral-letters/send-sms", async (req, res) => {
     try {
       if (!verifyDeviceAdmin(req)) {
@@ -6459,6 +6512,15 @@ async function startServer() {
         return res.status(400).json({ error: "Please review and publish the draft Referral Letter before texting." });
       }
 
+      // Ensure letter is persisted with an id so the public PDF endpoint can resolve it
+      if (!targetLetter.id || targetLetter.id === 'preview-unsaved') {
+        targetLetter = {
+          ...targetLetter,
+          id: `ref-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`
+        };
+        saveLocalReferralLetter(targetLetter);
+      }
+
       const parts = getFormattedReferralLetterParts(targetLetter);
       const rawPhone = (phone || parts.contactPhone || '').trim();
       const formattedPhone = formatPhoneToE164(rawPhone);
@@ -6466,27 +6528,64 @@ async function startServer() {
         return res.status(400).json({ error: "A valid phone number is required to send SMS." });
       }
 
-      const smsText = (customMessage || '').trim() || buildReferralLetterSmsText(targetLetter);
+      const pdfBuffer = await createReferralLetterPDF(targetLetter);
+      const safeRef = (targetLetter.referralNumber || 'REFERRAL').replace(/[^a-zA-Z0-9_-]/g, '');
+      const pdfFilename = `Referral-Letter-${safeRef}.pdf`;
+
+      const configuredBase = (process.env.APP_URL || '').trim().replace(/\/$/, '');
+      const proto = (req.get('x-forwarded-proto') || req.protocol || 'https').split(',')[0].trim();
+      const host = (req.get('x-forwarded-host') || req.get('host') || 'localhost:3000').split(',')[0].trim();
+      const baseUrl = configuredBase || `${proto}://${host}`;
+      const pdfUrl = `${baseUrl}/api/referral-letters/pdf/${encodeURIComponent(targetLetter.id)}/${encodeURIComponent(pdfFilename)}`;
+      const isPublicHttps = /^https:\/\//i.test(pdfUrl) && !/localhost|127\.0\.0\.1/i.test(pdfUrl);
+
+      const baseSmsText = (customMessage || '').trim() || buildReferralLetterSmsText(targetLetter);
+      const smsText = baseSmsText.includes('/api/referral-letters/pdf/')
+        ? baseSmsText
+        : `${baseSmsText}\n\nPDF Referral Letter: ${pdfUrl}`;
 
       const tSid = process.env.TWILIO_ACCOUNT_SID;
       const tTok = process.env.TWILIO_AUTH_TOKEN;
       const tFrom = process.env.TWILIO_PHONE_NUMBER;
       let simulated = false;
       let twilioSid: string | null = null;
+      let mmsMediaAttached = false;
 
       if (tSid && tTok && tSid.startsWith('AC') && !tSid.includes('PROVIDE_REAL') && tFrom) {
         const twilioPkg = await import('twilio');
         const twilio = twilioPkg.default || twilioPkg;
         const twilioClient = (twilio as any)(tSid, tTok);
-        const msgResp = await twilioClient.messages.create({
-          body: smsText,
-          from: tFrom,
-          to: formattedPhone
-        });
-        twilioSid = msgResp?.sid || null;
+
+        if (isPublicHttps) {
+          try {
+            const mmsResp = await twilioClient.messages.create({
+              body: smsText,
+              from: tFrom,
+              to: formattedPhone,
+              mediaUrl: [pdfUrl]
+            });
+            twilioSid = mmsResp?.sid || null;
+            mmsMediaAttached = true;
+          } catch (mmsErr: any) {
+            console.warn("[Referrals] MMS mediaUrl delivery fallback to SMS with PDF link:", mmsErr.message);
+            const fallbackResp = await twilioClient.messages.create({
+              body: smsText,
+              from: tFrom,
+              to: formattedPhone
+            });
+            twilioSid = fallbackResp?.sid || null;
+          }
+        } else {
+          const msgResp = await twilioClient.messages.create({
+            body: smsText,
+            from: tFrom,
+            to: formattedPhone
+          });
+          twilioSid = msgResp?.sid || null;
+        }
       } else {
         simulated = true;
-        console.warn("[Referrals] Twilio not configured. Simulating referral letter SMS to", formattedPhone);
+        console.warn(`[Referrals] Twilio not configured. Simulating referral letter SMS + PDF (${pdfFilename}) to`, formattedPhone);
       }
 
       const nowIso = new Date().toISOString();
@@ -6494,6 +6593,7 @@ async function startServer() {
         ...targetLetter,
         lastSmsSentAt: nowIso,
         lastSmsSentTo: formattedPhone,
+        lastSmsPdfUrl: pdfUrl,
         updatedAt: nowIso
       };
       saveLocalReferralLetter(updatedLetter);
@@ -6507,10 +6607,17 @@ async function startServer() {
         success: true,
         simulated,
         sid: twilioSid,
+        pdfAttached: true,
+        mmsMediaAttached,
+        pdfFilename,
+        pdfSizeBytes: pdfBuffer.length,
+        pdfUrl,
         letter: updatedLetter,
         message: simulated
-          ? `Referral Letter SMS simulated to ${formattedPhone} (Twilio credentials not configured in preview).`
-          : `Referral Letter text message successfully sent to ${formattedPhone}.`
+          ? `Referral Letter SMS + PDF (${pdfFilename}, ${pdfBuffer.length} bytes) simulated to ${formattedPhone} (Twilio credentials not configured in preview).`
+          : mmsMediaAttached
+          ? `Referral Letter PDF (${pdfFilename}) sent via MMS text to ${formattedPhone}.`
+          : `Referral Letter text message with PDF download link (${pdfFilename}) sent to ${formattedPhone}.`
       });
     } catch (err: any) {
       console.error("[API] Error texting referral letter:", err.message);
