@@ -626,6 +626,7 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
       <li><strong>Home Owners who experience Home Water, Fire, Smoke, and/or Mold damages and need temporary housing during repair</strong></li>
       <li><strong>Flight Attendants</strong></li>
       <li><strong>Musician housing who will perform at St. James Live 5 miles away</strong></li>
+      <li><strong>Future Home Owners transitioning; waiting on the Closing of their new Home</strong></li>
     </ul>
   </div>
   <div class="fee-box">
@@ -743,7 +744,7 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
     const feeVal = Number(l.referralFee || 0);
     const feeText = l.referralFeeType === 'percentage' ? `${feeVal}% of completed booking` : `$${feeVal.toFixed(2)} USD`;
     const feeLabel = isBus ? 'Bus. Referral Fee' : 'Ind. Referral Fee';
-    return `C&SH Group Properties, LLC — Referral Letter (${l.referralNumber}): Hi ${recipientName}, we welcome short-term rental referrals for Traveling Nurses, Home Owners who experience Home Water, Fire, Smoke, and/or Mold damages needing temporary housing during repair, Flight Attendants & Musicians performing at St. James Live (5 mi away). ${feeLabel}: ${feeText}. Guests enter Referral Number ${l.referralNumber} at booking; Referral Fees are paid 7 to 14 days after Guest checks out. Sincerely, Housing Management E:candsh@cashgroupproperties.com P:404-910-3194`;
+    return `C&SH Group Properties, LLC — Referral Letter (${l.referralNumber}): Hi ${recipientName}, we welcome short-term rental referrals for Traveling Nurses, Home Owners who experience Home Water, Fire, Smoke, and/or Mold damages needing temporary housing during repair, Flight Attendants, Musicians performing at St. James Live (5 mi away) & Future Home Owners transitioning; waiting on the Closing of their new Home. ${feeLabel}: ${feeText}. Guests enter Referral Number ${l.referralNumber} at booking; Referral Fees are paid 7 to 14 days after Guest checks out. Sincerely, Housing Management E:candsh@cashgroupproperties.com P:404-910-3194`;
   };
 
   const openSmsModal = (letterObj: ReferralLetter) => {
@@ -1768,6 +1769,9 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
                   <li className="font-semibold">
                     Musician housing who will perform at St. James Live 5 miles away
                   </li>
+                  <li className="font-semibold">
+                    Future Home Owners transitioning; waiting on the Closing of their new Home
+                  </li>
                 </ul>
               </div>
 
@@ -2496,7 +2500,7 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
               </div>
 
               <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-600 leading-relaxed">
-                Includes the tailored HTML Referral Letter highlighting short-term rental opportunities (Traveling Nurses, Home Owners with Home Water/Fire/Smoke/Mold Damage Temporary Housing, Flight Attendants, Musicians at St. James Live) plus a downloadable PDF copy attached automatically.
+                Includes the tailored HTML Referral Letter highlighting short-term rental opportunities (Traveling Nurses, Home Owners with Home Water/Fire/Smoke/Mold Damage Temporary Housing, Flight Attendants, Musicians at St. James Live, Future Home Owners transitioning / waiting on new Home Closing) plus a downloadable PDF copy attached automatically.
               </div>
 
               <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
