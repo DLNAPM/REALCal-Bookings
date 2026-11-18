@@ -2073,7 +2073,10 @@ async function sendReferralBookingNotifications({
   const guestName = entry?.guestName || 'Guest';
   const bookingRef = entry?.bookingRef || entry?.bookingId?.substring(0, 8).toUpperCase() || '';
 
-  const smsBody = `C&SH Group Properties, LLC Referral Notice: Hi ${contactName}, ${guestName} completed a booking (#${bookingRef}) at ${propName} (${checkIn} to ${checkOut}) using Referral Number ${refCode}. Your Referral Fee of ${feeStr} is recorded and you will receive your Referral Fee 7 to 14 days after Guest checks out (${checkOut}). Questions? P:404-910-3194 E:candsh@cashgroupproperties.com`;
+  const leadershipName = (letter?.leadershipName || '').trim();
+  const leadershipPhone = (letter?.leadershipPhone || '').trim() || '404-910-3194';
+
+  const smsBody = `C&SH Group Properties, LLC Referral Notice: Hi ${contactName}, ${guestName} completed a booking (#${bookingRef}) at ${propName} (${checkIn} to ${checkOut}) using Referral Number ${refCode}. Your Referral Fee of ${feeStr} is recorded and you will receive your Referral Fee 7 to 14 days after Guest checks out (${checkOut}). Questions? P:${leadershipPhone} E:candsh@cashgroupproperties.com`;
 
   const emailSubject = `Referral Fee Notice (${refCode}): Guest Booking Completed — Payout 7 to 14 Days After Check-Out`;
   const emailHtml = `
@@ -2106,10 +2109,11 @@ async function sendReferralBookingNotifications({
 
       <p style="font-size: 13px; color: #475569; margin-bottom: 0;">
         Sincerely,<br/>
+        ${leadershipName ? `<strong>${leadershipName}</strong><br/>` : ''}
         <strong>Housing Management</strong><br/>
         <strong>C&amp;SH Group Properties, LLC</strong><br/>
         E: candsh@cashgroupproperties.com<br/>
-        P: 404-910-3194
+        P: ${leadershipPhone}
       </p>
     </div>
   </div>`;
@@ -2369,6 +2373,8 @@ function getFormattedReferralLetterParts(letter: any) {
 
   const contactEmail = isBusiness ? (letter.contactEmail || '') : (letter.email || '');
   const contactPhone = isBusiness ? (letter.contactPhone || '') : (letter.phone || '');
+  const leadershipName = (letter.leadershipName || '').trim();
+  const leadershipPhone = (letter.leadershipPhone || '').trim() || '404-910-3194';
 
   return {
     isBusiness,
@@ -2378,7 +2384,9 @@ function getFormattedReferralLetterParts(letter: any) {
     attentionLine,
     salutation,
     contactEmail,
-    contactPhone
+    contactPhone,
+    leadershipName,
+    leadershipPhone
   };
 }
 
@@ -2432,11 +2440,11 @@ Future Guests can create their bookings online at RealCal Bookings (https://real
 
 ${letter.customClosingNote ? `${letter.customClosingNote}\n\n` : ''}We appreciate your partnership and look forward to welcoming your referred guests with quiet comfort, automated smart-lock entry, and dependable hospitality.
 
-Sincerely
-Housing Management
+Sincerely,
+${parts.leadershipName ? `${parts.leadershipName}\n` : ''}Housing Management
 C&SH Group Properties, LLC
 E:candsh@cashgroupproperties.com
-P:404-910-3194
+P:${parts.leadershipPhone}
 `;
 }
 
@@ -2444,7 +2452,7 @@ function buildReferralLetterSmsText(letter: any): string {
   const parts = getFormattedReferralLetterParts(letter);
   const greetingName = parts.isBusiness && parts.attentionLine ? parts.attentionLine : parts.recipientName;
   const feeLabel = parts.isBusiness ? 'Bus. Referral Fee' : 'Ind. Referral Fee';
-  return `C&SH Group Properties, LLC — Referral Letter (${letter.referralNumber}): Hi ${greetingName}, thank you for partnering with us! Open to short-term rentals for Traveling Nurses, Home Owners who experience Home Water, Fire, Smoke, and/or Mold damages needing temporary housing during repair, Flight Attendants, Musicians performing at St. James Live (5 mi away) & Future Home Owners transitioning; waiting on the Closing of their new Home. ${feeLabel}: ${parts.feeDisplay}. Future Guests can book at RealCal Bookings (https://realcal-bookings-tjrz.onrender.com) using code ${letter.referralNumber}; Referral Fees are paid 7 to 14 days after guest checks out. Sincerely, Housing Management E:candsh@cashgroupproperties.com P:404-910-3194`;
+  return `C&SH Group Properties, LLC — Referral Letter (${letter.referralNumber}): Hi ${greetingName}, thank you for partnering with us! Open to short-term rentals for Traveling Nurses, Home Owners who experience Home Water, Fire, Smoke, and/or Mold damages needing temporary housing during repair, Flight Attendants, Musicians performing at St. James Live (5 mi away) & Future Home Owners transitioning; waiting on the Closing of their new Home. ${feeLabel}: ${parts.feeDisplay}. Future Guests can book at RealCal Bookings (https://realcal-bookings-tjrz.onrender.com) using code ${letter.referralNumber}; Referral Fees are paid 7 to 14 days after guest checks out. Sincerely, ${parts.leadershipName ? `${parts.leadershipName}, ` : ''}Housing Management E:candsh@cashgroupproperties.com P:${parts.leadershipPhone}`;
 }
 
 function buildReferralLetterEmailHtml(letter: any): string {
@@ -2456,7 +2464,7 @@ function buildReferralLetterEmailHtml(letter: any): string {
     <div style="border-bottom: 2px solid #0f172a; padding-bottom: 18px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-start;">
       <div>
         <div style="font-family: Arial, sans-serif; font-size: 20px; font-weight: 800; color: #0f172a; letter-spacing: -0.02em;">C&amp;SH Group Properties, LLC</div>
-        <div style="font-family: Arial, sans-serif; font-size: 12px; color: #475569; margin-top: 4px;">E: candsh@cashgroupproperties.com &nbsp;&bull;&nbsp; P: 404-910-3194</div>
+        <div style="font-family: Arial, sans-serif; font-size: 12px; color: #475569; margin-top: 4px;">E: candsh@cashgroupproperties.com &nbsp;&bull;&nbsp; P: ${parts.leadershipPhone}</div>
       </div>
       <div style="text-align: right; font-family: Arial, sans-serif;">
         <div style="font-size: 11px; color: #64748b; font-weight: 700; text-transform: uppercase;">Referral Number</div>
@@ -2516,11 +2524,12 @@ function buildReferralLetterEmailHtml(letter: any): string {
     ${letter.customClosingNote ? `<p style="font-size: 15px; line-height: 1.7; margin-bottom: 16px;">${letter.customClosingNote}</p>` : ''}
 
     <div style="margin-top: 28px; padding-top: 18px; border-top: 1px solid #e2e8f0; font-family: Arial, sans-serif; font-size: 13px; line-height: 1.7; color: #0f172a;">
-      <div>Sincerely</div>
-      <div style="font-weight: 700; margin-top: 4px;">Housing Management</div>
+      <div>Sincerely,</div>
+      ${parts.leadershipName ? `<div style="font-weight: 700; margin-top: 4px;">${parts.leadershipName}</div>` : ''}
+      <div style="font-weight: 700; ${parts.leadershipName ? '' : 'margin-top: 4px;'}">Housing Management</div>
       <div style="font-weight: 700;">C&amp;SH Group Properties, LLC</div>
       <div>E:candsh@cashgroupproperties.com</div>
-      <div>P:404-910-3194</div>
+      <div>P:${parts.leadershipPhone}</div>
     </div>
   </div>`;
 }
@@ -2536,7 +2545,7 @@ async function createReferralLetterPDF(letter: any): Promise<Buffer> {
 
       // Header Band
       doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(18).text('C&SH Group Properties, LLC', 54, 52);
-      doc.font('Helvetica').fontSize(9.5).fillColor('#475569').text('E:candsh@cashgroupproperties.com  |  P:404-910-3194', 54, 74);
+      doc.font('Helvetica').fontSize(9.5).fillColor('#475569').text(`E:candsh@cashgroupproperties.com  |  P:${parts.leadershipPhone}`, 54, 74);
 
       doc.font('Helvetica-Bold').fontSize(9).fillColor('#64748b').text('REFERRAL NUMBER', 380, 52, { width: 178, align: 'right' });
       doc.font('Courier-Bold').fontSize(13).fillColor('#4338ca').text(letter.referralNumber || 'N/A', 380, 64, { width: 178, align: 'right' });
@@ -2654,12 +2663,17 @@ async function createReferralLetterPDF(letter: any): Promise<Buffer> {
         y = doc.y + 14;
       }
 
-      // Signature Block (Exact wording requested)
-      doc.font('Helvetica').fontSize(10.5).fillColor('#0f172a').text('Sincerely', 54, y);
-      doc.font('Helvetica-Bold').fontSize(10.5).text('Housing Management', 54, y + 16);
-      doc.font('Helvetica-Bold').fontSize(10.5).text('C&SH Group Properties, LLC', 54, y + 31);
-      doc.font('Helvetica').fontSize(10).fillColor('#334155').text('E:candsh@cashgroupproperties.com', 54, y + 46);
-      doc.font('Helvetica').fontSize(10).fillColor('#334155').text('P:404-910-3194', 54, y + 60);
+      // Signature Block
+      doc.font('Helvetica').fontSize(10.5).fillColor('#0f172a').text('Sincerely,', 54, y);
+      let sy = y + 16;
+      if (parts.leadershipName) {
+        doc.font('Helvetica-Bold').fontSize(10.5).text(parts.leadershipName, 54, sy);
+        sy += 15;
+      }
+      doc.font('Helvetica-Bold').fontSize(10.5).text('Housing Management', 54, sy);
+      doc.font('Helvetica-Bold').fontSize(10.5).text('C&SH Group Properties, LLC', 54, sy + 15);
+      doc.font('Helvetica').fontSize(10).fillColor('#334155').text('E:candsh@cashgroupproperties.com', 54, sy + 30);
+      doc.font('Helvetica').fontSize(10).fillColor('#334155').text(`P:${parts.leadershipPhone}`, 54, sy + 44);
 
       doc.end();
     } catch (err) {
@@ -6218,6 +6232,8 @@ async function startServer() {
         referralFeeType: data.referralFeeType === 'percentage' ? 'percentage' : 'flat',
         customOpeningNote: (data.customOpeningNote || '').trim(),
         customClosingNote: (data.customClosingNote || '').trim(),
+        leadershipName: (data.leadershipName || '').trim(),
+        leadershipPhone: (data.leadershipPhone || '').trim() || '404-910-3194',
         letterDate: data.letterDate || existing?.letterDate || nowIso.split('T')[0],
         publishedAt: status === 'published' ? (existing?.publishedAt || nowIso) : existing?.publishedAt || null,
         lastEmailedAt: existing?.lastEmailedAt || null,

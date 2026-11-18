@@ -364,6 +364,8 @@ export interface ReferralLetter {
   // Letter customization
   customOpeningNote?: string;
   customClosingNote?: string;
+  leadershipName?: string;
+  leadershipPhone?: string;
   letterDate?: string;
   publishedAt?: string;
   lastEmailedAt?: string;

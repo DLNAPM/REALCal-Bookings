@@ -5694,6 +5694,10 @@ C.&S.H. Group Properties, LLC
             currentUser={user}
             bookings={bookings}
             properties={properties}
+            propertyManagers={propertyManagers}
+            ceoName={ceoName}
+            pmName={pmName}
+            defaultLeadershipPhone={contactUsPhone}
             onPublishedLettersUpdate={setPublishedReferralLetters}
           />
 

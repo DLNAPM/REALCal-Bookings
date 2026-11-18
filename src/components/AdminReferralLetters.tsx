@@ -26,6 +26,7 @@ import {
 import {
   Booking,
   Property,
+  PropertyManager,
   ReferralLetter,
   ReferralLedgerEntry,
   ReferralRecipientType,
@@ -37,8 +38,25 @@ interface AdminReferralLettersProps {
   currentUser: { email?: string; displayName?: string; role?: string } | null;
   bookings: Booking[];
   properties: Property[];
+  propertyManagers?: PropertyManager[];
+  ceoName?: string;
+  pmName?: string;
+  defaultLeadershipPhone?: string;
   onPublishedLettersUpdate?: (publishedLetters: ReferralLetter[]) => void;
 }
+
+const formatLeadershipPhone = (raw?: string, fallback = '404-910-3194'): string => {
+  const trimmed = (raw || '').trim();
+  if (!trimmed) return fallback;
+  const digits = trimmed.replace(/\D/g, '');
+  if (digits.length === 11 && digits.startsWith('1')) {
+    return `${digits.slice(1, 4)}-${digits.slice(4, 7)}-${digits.slice(7, 11)}`;
+  }
+  if (digits.length === 10) {
+    return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
+  }
+  return trimmed;
+};
 
 const generateLocalReferralCode = (type: ReferralRecipientType): string => {
   const prefix = type === 'business' ? 'REF-BUS' : 'REF-IND';
@@ -51,6 +69,10 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
   currentUser,
   bookings,
   properties,
+  propertyManagers = [],
+  ceoName,
+  pmName,
+  defaultLeadershipPhone,
   onPublishedLettersUpdate
 }) => {
   const [subTab, setSubTab] = useState<'studio' | 'directory' | 'ledger'>('studio');
@@ -86,9 +108,78 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
   const [referralFee, setReferralFee] = useState<string>('150');
   const [referralFeeType, setReferralFeeType] = useState<ReferralFeeType>('flat');
 
-  // Optional custom notes for Draft Review
+  // Optional custom notes & Leadership Signature
   const [customOpeningNote, setCustomOpeningNote] = useState<string>('');
   const [customClosingNote, setCustomClosingNote] = useState<string>('');
+  const [leadershipName, setLeadershipName] = useState<string>('');
+  const [leadershipPhone, setLeadershipPhone] = useState<string>(() =>
+    formatLeadershipPhone(defaultLeadershipPhone, '404-910-3194')
+  );
+
+  const baseLeadershipOptions = useMemo(() => {
+    const fallbackPhone = formatLeadershipPhone(defaultLeadershipPhone, '404-910-3194');
+    const seen = new Set<string>();
+    const options: { name: string; phone: string; label?: string }[] = [];
+
+    const addOption = (nameRaw?: string, phoneRaw?: string, label?: string) => {
+      const name = (nameRaw || '').trim();
+      if (!name) return;
+      const key = name.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      options.push({
+        name,
+        phone: formatLeadershipPhone(phoneRaw, fallbackPhone),
+        label
+      });
+    };
+
+    const sortedManagers = [...propertyManagers].sort((a, b) => {
+      const aEnabled = a.enabled !== false ? 0 : 1;
+      const bEnabled = b.enabled !== false ? 0 : 1;
+      return aEnabled - bEnabled;
+    });
+
+    for (const mgr of sortedManagers) {
+      addOption(mgr.name, mgr.phone, mgr.enabled === false ? 'Inactive Manager' : 'Property Manager');
+    }
+
+    addOption(ceoName || 'Cynthia S. H. Robinson', fallbackPhone, 'CEO');
+    addOption(pmName || 'Markus Vance', fallbackPhone, 'Property Manager');
+
+    return options;
+  }, [propertyManagers, ceoName, pmName, defaultLeadershipPhone]);
+
+  const leadershipOptions = useMemo(() => {
+    const trimmed = leadershipName.trim();
+    if (
+      trimmed &&
+      !baseLeadershipOptions.some((opt) => opt.name.toLowerCase() === trimmed.toLowerCase())
+    ) {
+      return [
+        ...baseLeadershipOptions,
+        {
+          name: trimmed,
+          phone: formatLeadershipPhone(leadershipPhone || defaultLeadershipPhone, '404-910-3194'),
+          label: 'Saved'
+        }
+      ];
+    }
+    return baseLeadershipOptions;
+  }, [baseLeadershipOptions, leadershipName, leadershipPhone, defaultLeadershipPhone]);
+
+  useEffect(() => {
+    if (!editingId && !leadershipName && baseLeadershipOptions.length > 0) {
+      setLeadershipName(baseLeadershipOptions[0].name);
+      setLeadershipPhone(baseLeadershipOptions[0].phone);
+    }
+  }, [editingId, leadershipName, baseLeadershipOptions]);
+
+  const handleLeadershipSelect = (selectedName: string) => {
+    const match = leadershipOptions.find((opt) => opt.name === selectedName);
+    setLeadershipName(selectedName);
+    setLeadershipPhone(match?.phone || formatLeadershipPhone(defaultLeadershipPhone, '404-910-3194'));
+  };
 
   // Feedback & Operation states
   const [savingDraft, setSavingDraft] = useState<boolean>(false);
@@ -327,6 +418,11 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
     setReferralFeeType('flat');
     setCustomOpeningNote('');
     setCustomClosingNote('');
+    const defaultLeader = baseLeadershipOptions[0];
+    setLeadershipName(defaultLeader?.name || '');
+    setLeadershipPhone(
+      defaultLeader?.phone || formatLeadershipPhone(defaultLeadershipPhone, '404-910-3194')
+    );
     setFeedbackBanner(null);
   };
 
@@ -351,6 +447,17 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
     setReferralFeeType(l.referralFeeType || 'flat');
     setCustomOpeningNote(l.customOpeningNote || '');
     setCustomClosingNote(l.customClosingNote || '');
+    const defaultLeader = baseLeadershipOptions[0];
+    const resolvedName = (l.leadershipName || '').trim() || defaultLeader?.name || '';
+    const matchedOpt = baseLeadershipOptions.find(
+      (opt) => opt.name.toLowerCase() === resolvedName.toLowerCase()
+    );
+    setLeadershipName(resolvedName);
+    setLeadershipPhone(
+      (l.leadershipPhone || '').trim() ||
+        matchedOpt?.phone ||
+        formatLeadershipPhone(defaultLeadershipPhone, '404-910-3194')
+    );
     setFeedbackBanner(null);
     setSubTab('studio');
   };
@@ -396,6 +503,9 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
     referralFeeType,
     customOpeningNote: customOpeningNote.trim(),
     customClosingNote: customClosingNote.trim(),
+    leadershipName: leadershipName.trim(),
+    leadershipPhone:
+      leadershipPhone.trim() || formatLeadershipPhone(defaultLeadershipPhone, '404-910-3194'),
     letterDate,
     createdBy: currentUser?.email || 'Admin'
   });
@@ -482,6 +592,8 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
       referralFeeType,
       customOpeningNote,
       customClosingNote,
+      leadershipName,
+      leadershipPhone,
       letterDate,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -506,6 +618,8 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
     referralFeeType,
     customOpeningNote,
     customClosingNote,
+    leadershipName,
+    leadershipPhone,
     letterDate
   ]);
 
@@ -567,6 +681,8 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
         })
       : new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
     const salutation = isBus ? `Dear ${attn || recipientName},` : `Dear ${l.firstName || recipientName},`;
+    const sigName = (l.leadershipName || '').trim();
+    const sigPhone = formatLeadershipPhone(l.leadershipPhone, '404-910-3194');
 
     return `<!DOCTYPE html>
 <html>
@@ -599,7 +715,7 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
   <div class="header">
     <div>
       <div class="company">C&amp;SH Group Properties, LLC</div>
-      <div class="meta">E:candsh@cashgroupproperties.com &nbsp;&bull;&nbsp; P:404-910-3194</div>
+      <div class="meta">E:candsh@cashgroupproperties.com &nbsp;&bull;&nbsp; P:${sigPhone}</div>
     </div>
     <div class="ref-box">
       <div class="ref-label">Referral Number</div>
@@ -637,11 +753,12 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
   </div>
   ${l.customClosingNote ? `<p style="font-size: 15px; line-height: 1.65;">${l.customClosingNote}</p>` : ''}
   <div class="sig">
-    <div>Sincerely</div>
-    <div style="font-weight:bold; margin-top:4px;">Housing Management</div>
+    <div>Sincerely,</div>
+    ${sigName ? `<div style="font-weight:bold; margin-top:4px;">${sigName}</div>` : ''}
+    <div style="font-weight:bold; ${sigName ? '' : 'margin-top:4px;'}">Housing Management</div>
     <div style="font-weight:bold;">C&amp;SH Group Properties, LLC</div>
     <div>E:candsh@cashgroupproperties.com</div>
-    <div>P:404-910-3194</div>
+    <div>P:${sigPhone}</div>
   </div>
 </body>
 </html>`;
@@ -745,7 +862,9 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
     const feeVal = Number(l.referralFee || 0);
     const feeText = l.referralFeeType === 'percentage' ? `${feeVal}% of completed booking` : `$${feeVal.toFixed(2)} USD`;
     const feeLabel = isBus ? 'Bus. Referral Fee' : 'Ind. Referral Fee';
-    return `C&SH Group Properties, LLC — Referral Letter (${l.referralNumber}): Hi ${recipientName}, we welcome short-term rental referrals for Traveling Nurses, Home Owners who experience Home Water, Fire, Smoke, and/or Mold damages needing temporary housing during repair, Flight Attendants, Musicians performing at St. James Live (5 mi away) & Future Home Owners transitioning; waiting on the Closing of their new Home. ${feeLabel}: ${feeText}. Future Guests can create bookings at RealCal Bookings (https://realcal-bookings-tjrz.onrender.com) using Referral Number ${l.referralNumber}; Referral Fees are paid 7 to 14 days after Guest checks out. Sincerely, Housing Management E:candsh@cashgroupproperties.com P:404-910-3194`;
+    const sigName = (l.leadershipName || '').trim();
+    const sigPhone = formatLeadershipPhone(l.leadershipPhone, '404-910-3194');
+    return `C&SH Group Properties, LLC — Referral Letter (${l.referralNumber}): Hi ${recipientName}, we welcome short-term rental referrals for Traveling Nurses, Home Owners who experience Home Water, Fire, Smoke, and/or Mold damages needing temporary housing during repair, Flight Attendants, Musicians performing at St. James Live (5 mi away) & Future Home Owners transitioning; waiting on the Closing of their new Home. ${feeLabel}: ${feeText}. Future Guests can create bookings at RealCal Bookings (https://realcal-bookings-tjrz.onrender.com) using Referral Number ${l.referralNumber}; Referral Fees are paid 7 to 14 days after Guest checks out. Sincerely, ${sigName ? `${sigName}, ` : ''}Housing Management E:candsh@cashgroupproperties.com P:${sigPhone}`;
   };
 
   const openSmsModal = (letterObj: ReferralLetter) => {
@@ -1702,7 +1821,7 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
                     C&amp;SH Group Properties, LLC
                   </div>
                   <div className="text-xs text-slate-600 mt-1">
-                    E:candsh@cashgroupproperties.com &middot; P:404-910-3194
+                    E:candsh@cashgroupproperties.com &middot; P:{leadershipPhone || formatLeadershipPhone(defaultLeadershipPhone, '404-910-3194')}
                   </div>
                 </div>
                 <div className="sm:text-right">
@@ -1813,13 +1932,52 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
 
               {customClosingNote.trim() && <p className="text-sm mb-4">{customClosingNote.trim()}</p>}
 
-              {/* Mandatory Exact Signature */}
-              <div className="mt-8 pt-4 border-t border-slate-200 font-sans text-xs text-slate-800 space-y-0.5">
-                <div>Sincerely</div>
-                <div className="font-bold text-slate-900 pt-1">Housing Management</div>
-                <div className="font-bold text-slate-900">C&amp;SH Group Properties, LLC</div>
-                <div>E:candsh@cashgroupproperties.com</div>
-                <div>P:404-910-3194</div>
+              {/* Interactive Signature Block with Leadership Name Dropdown */}
+              <div className="mt-8 pt-4 border-t border-slate-200 font-sans text-xs text-slate-800 space-y-2.5">
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                  <div className="flex-1">
+                    <label
+                      htmlFor="referral-leadership-select"
+                      className="block text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1"
+                    >
+                      Signature Block — Select Leadership Name
+                    </label>
+                    <select
+                      id="referral-leadership-select"
+                      value={leadershipName}
+                      onChange={(e) => handleLeadershipSelect(e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      {leadershipOptions.map((opt) => (
+                        <option key={opt.name} value={opt.name}>
+                          {opt.name}
+                          {opt.label ? ` (${opt.label})` : ''} — {opt.phone}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="sm:text-right shrink-0">
+                    <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                      Leadership Phone
+                    </div>
+                    <div className="text-xs font-mono font-bold text-indigo-700 mt-0.5">
+                      {leadershipPhone || formatLeadershipPhone(defaultLeadershipPhone, '404-910-3194')}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-0.5 pt-1">
+                  <div>Sincerely,</div>
+                  {leadershipName && (
+                    <div className="font-bold text-slate-900 pt-1">{leadershipName}</div>
+                  )}
+                  <div className={cn('font-bold text-slate-900', !leadershipName && 'pt-1')}>
+                    Housing Management
+                  </div>
+                  <div className="font-bold text-slate-900">C&amp;SH Group Properties, LLC</div>
+                  <div>E:candsh@cashgroupproperties.com</div>
+                  <div>P:{leadershipPhone || formatLeadershipPhone(defaultLeadershipPhone, '404-910-3194')}</div>
+                </div>
               </div>
             </div>
           </div>
