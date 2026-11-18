@@ -2417,7 +2417,7 @@ ${letter.customOpeningNote ? `${letter.customOpeningNote}\n\n` : ''}C&SH Group P
 
 C&SH Group Properties, LLC is open to short Term Rental related to:
   * Traveling Nurses
-  * Individuals who experience water damage in their home and need temporary housing during repair
+  * Home Owners who experience Home Water, Fire, Smoke, and/or Mold damages and need temporary housing during repair
   * Flight Attendants
   * Musician housing who will perform at St. James Live 5 miles away
 
@@ -2441,7 +2441,7 @@ function buildReferralLetterSmsText(letter: any): string {
   const parts = getFormattedReferralLetterParts(letter);
   const greetingName = parts.isBusiness && parts.attentionLine ? parts.attentionLine : parts.recipientName;
   const feeLabel = parts.isBusiness ? 'Bus. Referral Fee' : 'Ind. Referral Fee';
-  return `C&SH Group Properties, LLC — Referral Letter (${letter.referralNumber}): Hi ${greetingName}, thank you for partnering with us! Open to short-term rentals for Traveling Nurses, Water Damage Temp Housing, Flight Attendants & Musicians performing at St. James Live (5 mi away). ${feeLabel}: ${parts.feeDisplay}. Share code ${letter.referralNumber} with guests at booking; Referral Fees are paid 7 to 14 days after guest checks out. Sincerely, Housing Management E:candsh@cashgroupproperties.com P:404-910-3194`;
+  return `C&SH Group Properties, LLC — Referral Letter (${letter.referralNumber}): Hi ${greetingName}, thank you for partnering with us! Open to short-term rentals for Traveling Nurses, Home Owners who experience Home Water, Fire, Smoke, and/or Mold damages needing temporary housing during repair, Flight Attendants & Musicians performing at St. James Live (5 mi away). ${feeLabel}: ${parts.feeDisplay}. Share code ${letter.referralNumber} with guests at booking; Referral Fees are paid 7 to 14 days after guest checks out. Sincerely, Housing Management E:candsh@cashgroupproperties.com P:404-910-3194`;
 }
 
 function buildReferralLetterEmailHtml(letter: any): string {
@@ -2489,7 +2489,7 @@ function buildReferralLetterEmailHtml(letter: any): string {
       </p>
       <ul style="font-family: Arial, sans-serif; font-size: 13px; color: #1e293b; line-height: 1.8; margin: 0; padding-left: 20px;">
         <li><strong>Traveling Nurses</strong></li>
-        <li><strong>Individuals who experience water damage in their home and need temporary housing during repair</strong></li>
+        <li><strong>Home Owners who experience Home Water, Fire, Smoke, and/or Mold damages and need temporary housing during repair</strong></li>
         <li><strong>Flight Attendants</strong></li>
         <li><strong>Musician housing who will perform at St. James Live 5 miles away</strong></li>
       </ul>
@@ -2594,7 +2594,7 @@ async function createReferralLetterPDF(letter: any): Promise<Buffer> {
 
       // Highlight Box
       const boxStartY = y;
-      doc.rect(54, boxStartY, 504, 108).fillAndStroke('#f8fafc', '#cbd5e1');
+      doc.rect(54, boxStartY, 504, 120).fillAndStroke('#f8fafc', '#cbd5e1');
       doc.font('Helvetica-Bold').fontSize(10).fillColor('#0f172a').text(
         'C&SH Group Properties, LLC is open to short Term Rental related to:',
         68,
@@ -2604,7 +2604,7 @@ async function createReferralLetterPDF(letter: any): Promise<Buffer> {
 
       const highlights = [
         '• Traveling Nurses',
-        '• Individuals who experience water damage in their home and need temporary housing during repair',
+        '• Home Owners who experience Home Water, Fire, Smoke, and/or Mold damages and need temporary housing during repair',
         '• Flight Attendants',
         '• Musician housing who will perform at St. James Live 5 miles away'
       ];
@@ -2614,7 +2614,7 @@ async function createReferralLetterPDF(letter: any): Promise<Buffer> {
         hy = doc.y + 4;
       });
 
-      y = boxStartY + 122;
+      y = boxStartY + 134;
 
       // Fee & Tracking Box
       const feeLabel = parts.isBusiness ? 'Bus. Referral Fee' : 'Ind. Referral Fee';
