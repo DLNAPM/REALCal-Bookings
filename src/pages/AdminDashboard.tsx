@@ -12,6 +12,7 @@ import { ProofOfResidencyModal } from '../components/ProofOfResidencyModal';
 import { AdminAlarmsBanner, AdminAlarmsModal } from '../components/AdminAlarmsPanel';
 import { AdminSurveyReminders } from '../components/AdminSurveyReminders';
 import { AdminReferralLetters } from '../components/AdminReferralLetters';
+import { AdminEventsLineup } from '../components/AdminEventsLineup';
 import { INITIAL_REVIEWS } from '../data/initialReviews';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -3752,6 +3753,16 @@ C.&S.H. Group Properties, LLC
                         >
                           <FileText size={14} className="text-emerald-700" /> Referral Letter
                         </button>
+                        <button
+                          onClick={() => {
+                            const el = document.getElementById('admin-events-lineup-section');
+                            if (el) el.scrollIntoView({ behavior: 'smooth' });
+                          }}
+                          className="text-xs bg-[#0b192c] text-white hover:bg-slate-800 border border-[#0b192c] font-bold px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer whitespace-nowrap"
+                          title="Generate & Distribute Events LineUp Publication (Sports, Nightlife & Concerts, Family, Kids) to Current Booked Guests"
+                        >
+                          <CalendarIcon size={14} className="text-[#c9a86a]" /> Events LineUp
+                        </button>
                         <div className="relative group">
                             <button onClick={handleSeedTestData} className="text-xs bg-indigo-100 text-indigo-700 font-bold px-3 py-1.5 rounded-lg hover:bg-indigo-200 transition-colors flex items-center gap-1">
                                Seed Test Data
@@ -5699,6 +5710,14 @@ C.&S.H. Group Properties, LLC
             pmName={pmName}
             defaultLeadershipPhone={contactUsPhone}
             onPublishedLettersUpdate={setPublishedReferralLetters}
+          />
+
+          {/* Events LineUp Concierge Publication (Sports, Nightlife & Concerts, Family, Kids) */}
+          <AdminEventsLineup
+            currentUser={user}
+            bookings={bookings}
+            properties={properties}
+            defaultContactPhone={contactUsPhone}
           />
 
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm mt-8">

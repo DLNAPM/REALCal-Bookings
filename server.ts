@@ -2709,6 +2709,376 @@ async function createReferralLetterPDF(letter: any): Promise<Buffer> {
   });
 }
 
+// ============================================================
+// EVENTS LINEUP PUBLICATION (AMEX-INSPIRED CONCIERGE EDITION)
+// ============================================================
+const EVENTS_LINEUP_FILE = path.resolve(process.cwd(), "data", "events-lineup.json");
+
+function getLocalEventsLineups(): any[] {
+  try {
+    if (fs.existsSync(EVENTS_LINEUP_FILE)) {
+      const raw = fs.readFileSync(EVENTS_LINEUP_FILE, "utf-8");
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    }
+  } catch (e) {
+    console.warn("[EventsLineup] Could not read local cache:", e);
+  }
+  return [];
+}
+
+function saveLocalEventsLineup(pub: any) {
+  try {
+    const dir = path.dirname(EVENTS_LINEUP_FILE);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const list = getLocalEventsLineups().filter((x: any) => x.id !== pub.id);
+    list.unshift(pub);
+    fs.writeFileSync(EVENTS_LINEUP_FILE, JSON.stringify(list.slice(0, 30), null, 2), "utf-8");
+  } catch (e) {
+    console.error("[EventsLineup] Error writing local events lineup:", e);
+  }
+}
+
+async function getEventsLineupByIdMerged(id: string): Promise<any | null> {
+  const local = getLocalEventsLineups().find((x: any) => x.id === id);
+  if (local) return local;
+  if (db) {
+    try {
+      const docSnap = await db.collection("events_lineup_publications").doc(id).get();
+      if (docSnap.exists) return { id: docSnap.id, ...docSnap.data() };
+    } catch {}
+  }
+  return null;
+}
+
+const EVENTS_LINEUP_CATEGORY_DEFS = [
+  { key: 'sports', number: '01', label: 'Sports' },
+  { key: 'nightlife', number: '02', label: 'Nightlife & Concerts' },
+  { key: 'family', number: '03', label: 'Family' },
+  { key: 'kids', number: '04', label: 'Kids' },
+] as const;
+
+function sanitizeEventsLineupPub(raw: any = {}) {
+  const cats = raw.categories || {};
+  const normalizeList = (arr: any) =>
+    Array.isArray(arr)
+      ? arr.map((ev: any) => ({
+          id: String(ev?.id || ''),
+          title: String(ev?.title || 'Local Event').trim(),
+          date: String(ev?.date || '').trim(),
+          venue: String(ev?.venue || '').trim(),
+          distance: String(ev?.distance || '').trim(),
+          description: String(ev?.description || '').trim(),
+          ticketUrl: String(ev?.ticketUrl || '').trim(),
+        }))
+      : [];
+
+  return {
+    id: String(raw.id || `lineup-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`),
+    editionTitle: String(raw.editionTitle || 'THE EVENTS LINEUP').trim(),
+    editionSubtitle: String(raw.editionSubtitle || 'C&SH Group Properties, LLC · Concierge Edition').trim(),
+    propertyName: String(raw.propertyName || 'Stonewall Villa').trim(),
+    windowLabel: String(raw.windowLabel || 'Next 30 Days').trim(),
+    introNote: String(
+      raw.introNote ||
+        'Enjoy exclusive concierge-curated sporting matchups, live concerts & nightlife, family outings, and kid-friendly adventures nearby during your stay.'
+    ).trim(),
+    leadershipPhone: String(raw.leadershipPhone || '404-910-3194').trim(),
+    leadershipEmail: String(raw.leadershipEmail || 'candsh@cashgroupproperties.com').trim(),
+    categories: {
+      sports: normalizeList(cats.sports),
+      nightlife: normalizeList(cats.nightlife),
+      family: normalizeList(cats.family),
+      kids: normalizeList(cats.kids),
+    },
+    createdAt: raw.createdAt || new Date().toISOString(),
+  };
+}
+
+async function createEventsLineupPDF(rawPub: any): Promise<Buffer> {
+  const pub = sanitizeEventsLineupPub(rawPub);
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({ margin: 44, size: 'LETTER' });
+      const buffers: Buffer[] = [];
+      doc.on('data', buffers.push.bind(buffers));
+      doc.on('end', () => resolve(Buffer.concat(buffers)));
+
+      const PAGE_W = 612;
+      const PAGE_H = 792;
+      const LEFT = 44;
+      const RIGHT = 568;
+      const CONTENT_W = RIGHT - LEFT;
+
+      const drawFooter = () => {
+        doc
+          .strokeColor('#cbd5e1')
+          .lineWidth(0.75)
+          .moveTo(LEFT, PAGE_H - 42)
+          .lineTo(RIGHT, PAGE_H - 42)
+          .stroke();
+        doc
+          .font('Helvetica')
+          .fontSize(8)
+          .fillColor('#64748b')
+          .text(
+            `${pub.editionTitle}  |  ${pub.propertyName}  |  ${pub.windowLabel}  |  E:${pub.leadershipEmail}  |  P:${pub.leadershipPhone}`,
+            LEFT,
+            PAGE_H - 34,
+            { width: CONTENT_W, align: 'center' }
+          );
+      };
+
+      const ensureSpace = (needed: number, currentY: number): number => {
+        if (currentY + needed > PAGE_H - 54) {
+          drawFooter();
+          doc.addPage();
+          doc.rect(LEFT, 36, CONTENT_W, 3).fill('#c9a86a');
+          doc
+            .font('Helvetica-Bold')
+            .fontSize(8.5)
+            .fillColor('#0b192c')
+            .text(`${pub.editionTitle} — ${pub.propertyName.toUpperCase()}`, LEFT, 45);
+          doc
+            .font('Helvetica')
+            .fontSize(8.5)
+            .fillColor('#64748b')
+            .text(pub.windowLabel, LEFT, 45, { width: CONTENT_W, align: 'right' });
+          doc.strokeColor('#e2e8f0').lineWidth(0.75).moveTo(LEFT, 60).lineTo(RIGHT, 60).stroke();
+          return 72;
+        }
+        return currentY;
+      };
+
+      // Masthead Band (AMEX Lineup inspired Midnight Navy & Gold)
+      doc.rect(LEFT, 38, CONTENT_W, 92).fill('#0b192c');
+      doc.rect(LEFT, 38, CONTENT_W, 4).fill('#c9a86a');
+
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(8.5)
+        .fillColor('#c9a86a')
+        .text('C&SH GROUP PROPERTIES, LLC  ·  GUEST CONCIERGE EDITION', LEFT + 20, 52, {
+          width: CONTENT_W - 40,
+        });
+
+      doc
+        .font('Times-Bold')
+        .fontSize(26)
+        .fillColor('#ffffff')
+        .text(pub.editionTitle.toUpperCase(), LEFT + 20, 68, { width: CONTENT_W - 40 });
+
+      doc
+        .font('Helvetica')
+        .fontSize(10)
+        .fillColor('#cbd5e1')
+        .text(`${pub.propertyName}  ·  ${pub.windowLabel}  ·  Sports · Nightlife & Concerts · Family · Kids`, LEFT + 20, 102, {
+          width: CONTENT_W - 40,
+        });
+
+      let y = 144;
+
+      // Intro Note
+      if (pub.introNote) {
+        doc.font('Times-Roman').fontSize(10.5).fillColor('#334155').text(pub.introNote, LEFT, y, {
+          width: CONTENT_W,
+          lineGap: 2.5,
+        });
+        y = doc.y + 16;
+      }
+
+      // 4 Category Sections: Sports, Nightlife & Concerts, Family, Kids
+      for (const catDef of EVENTS_LINEUP_CATEGORY_DEFS) {
+        const items: any[] = (pub.categories as any)[catDef.key] || [];
+        y = ensureSpace(72, y);
+
+        // Category Section Header Bar
+        doc.rect(LEFT, y, CONTENT_W, 24).fill('#f1f5f9');
+        doc.rect(LEFT, y, CONTENT_W, 2).fill('#0b192c');
+        doc
+          .font('Helvetica-Bold')
+          .fontSize(11)
+          .fillColor('#0b192c')
+          .text(`${catDef.number}.  ${catDef.label.toUpperCase()}`, LEFT + 10, y + 6, {
+            width: CONTENT_W - 110,
+          });
+        doc
+          .font('Helvetica')
+          .fontSize(9)
+          .fillColor('#475569')
+          .text(`${items.length} Event${items.length === 1 ? '' : 's'}`, LEFT + 10, y + 7, {
+            width: CONTENT_W - 20,
+            align: 'right',
+          });
+
+        y += 32;
+
+        if (items.length === 0) {
+          doc
+            .font('Helvetica-Oblique')
+            .fontSize(9.5)
+            .fillColor('#64748b')
+            .text(`No upcoming ${catDef.label.toLowerCase()} listings currently scheduled for this date window.`, LEFT + 6, y, {
+              width: CONTENT_W - 12,
+            });
+          y = doc.y + 14;
+          continue;
+        }
+
+        for (const ev of items) {
+          y = ensureSpace(68, y);
+
+          const metaLine = [ev.date, ev.venue, ev.distance].filter(Boolean).join('  ·  ');
+          doc
+            .font('Helvetica-Bold')
+            .fontSize(10.5)
+            .fillColor('#0f172a')
+            .text(ev.title, LEFT + 6, y, { width: CONTENT_W - 12 });
+          y = doc.y + 2;
+
+          if (metaLine) {
+            doc
+              .font('Helvetica-Bold')
+              .fontSize(8.5)
+              .fillColor('#1d4ed8')
+              .text(metaLine, LEFT + 6, y, { width: CONTENT_W - 12 });
+            y = doc.y + 2;
+          }
+
+          if (ev.description) {
+            doc
+              .font('Helvetica')
+              .fontSize(9)
+              .fillColor('#334155')
+              .text(ev.description, LEFT + 6, y, { width: CONTENT_W - 12, lineGap: 1.5 });
+            y = doc.y + 2;
+          }
+
+          if (ev.ticketUrl) {
+            doc
+              .font('Helvetica-Bold')
+              .fontSize(8.5)
+              .fillColor('#0b192c')
+              .text(`Tickets & Details: ${ev.ticketUrl}`, LEFT + 6, y, {
+                width: CONTENT_W - 12,
+                link: ev.ticketUrl,
+                underline: true,
+              });
+            y = doc.y + 4;
+          }
+
+          doc.strokeColor('#e2e8f0').lineWidth(0.5).moveTo(LEFT + 6, y + 2).lineTo(RIGHT - 6, y + 2).stroke();
+          y += 10;
+        }
+
+        y += 6;
+      }
+
+      drawFooter();
+      doc.end();
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+function buildEventsLineupPlainText(rawPub: any, guestName?: string): string {
+  const pub = sanitizeEventsLineupPub(rawPub);
+  const greeting = guestName ? `Hi ${guestName},` : 'Hello Guest,';
+  const sectionsText = EVENTS_LINEUP_CATEGORY_DEFS.map((cat) => {
+    const items: any[] = (pub.categories as any)[cat.key] || [];
+    const lines =
+      items.length === 0
+        ? [`  • No scheduled ${cat.label.toLowerCase()} events in this window.`]
+        : items.map(
+            (ev: any) =>
+              `  • ${ev.title}\n    ${[ev.date, ev.venue, ev.distance].filter(Boolean).join(' · ')}\n    ${ev.description ? `${ev.description}\n    ` : ''}${ev.ticketUrl ? `Tickets/Info: ${ev.ticketUrl}` : ''}`
+          );
+    return `${cat.number}. ${cat.label.toUpperCase()} (${items.length})\n${lines.join('\n')}`;
+  }).join('\n\n');
+
+  return `${pub.editionTitle} — ${pub.propertyName} (${pub.windowLabel})
+${pub.editionSubtitle}
+
+${greeting}
+
+${pub.introNote}
+
+${sectionsText}
+
+Concierge Questions?
+Housing Management · C&SH Group Properties, LLC
+E: ${pub.leadershipEmail} · P: ${pub.leadershipPhone}
+`;
+}
+
+function buildEventsLineupEmailHtml(rawPub: any, guestName?: string): string {
+  const pub = sanitizeEventsLineupPub(rawPub);
+  const greeting = guestName ? `Dear <strong>${guestName}</strong>,` : 'Dear Valued Guest,';
+
+  const sectionsHtml = EVENTS_LINEUP_CATEGORY_DEFS.map((cat) => {
+    const items: any[] = (pub.categories as any)[cat.key] || [];
+    const itemsHtml =
+      items.length === 0
+        ? `<p style="font-family: Arial, sans-serif; font-size: 13px; color: #64748b; font-style: italic; margin: 10px 0 0 0;">No upcoming ${cat.label.toLowerCase()} events currently scheduled for this date window.</p>`
+        : items
+            .map(
+              (ev: any) => `
+          <div style="padding: 12px 0; border-bottom: 1px solid #e2e8f0;">
+            <div style="font-family: Arial, sans-serif; font-size: 15px; font-weight: 700; color: #0f172a; margin-bottom: 4px;">${ev.title}</div>
+            <div style="font-family: Arial, sans-serif; font-size: 12px; font-weight: 600; color: #1d4ed8; margin-bottom: 4px;">
+              ${[ev.date, ev.venue, ev.distance].filter(Boolean).join(' &middot; ')}
+            </div>
+            ${ev.description ? `<div style="font-family: Arial, sans-serif; font-size: 13px; color: #334155; line-height: 1.55; margin-bottom: 6px;">${ev.description}</div>` : ''}
+            ${ev.ticketUrl ? `<a href="${ev.ticketUrl}" target="_blank" rel="noopener noreferrer" style="font-family: Arial, sans-serif; font-size: 12px; font-weight: 700; color: #0b192c; text-decoration: underline;">Tickets &amp; Event Details &rarr;</a>` : ''}
+          </div>`
+            )
+            .join('');
+
+    return `
+      <div style="margin-top: 26px;">
+        <div style="border-top: 2px solid #0b192c; border-bottom: 1px solid #cbd5e1; background: #f8fafc; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-family: Arial, sans-serif; font-size: 14px; font-weight: 800; letter-spacing: 0.04em; color: #0b192c;">${cat.number}. ${cat.label.toUpperCase()}</span>
+          <span style="font-family: Arial, sans-serif; font-size: 12px; color: #475569;">${items.length} Event${items.length === 1 ? '' : 's'}</span>
+        </div>
+        ${itemsHtml}
+      </div>`;
+  }).join('');
+
+  return `
+  <div style="max-width: 720px; margin: 0 auto; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 10px; overflow: hidden; color: #0f172a;">
+    <div style="background: #0b192c; border-top: 5px solid #c9a86a; padding: 28px 32px; color: #ffffff;">
+      <div style="font-family: Arial, sans-serif; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #c9a86a; font-weight: 700;">C&amp;SH Group Properties, LLC &middot; Guest Concierge Guide</div>
+      <h1 style="font-family: Georgia, 'Times New Roman', serif; font-size: 30px; margin: 6px 0 4px 0; color: #ffffff; letter-spacing: 0.02em;">${pub.editionTitle}</h1>
+      <div style="font-family: Arial, sans-serif; font-size: 13px; color: #cbd5e1;">${pub.propertyName} &middot; ${pub.windowLabel} &middot; Sports &middot; Nightlife &amp; Concerts &middot; Family &middot; Kids</div>
+    </div>
+
+    <div style="padding: 28px 32px;">
+      <p style="font-family: Georgia, serif; font-size: 15px; line-height: 1.65; margin-top: 0;">${greeting}</p>
+      <p style="font-family: Georgia, serif; font-size: 15px; line-height: 1.65; color: #334155;">${pub.introNote}</p>
+
+      ${sectionsHtml}
+
+      <div style="margin-top: 30px; padding-top: 18px; border-top: 1px solid #cbd5e1; font-family: Arial, sans-serif; font-size: 12.5px; color: #475569; line-height: 1.65;">
+        <div style="font-weight: 700; color: #0f172a;">Housing Management &middot; C&amp;SH Group Properties, LLC</div>
+        <div>E: ${pub.leadershipEmail} &middot; P: ${pub.leadershipPhone}</div>
+        <div style="margin-top: 4px; color: #64748b;">A printable PDF edition of this Events LineUp is attached to this email.</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function buildEventsLineupSmsText(rawPub: any, guestName?: string, pdfUrl?: string): string {
+  const pub = sanitizeEventsLineupPub(rawPub);
+  const firstName = (guestName || '').trim().split(/\s+/)[0] || 'Guest';
+  const summaryParts = EVENTS_LINEUP_CATEGORY_DEFS.map((cat) => {
+    const items: any[] = (pub.categories as any)[cat.key] || [];
+    const topPick = items[0]?.title ? ` (${items[0].title})` : '';
+    return `${cat.label}: ${items.length}${topPick}`;
+  }).join(' | ');
+  return `${pub.editionTitle} (${pub.propertyName} · ${pub.windowLabel}): Hi ${firstName}, explore your concierge guide — ${summaryParts}.${pdfUrl ? ` Download Events LineUp PDF: ${pdfUrl}` : ''} — C&SH Group Properties (${pub.leadershipPhone})`;
+}
+
 async function startServer() {
   const app = express();
 
@@ -6802,6 +7172,241 @@ async function startServer() {
     } catch (err: any) {
       console.error("[API] Error fetching local events:", err);
       res.status(500).json({ success: false, error: err.message || "Failed to fetch live local events" });
+    }
+  });
+
+  // ==========================================
+  // EVENTS LINEUP PUBLICATION ROUTES
+  // ==========================================
+
+  // POST /api/events-lineup/pdf - Download genuine AMEX-inspired Events LineUp PDF (ADMIN ONLY)
+  app.post("/api/events-lineup/pdf", async (req, res) => {
+    try {
+      if (!verifyDeviceAdmin(req)) {
+        return res.status(403).json({ success: false, error: "Administrator access required." });
+      }
+      const pub = sanitizeEventsLineupPub(req.body?.publication || req.body);
+      const pdfBuffer = await createEventsLineupPDF(pub);
+      const safeProp = (pub.propertyName || 'Property').replace(/[^a-zA-Z0-9_-]/g, '-');
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="Events-LineUp-${safeProp}.pdf"`);
+      res.send(pdfBuffer);
+    } catch (err: any) {
+      console.error("[API] Error generating Events LineUp PDF:", err.message);
+      res.status(500).json({ error: err.message || "Failed to generate Events LineUp PDF." });
+    }
+  });
+
+  // GET /api/events-lineup/pdf/:id/:filename - Serve Published Events LineUp PDF for Text/MMS & direct viewing
+  app.get("/api/events-lineup/pdf/:id/:filename", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const pub = await getEventsLineupByIdMerged(id);
+      if (!pub) {
+        return res.status(404).json({ error: "Events LineUp edition not found." });
+      }
+      const safeProp = (pub.propertyName || 'Property').replace(/[^a-zA-Z0-9_-]/g, '-');
+      const pdfBuffer = await createEventsLineupPDF(pub);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `inline; filename="Events-LineUp-${safeProp}.pdf"`);
+      res.send(pdfBuffer);
+    } catch (err: any) {
+      console.error("[API] Error serving Events LineUp PDF:", err.message);
+      res.status(500).json({ error: err.message || "Failed to serve Events LineUp PDF." });
+    }
+  });
+
+  // POST /api/events-lineup/send-email - Email Events LineUp Publication + PDF to Current Booked Guests (ADMIN ONLY)
+  app.post("/api/events-lineup/send-email", async (req, res) => {
+    try {
+      if (!verifyDeviceAdmin(req)) {
+        return res.status(403).json({ success: false, error: "Administrator access required." });
+      }
+      const { publication, recipients, cc, subject } = req.body || {};
+      const pub = sanitizeEventsLineupPub(publication);
+      const validRecipients = Array.isArray(recipients)
+        ? recipients.filter((r: any) => r?.email && String(r.email).trim())
+        : [];
+      if (validRecipients.length === 0) {
+        return res.status(400).json({ error: "Select at least one booked guest with an email address." });
+      }
+
+      saveLocalEventsLineup(pub);
+      if (db) {
+        try {
+          await db.collection("events_lineup_publications").doc(pub.id).set(pub, { merge: true });
+        } catch {}
+      }
+
+      const pdfBuffer = await createEventsLineupPDF(pub);
+      const safeProp = (pub.propertyName || 'Property').replace(/[^a-zA-Z0-9_-]/g, '-');
+      const emailSubject =
+        (subject || '').trim() ||
+        `${pub.editionTitle} — ${pub.propertyName} (${pub.windowLabel})`;
+
+      const smtpHost = process.env.SMTP_HOST;
+      let simulated = false;
+      const results: { email: string; name: string; sent: boolean; simulated: boolean }[] = [];
+
+      for (const rec of validRecipients) {
+        const toEmail = String(rec.email).trim();
+        const guestName = String(rec.name || 'Guest').trim();
+        const html = buildEventsLineupEmailHtml(pub, guestName);
+        const text = buildEventsLineupPlainText(pub, guestName);
+
+        if (!smtpHost) {
+          simulated = true;
+          console.warn(`[EventsLineup] SMTP_HOST not set. Simulating Events LineUp email to ${toEmail}`);
+          results.push({ email: toEmail, name: guestName, sent: true, simulated: true });
+        } else {
+          await sendSmtpEmail({
+            to: toEmail,
+            cc: cc || undefined,
+            subject: emailSubject,
+            text,
+            html,
+            attachments: [
+              {
+                filename: `Events-LineUp-${safeProp}.pdf`,
+                content: pdfBuffer,
+                contentType: 'application/pdf',
+              },
+            ],
+          });
+          results.push({ email: toEmail, name: guestName, sent: true, simulated: false });
+        }
+      }
+
+      res.json({
+        success: true,
+        simulated,
+        sentCount: results.length,
+        pdfFilename: `Events-LineUp-${safeProp}.pdf`,
+        results,
+        message: simulated
+          ? `Events LineUp email + PDF simulated for ${results.length} booked guest(s) (SMTP_HOST not configured in preview).`
+          : `Events LineUp emailed with PDF attachment to ${results.length} booked guest(s).`,
+      });
+    } catch (err: any) {
+      console.error("[API] Error emailing Events LineUp:", err.message);
+      res.status(500).json({ error: err.message || "Failed to email Events LineUp." });
+    }
+  });
+
+  // POST /api/events-lineup/send-sms - Text Events LineUp Publication (SMS/MMS + PDF) to Current Booked Guests (ADMIN ONLY)
+  app.post("/api/events-lineup/send-sms", async (req, res) => {
+    try {
+      if (!verifyDeviceAdmin(req)) {
+        return res.status(403).json({ success: false, error: "Administrator access required." });
+      }
+      const { publication, recipients, customMessage } = req.body || {};
+      const pub = sanitizeEventsLineupPub(publication);
+      const validRecipients = Array.isArray(recipients)
+        ? recipients
+            .map((r: any) => ({
+              name: String(r?.name || 'Guest').trim(),
+              rawPhone: String(r?.phone || '').trim(),
+              phone: formatPhoneToE164(String(r?.phone || '').trim()),
+            }))
+            .filter((r) => Boolean(r.phone))
+        : [];
+
+      if (validRecipients.length === 0) {
+        return res.status(400).json({ error: "Select at least one booked guest with a valid phone number." });
+      }
+
+      saveLocalEventsLineup(pub);
+      if (db) {
+        try {
+          await db.collection("events_lineup_publications").doc(pub.id).set(pub, { merge: true });
+        } catch {}
+      }
+
+      const pdfBuffer = await createEventsLineupPDF(pub);
+      const safeProp = (pub.propertyName || 'Property').replace(/[^a-zA-Z0-9_-]/g, '-');
+      const pdfFilename = `Events-LineUp-${safeProp}.pdf`;
+
+      const configuredBase = (process.env.APP_URL || '').trim().replace(/\/$/, '');
+      const proto = (req.get('x-forwarded-proto') || req.protocol || 'https').split(',')[0].trim();
+      const host = (req.get('x-forwarded-host') || req.get('host') || 'localhost:3000').split(',')[0].trim();
+      const baseUrl = configuredBase || `${proto}://${host}`;
+      const pdfUrl = `${baseUrl}/api/events-lineup/pdf/${encodeURIComponent(pub.id)}/${encodeURIComponent(pdfFilename)}`;
+      const isPublicHttps = /^https:\/\//i.test(pdfUrl) && !/localhost|127\.0\.0\.1/i.test(pdfUrl);
+
+      const tSid = process.env.TWILIO_ACCOUNT_SID;
+      const tTok = process.env.TWILIO_AUTH_TOKEN;
+      const tFrom = process.env.TWILIO_PHONE_NUMBER;
+      let simulated = false;
+      let mmsMediaAttached = false;
+      const results: { phone: string; name: string; sid: string | null; simulated: boolean }[] = [];
+
+      if (tSid && tTok && tSid.startsWith('AC') && !tSid.includes('PROVIDE_REAL') && tFrom) {
+        const twilioPkg = await import('twilio');
+        const twilio = twilioPkg.default || twilioPkg;
+        const twilioClient = (twilio as any)(tSid, tTok);
+
+        for (const rec of validRecipients) {
+          const baseText = (customMessage || '').trim() || buildEventsLineupSmsText(pub, rec.name, pdfUrl);
+          const bodyText = baseText.includes('/api/events-lineup/pdf/')
+            ? baseText
+            : `${baseText}\n\nEvents LineUp PDF: ${pdfUrl}`;
+
+          let sid: string | null = null;
+          if (isPublicHttps) {
+            try {
+              const resp = await twilioClient.messages.create({
+                body: bodyText,
+                from: tFrom,
+                to: rec.phone,
+                mediaUrl: [pdfUrl],
+              });
+              sid = resp?.sid || null;
+              mmsMediaAttached = true;
+            } catch {
+              const fallback = await twilioClient.messages.create({
+                body: bodyText,
+                from: tFrom,
+                to: rec.phone,
+              });
+              sid = fallback?.sid || null;
+            }
+          } else {
+            const resp = await twilioClient.messages.create({
+              body: bodyText,
+              from: tFrom,
+              to: rec.phone,
+            });
+            sid = resp?.sid || null;
+          }
+          results.push({ phone: rec.phone, name: rec.name, sid, simulated: false });
+        }
+      } else {
+        simulated = true;
+        console.warn(`[EventsLineup] Twilio not configured. Simulating Events LineUp SMS + PDF (${pdfFilename}) for ${validRecipients.length} guest(s).`);
+        validRecipients.forEach((rec) =>
+          results.push({ phone: rec.phone, name: rec.name, sid: null, simulated: true })
+        );
+      }
+
+      res.json({
+        success: true,
+        simulated,
+        sentCount: results.length,
+        pdfAttached: true,
+        mmsMediaAttached,
+        pdfFilename,
+        pdfSizeBytes: pdfBuffer.length,
+        pdfUrl,
+        results,
+        message: simulated
+          ? `Events LineUp text + PDF (${pdfFilename}, ${pdfBuffer.length} bytes) simulated to ${results.length} booked guest(s) (Twilio credentials not configured in preview).`
+          : mmsMediaAttached
+          ? `Events LineUp PDF (${pdfFilename}) sent via MMS text to ${results.length} booked guest(s).`
+          : `Events LineUp text with PDF download link (${pdfFilename}) sent to ${results.length} booked guest(s).`,
+      });
+    } catch (err: any) {
+      console.error("[API] Error texting Events LineUp:", err.message);
+      res.status(500).json({ error: err.message || "Failed to text Events LineUp." });
     }
   });
 
