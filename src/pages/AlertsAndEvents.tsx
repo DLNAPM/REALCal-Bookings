@@ -51,7 +51,7 @@ import {
 } from '../data/propertyLocations';
 import { 
   EventItem, 
-  getEventsForNext30Days 
+  fetchLiveEventsForProperty 
 } from '../data/events';
 
 interface WeatherData {
@@ -112,6 +112,9 @@ export function AlertsAndEvents() {
   const [refreshSeed, setRefreshSeed] = useState<number>(0);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date>(() => new Date());
+  const [eventsList, setEventsList] = useState<EventItem[]>([]);
+  const [eventsLoading, setEventsLoading] = useState<boolean>(true);
+  const [eventsError, setEventsError] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [sortBy, setSortBy] = useState<'date' | 'distance'>('date');
@@ -200,11 +203,20 @@ export function AlertsAndEvents() {
     return resolvePropertyProfile(foundProp || { id: selectedPropertyId });
   }, [allSelectableProperties, selectedPropertyId]);
 
-  // Keep URL query param synced
+  // Keep URL query param synced & adjust default search radius for mountain vs metro properties
   const handlePropertyChange = (newId: string) => {
     setSelectedPropertyId(newId);
     setSearchParams({ property: newId });
+    setSearchQuery('');
+    setSelectedCategory('all');
   };
+
+  useEffect(() => {
+    const isMountain =
+      activePropertyProfile.id.includes('mountain') ||
+      activePropertyProfile.city.toLowerCase().includes('blue ridge');
+    setMaxDistanceMiles(isMountain ? 60 : 35);
+  }, [activePropertyProfile.id, activePropertyProfile.city]);
 
   // Weather Condition mapping
   const decodeWeatherCode = (code: number): { label: string; icon: any } => {
@@ -295,60 +307,101 @@ export function AlertsAndEvents() {
     return () => {
       isCancelled = true;
     };
-  }, [activePropertyProfile]);
+  }, [activePropertyProfile, refreshSeed]);
 
-  // Compute upcoming events relative to the selected property's coordinates
-  const eventsList = useMemo(() => {
-    const rawEvents = getEventsForNext30Days(lastRefreshedAt, refreshSeed, {
-      lat: activePropertyProfile.lat,
-      lng: activePropertyProfile.lng,
-      propertyName: activePropertyProfile.shortName
-    });
+  // Automatically load live upcoming events (current day to +30 days) whenever property or refresh triggers change
+  useEffect(() => {
+    if (!user) return;
+    let isCancelled = false;
+    setEventsLoading(true);
+    setEventsError(null);
 
-    return rawEvents;
-  }, [lastRefreshedAt, refreshSeed, activePropertyProfile]);
+    const loadLiveEvents = async () => {
+      try {
+        const result = await fetchLiveEventsForProperty({
+          propertyId: activePropertyProfile.id,
+          propertyName: activePropertyProfile.shortName,
+          city: activePropertyProfile.city,
+          state: activePropertyProfile.state,
+          lat: activePropertyProfile.lat,
+          lng: activePropertyProfile.lng,
+          forceRefresh: refreshSeed > 0,
+        });
+        if (!isCancelled) {
+          setEventsList(result.events);
+          setLastRefreshedAt(result.refreshedAt);
+        }
+      } catch (err: any) {
+        if (!isCancelled) {
+          console.error('Failed to load live local events:', err);
+          setEventsError(err.message || 'Unable to load live local events right now.');
+        }
+      } finally {
+        if (!isCancelled) {
+          setEventsLoading(false);
+          setIsRefreshing(false);
+        }
+      }
+    };
 
-  // Filter & Sort events
+    loadLiveEvents();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [user, activePropertyProfile, refreshSeed]);
+
+  // Filter & Sort events (strictly enforcing today -> +30 days window client-side too)
   const filteredEvents = useMemo(() => {
-    return eventsList.filter(item => {
-      // Category filter
-      if (selectedCategory !== 'all' && item.category !== selectedCategory) {
-        return false;
-      }
-      // Search filter
-      if (searchQuery.trim()) {
-        const queryLower = searchQuery.toLowerCase();
-        const matchesTitle = item.title.toLowerCase().includes(queryLower);
-        const matchesVenue = item.venue.toLowerCase().includes(queryLower);
-        const matchesDesc = item.description.toLowerCase().includes(queryLower);
-        if (!matchesTitle && !matchesVenue && !matchesDesc) return false;
-      }
-      // Distance filter (parse number from distance string e.g. "5.8 mi from...")
-      const distMatch = item.distance.match(/([\d.]+)/);
-      if (distMatch) {
-        const miles = parseFloat(distMatch[1]);
-        if (miles > maxDistanceMiles) return false;
-      }
-      return true;
-    }).sort((a, b) => {
-      if (sortBy === 'distance') {
-        const distA = parseFloat(a.distance.match(/([\d.]+)/)?.[1] || '999');
-        const distB = parseFloat(b.distance.match(/([\d.]+)/)?.[1] || '999');
-        return distA - distB;
-      }
-      return a.rawDate.getTime() - b.rawDate.getTime();
-    });
+    const nowMs = Date.now() - 2 * 60 * 60 * 1000;
+    const windowEndMs = Date.now() + 30 * 24 * 60 * 60 * 1000;
+
+    return eventsList
+      .filter((item) => {
+        const eventMs = item.rawDate instanceof Date ? item.rawDate.getTime() : new Date(item.date).getTime();
+        if (!isNaN(eventMs) && (eventMs < nowMs || eventMs > windowEndMs)) {
+          return false;
+        }
+        // Category filter
+        if (selectedCategory !== 'all' && item.category !== selectedCategory) {
+          return false;
+        }
+        // Search filter
+        if (searchQuery.trim()) {
+          const queryLower = searchQuery.toLowerCase();
+          const matchesTitle = item.title.toLowerCase().includes(queryLower);
+          const matchesVenue = item.venue.toLowerCase().includes(queryLower);
+          const matchesDesc = item.description.toLowerCase().includes(queryLower);
+          if (!matchesTitle && !matchesVenue && !matchesDesc) return false;
+        }
+        // Distance filter
+        const miles =
+          typeof item.distanceMiles === 'number'
+            ? item.distanceMiles
+            : parseFloat(item.distance.match(/([\d.]+)/)?.[1] || '0');
+        if (!isNaN(miles) && miles > maxDistanceMiles) return false;
+        return true;
+      })
+      .sort((a, b) => {
+        if (sortBy === 'distance') {
+          const distA =
+            typeof a.distanceMiles === 'number'
+              ? a.distanceMiles
+              : parseFloat(a.distance.match(/([\d.]+)/)?.[1] || '999');
+          const distB =
+            typeof b.distanceMiles === 'number'
+              ? b.distanceMiles
+              : parseFloat(b.distance.match(/([\d.]+)/)?.[1] || '999');
+          return distA - distB;
+        }
+        return a.rawDate.getTime() - b.rawDate.getTime();
+      });
   }, [eventsList, selectedCategory, searchQuery, sortBy, maxDistanceMiles]);
 
   const handleRefreshAll = () => {
     setIsRefreshing(true);
-    setTimeout(() => {
-      const now = new Date();
-      setLastRefreshedAt(now);
-      setRefreshSeed(prev => prev + 1);
-      setNetworkPingLatency(Math.floor(Math.random() * 6) + 10);
-      setIsRefreshing(false);
-    }, 500);
+    setNetworkPingLatency(Math.floor(Math.random() * 6) + 10);
+    setRefreshSeed((prev) => prev + 1);
   };
 
   const handlePingNetwork = () => {
@@ -1133,14 +1186,21 @@ export function AlertsAndEvents() {
                 Upcoming Events Near {activePropertyProfile.name}
               </h2>
               <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-2xl">
-                Real, verified concerts, sports games, festivals &amp; family attractions within proximity of {activePropertyProfile.name} ({activePropertyProfile.city}, {activePropertyProfile.state}) for the next 30 days.
+                Live, verified concerts, sports games, festivals &amp; family attractions within {maxDistanceMiles} miles of {activePropertyProfile.name} ({activePropertyProfile.city}, {activePropertyProfile.state}) from{' '}
+                <strong className="text-slate-700">
+                  {lastRefreshedAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </strong>{' '}
+                to{' '}
+                <strong className="text-slate-700">
+                  {new Date(lastRefreshedAt.getTime() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </strong>.
               </p>
             </div>
 
             {/* Total Count Badge */}
             <div className="flex items-center gap-2">
               <span className="px-3.5 py-1.5 rounded-xl bg-slate-900 text-white text-xs font-bold shadow-xs">
-                {filteredEvents.length} Verified Events Found
+                {eventsLoading ? 'Syncing Live Events...' : `${filteredEvents.length} Verified Events Found`}
               </span>
             </div>
           </div>
@@ -1219,8 +1279,19 @@ export function AlertsAndEvents() {
                 />
               </div>
 
-              {/* Sort By */}
-              <div className="flex items-center gap-2 w-full sm:w-auto">
+              {/* Sort By & Radius */}
+              <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap sm:flex-nowrap">
+                <span className="text-xs font-bold text-slate-400 shrink-0">Radius:</span>
+                <select
+                  value={maxDistanceMiles}
+                  onChange={(e) => setMaxDistanceMiles(Number(e.target.value))}
+                  className="text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-slate-700 focus:outline-none cursor-pointer"
+                >
+                  <option value={20}>20 mi</option>
+                  <option value={35}>35 mi</option>
+                  <option value={60}>60 mi</option>
+                  <option value={100}>100 mi</option>
+                </select>
                 <span className="text-xs font-bold text-slate-400 shrink-0">Sort:</span>
                 <select
                   value={sortBy}
@@ -1233,59 +1304,146 @@ export function AlertsAndEvents() {
               </div>
             </div>
 
-            {/* Atlanta Pro Sports Team Quick Shortcuts */}
+            {/* Region-Aware Quick Venue & Team Shortcuts */}
             <div className="w-full flex items-center gap-2 pt-3 border-t border-slate-100 flex-wrap">
               <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1 shrink-0">
-                <Trophy size={12} className="text-amber-500" /> Atlanta Teams:
+                <Trophy size={12} className="text-amber-500" /> Local Highlights:
               </span>
-              <button
-                type="button"
-                onClick={() => { setSelectedCategory('Sporting Events'); setSearchQuery('Braves'); }}
-                className={`text-xs px-2.5 py-1 rounded-lg font-bold border transition-colors cursor-pointer ${
-                  searchQuery.toLowerCase() === 'braves' 
-                    ? 'bg-red-600 text-white border-red-600 shadow-2xs' 
-                    : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-red-50 hover:text-red-700'
-                }`}
-              >
-                ⚾ Atlanta Braves (Truist Park)
-              </button>
-              <button
-                type="button"
-                onClick={() => { setSelectedCategory('Sporting Events'); setSearchQuery('Dream'); }}
-                className={`text-xs px-2.5 py-1 rounded-lg font-bold border transition-colors cursor-pointer ${
-                  searchQuery.toLowerCase() === 'dream' 
-                    ? 'bg-sky-600 text-white border-sky-600 shadow-2xs' 
-                    : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-sky-50 hover:text-sky-700'
-                }`}
-              >
-                🏀 Atlanta Dream (WNBA Finals vs. Valkyries)
-              </button>
-              <button
-                type="button"
-                onClick={() => { setSelectedCategory('Sporting Events'); setSearchQuery('Falcons'); }}
-                className={`text-xs px-2.5 py-1 rounded-lg font-bold border transition-colors cursor-pointer ${
-                  searchQuery.toLowerCase() === 'falcons' 
-                    ? 'bg-slate-900 text-white border-slate-900 shadow-2xs' 
-                    : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                }`}
-              >
-                🏈 Atlanta Falcons (Mercedes-Benz)
-              </button>
-              <button
-                type="button"
-                onClick={() => { setSelectedCategory('Sporting Events'); setSearchQuery('Hawks'); }}
-                className={`text-xs px-2.5 py-1 rounded-lg font-bold border transition-colors cursor-pointer ${
-                  searchQuery.toLowerCase() === 'hawks' 
-                    ? 'bg-amber-600 text-white border-amber-600 shadow-2xs' 
-                    : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-amber-50 hover:text-amber-700'
-                }`}
-              >
-                🦅 Atlanta Hawks (State Farm Arena)
-              </button>
-              {searchQuery && (
+              {activePropertyProfile.state === 'FL' ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedCategory('Sporting Events'); setSearchQuery('Heat'); }}
+                    className={`text-xs px-2.5 py-1 rounded-lg font-bold border transition-colors cursor-pointer ${
+                      searchQuery.toLowerCase() === 'heat'
+                        ? 'bg-red-600 text-white border-red-600 shadow-2xs'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-red-50 hover:text-red-700'
+                    }`}
+                  >
+                    🏀 Miami Heat (Kaseya Center)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedCategory('Sporting Events'); setSearchQuery('Dolphins'); }}
+                    className={`text-xs px-2.5 py-1 rounded-lg font-bold border transition-colors cursor-pointer ${
+                      searchQuery.toLowerCase() === 'dolphins'
+                        ? 'bg-teal-600 text-white border-teal-600 shadow-2xs'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-teal-50 hover:text-teal-700'
+                    }`}
+                  >
+                    🏈 Miami Dolphins (Hard Rock)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedCategory('Sporting Events'); setSearchQuery('Panthers'); }}
+                    className={`text-xs px-2.5 py-1 rounded-lg font-bold border transition-colors cursor-pointer ${
+                      searchQuery.toLowerCase() === 'panthers'
+                        ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    🏒 Florida Panthers
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedCategory('all'); setSearchQuery('Frost'); }}
+                    className={`text-xs px-2.5 py-1 rounded-lg font-bold border transition-colors cursor-pointer ${
+                      searchQuery.toLowerCase() === 'frost'
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-indigo-50 hover:text-indigo-700'
+                    }`}
+                  >
+                    🔬 Frost Science Museum
+                  </button>
+                </>
+              ) : activePropertyProfile.city.toLowerCase().includes('blue ridge') ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedCategory('all'); setSearchQuery('Blue Ridge'); }}
+                    className={`text-xs px-2.5 py-1 rounded-lg font-bold border transition-colors cursor-pointer ${
+                      searchQuery.toLowerCase() === 'blue ridge'
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-emerald-50 hover:text-emerald-700'
+                    }`}
+                  >
+                    🏔️ Downtown Blue Ridge
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedCategory('all'); setSearchQuery('Train'); }}
+                    className={`text-xs px-2.5 py-1 rounded-lg font-bold border transition-colors cursor-pointer ${
+                      searchQuery.toLowerCase() === 'train'
+                        ? 'bg-amber-600 text-white border-amber-600 shadow-2xs'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-amber-50 hover:text-amber-700'
+                    }`}
+                  >
+                    🚂 Scenic Railway
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedCategory('all'); setSearchQuery('Gainesville'); }}
+                    className={`text-xs px-2.5 py-1 rounded-lg font-bold border transition-colors cursor-pointer ${
+                      searchQuery.toLowerCase() === 'gainesville'
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-indigo-50 hover:text-indigo-700'
+                    }`}
+                  >
+                    ✨ North GA Botanical &amp; Arts
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedCategory('Sporting Events'); setSearchQuery('Hawks'); }}
+                    className={`text-xs px-2.5 py-1 rounded-lg font-bold border transition-colors cursor-pointer ${
+                      searchQuery.toLowerCase() === 'hawks'
+                        ? 'bg-amber-600 text-white border-amber-600 shadow-2xs'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-amber-50 hover:text-amber-700'
+                    }`}
+                  >
+                    🏀 Atlanta Hawks (State Farm Arena)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedCategory('Sporting Events'); setSearchQuery('Falcons'); }}
+                    className={`text-xs px-2.5 py-1 rounded-lg font-bold border transition-colors cursor-pointer ${
+                      searchQuery.toLowerCase() === 'falcons'
+                        ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    🏈 Atlanta Falcons (Mercedes-Benz)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedCategory('Sporting Events'); setSearchQuery('Georgia Tech'); }}
+                    className={`text-xs px-2.5 py-1 rounded-lg font-bold border transition-colors cursor-pointer ${
+                      searchQuery.toLowerCase() === 'georgia tech'
+                        ? 'bg-yellow-600 text-white border-yellow-600 shadow-2xs'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-yellow-50 hover:text-yellow-700'
+                    }`}
+                  >
+                    🐝 Georgia Tech Yellow Jackets
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedCategory('Night Life Entertainments'); setSearchQuery('St. James'); }}
+                    className={`text-xs px-2.5 py-1 rounded-lg font-bold border transition-colors cursor-pointer ${
+                      searchQuery.toLowerCase() === 'st. james'
+                        ? 'bg-purple-600 text-white border-purple-600 shadow-2xs'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-purple-50 hover:text-purple-700'
+                    }`}
+                  >
+                    🎷 St. James Live (5.8 mi)
+                  </button>
+                </>
+              )}
+              {(searchQuery || selectedCategory !== 'all') && (
                 <button
                   type="button"
-                  onClick={() => setSearchQuery('')}
+                  onClick={() => { setSearchQuery(''); setSelectedCategory('all'); }}
                   className="text-[11px] text-slate-400 hover:text-slate-600 underline font-semibold cursor-pointer ml-1"
                 >
                   Show All Events
@@ -1295,17 +1453,38 @@ export function AlertsAndEvents() {
           </div>
 
           {/* Events Grid */}
-          {filteredEvents.length === 0 ? (
+          {eventsLoading ? (
+            <div className="text-center p-14 bg-white rounded-3xl border border-slate-200 text-slate-500 shadow-xs">
+              <RotateCw size={34} className="mx-auto text-indigo-600 mb-3 animate-spin" />
+              <h3 className="font-bold text-slate-800 text-base">Loading Live Local Experiences...</h3>
+              <p className="text-xs text-slate-400 mt-1">
+                Fetching real verified events near {activePropertyProfile.city}, {activePropertyProfile.state} for the next 30 days.
+              </p>
+            </div>
+          ) : eventsError ? (
+            <div className="text-center p-12 bg-red-50/70 rounded-3xl border border-red-200 text-red-800">
+              <AlertTriangle size={34} className="mx-auto text-red-500 mb-3" />
+              <h3 className="font-bold text-red-900 text-base">Unable to load live events</h3>
+              <p className="text-xs text-red-700 mt-1">{eventsError}</p>
+              <button
+                type="button"
+                onClick={handleRefreshAll}
+                className="mt-4 px-4 py-2 bg-red-600 text-white font-bold text-xs rounded-xl hover:bg-red-700 transition-colors cursor-pointer"
+              >
+                Retry Loading Events
+              </button>
+            </div>
+          ) : filteredEvents.length === 0 ? (
             <div className="text-center p-12 bg-white rounded-3xl border border-slate-200 border-dashed text-slate-500">
               <Compass size={36} className="mx-auto text-slate-300 mb-3" />
               <h3 className="font-bold text-slate-700 text-base">No events match your current filter</h3>
               <p className="text-xs text-slate-400 mt-1">
-                Try widening your search keywords or selecting "All" categories.
+                Try widening your search radius ({maxDistanceMiles} mi) or selecting "All" categories.
               </p>
               <button
                 type="button"
-                onClick={() => { setSelectedCategory('all'); setSearchQuery(''); }}
-                className="mt-4 px-4 py-2 bg-indigo-50 text-indigo-700 font-bold text-xs rounded-xl hover:bg-indigo-100 transition-colors"
+                onClick={() => { setSelectedCategory('all'); setSearchQuery(''); setMaxDistanceMiles(100); }}
+                className="mt-4 px-4 py-2 bg-indigo-50 text-indigo-700 font-bold text-xs rounded-xl hover:bg-indigo-100 transition-colors cursor-pointer"
               >
                 Reset Event Filters
               </button>

@@ -15,7 +15,7 @@ import { WeatherWidget } from '../components/WeatherWidget';
 import { cn } from '../lib/utils';
 
 import { LegalFooter } from '../components/LegalFooter';
-import { getEventsForNext30Days, EventItem } from '../data/events';
+import { fetchLiveEventsForProperty, EventItem } from '../data/events';
 
 export const Home: React.FC = () => {
     const { user, loading } = useAuth();
@@ -25,56 +25,56 @@ export const Home: React.FC = () => {
     const [refreshSeed, setRefreshSeed] = useState<number>(0);
     const [isRefreshingEvents, setIsRefreshingEvents] = useState<boolean>(false);
     const [lastRefreshedAt, setLastRefreshedAt] = useState<Date>(() => new Date());
-    const [eventsList, setEventsList] = useState<EventItem[]>(() => getEventsForNext30Days(new Date(), 0));
+    const [eventsList, setEventsList] = useState<EventItem[]>([]);
     const navigate = useNavigate();
 
     const isAdmin = Boolean(user && (user.role === 'admin' || isAdminEmail(user.email)));
 
-    // Automatic Events Refresh: automatically recalculate events on mount, whenever the tab is switched to 'events',
-    // when visibility changes, on window focus, and periodically every 60 seconds so no events can ever be shown in the past
+    // Automatic Live Events Refresh: load verified events from today to +30 days on mount, tab switch, and manual refresh
     useEffect(() => {
-        const refreshNow = () => {
-            const now = new Date();
-            setLastRefreshedAt(now);
-            setEventsList(getEventsForNext30Days(now, refreshSeed));
-        };
-
-        refreshNow();
-
-        // 60-second auto-refresh interval
-        const interval = setInterval(refreshNow, 60 * 1000);
-        
-        const onVisibilityChange = () => {
-            if (document.visibilityState === 'visible') {
-                refreshNow();
+        let isCancelled = false;
+        const loadEvents = async () => {
+            try {
+                const res = await fetchLiveEventsForProperty({
+                    propertyId: 'stonewall-villa',
+                    propertyName: 'Stonewall Villa',
+                    city: 'Atlanta',
+                    state: 'GA',
+                    lat: 33.6823,
+                    lng: -84.5262,
+                    forceRefresh: refreshSeed > 0,
+                });
+                if (!isCancelled) {
+                    setLastRefreshedAt(res.refreshedAt);
+                    setEventsList(res.events);
+                }
+            } catch (err) {
+                console.warn('Could not load Home live events:', err);
+            } finally {
+                if (!isCancelled) {
+                    setIsRefreshingEvents(false);
+                }
             }
         };
-        const onFocus = () => {
-            refreshNow();
-        };
 
-        document.addEventListener('visibilitychange', onVisibilityChange);
+        loadEvents();
+
+        const interval = setInterval(loadEvents, 5 * 60 * 1000);
+        const onFocus = () => {
+            if (activeTab === 'events') loadEvents();
+        };
         window.addEventListener('focus', onFocus);
 
         return () => {
+            isCancelled = true;
             clearInterval(interval);
-            document.removeEventListener('visibilitychange', onVisibilityChange);
             window.removeEventListener('focus', onFocus);
         };
     }, [activeTab, refreshSeed]);
 
     const handleRefreshEvents = () => {
         setIsRefreshingEvents(true);
-        setTimeout(() => {
-            setRefreshSeed(prev => {
-                const nextSeed = prev + 1;
-                const now = new Date();
-                setLastRefreshedAt(now);
-                setEventsList(getEventsForNext30Days(now, nextSeed));
-                return nextSeed;
-            });
-            setIsRefreshingEvents(false);
-        }, 450);
+        setRefreshSeed(prev => prev + 1);
     };
 
     const startDateStr = lastRefreshedAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });

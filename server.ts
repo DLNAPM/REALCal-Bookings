@@ -10,6 +10,7 @@ import admin from "firebase-admin";
 import { getFirestore } from "firebase-admin/firestore";
 import { calculatePriceDetails } from "./src/lib/pricing";
 import PDFDocument from "pdfkit";
+import { getLiveLocalEvents } from "./src/lib/liveEventsService";
 
 // Load environment variables from .env file if present
 dotenv.config();
@@ -6640,6 +6641,34 @@ async function startServer() {
     } catch (err: any) {
       console.error("[API] Error updating referral ledger status:", err.message);
       res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // --- LIVE LOCAL EVENTS AGGREGATOR (TODAY -> +30 DAYS) ---
+  app.get("/api/local-events", async (req, res) => {
+    try {
+      const propertyId = typeof req.query.propertyId === "string" ? req.query.propertyId : undefined;
+      const propertyName = typeof req.query.propertyName === "string" ? req.query.propertyName : undefined;
+      const city = typeof req.query.city === "string" ? req.query.city : undefined;
+      const state = typeof req.query.state === "string" ? req.query.state : undefined;
+      const lat = typeof req.query.lat === "string" ? parseFloat(req.query.lat) : undefined;
+      const lng = typeof req.query.lng === "string" ? parseFloat(req.query.lng) : undefined;
+      const forceRefresh = req.query.refresh === "true" || req.query.refresh === "1";
+
+      const payload = await getLiveLocalEvents({
+        propertyId,
+        propertyName,
+        city,
+        state,
+        lat: typeof lat === "number" && !isNaN(lat) ? lat : undefined,
+        lng: typeof lng === "number" && !isNaN(lng) ? lng : undefined,
+        forceRefresh,
+      });
+
+      res.json(payload);
+    } catch (err: any) {
+      console.error("[API] Error fetching local events:", err);
+      res.status(500).json({ success: false, error: err.message || "Failed to fetch live local events" });
     }
   });
 
