@@ -632,7 +632,8 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
   <div class="fee-box">
     <div><strong>Referral Number:</strong> <span style="font-family: monospace;">${l.referralNumber}</span></div>
     <div><strong>${isBus ? 'Bus. Referral Fee' : 'Ind. Referral Fee'}:</strong> ${feeDisplay}</div>
-    <div style="margin-top: 6px; font-size: 12px; color: #3730a3;">Guests booking a room should enter Referral Number <strong>${l.referralNumber}</strong> so that our commission ledger tracks the referral fee owed. You will receive your Referral Fee <strong>7 to 14 days after Guest checks out</strong>.</div>
+    <div style="margin-top: 4px;"><strong>RealCal Bookings URL:</strong> <a href="https://realcal-bookings-tjrz.onrender.com" target="_blank" rel="noopener noreferrer" style="color: #4338ca; font-weight: bold;">https://realcal-bookings-tjrz.onrender.com</a></div>
+    <div style="margin-top: 6px; font-size: 12px; color: #3730a3;">Please let Future Guests know they can create their bookings at <strong>RealCal Bookings</strong> (<a href="https://realcal-bookings-tjrz.onrender.com" style="color: #3730a3;">https://realcal-bookings-tjrz.onrender.com</a>) using Referral Number <strong>${l.referralNumber}</strong> so that our commission ledger tracks the referral fee owed. You will receive your Referral Fee <strong>7 to 14 days after Guest checks out</strong>.</div>
   </div>
   ${l.customClosingNote ? `<p style="font-size: 15px; line-height: 1.65;">${l.customClosingNote}</p>` : ''}
   <div class="sig">
@@ -744,7 +745,7 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
     const feeVal = Number(l.referralFee || 0);
     const feeText = l.referralFeeType === 'percentage' ? `${feeVal}% of completed booking` : `$${feeVal.toFixed(2)} USD`;
     const feeLabel = isBus ? 'Bus. Referral Fee' : 'Ind. Referral Fee';
-    return `C&SH Group Properties, LLC — Referral Letter (${l.referralNumber}): Hi ${recipientName}, we welcome short-term rental referrals for Traveling Nurses, Home Owners who experience Home Water, Fire, Smoke, and/or Mold damages needing temporary housing during repair, Flight Attendants, Musicians performing at St. James Live (5 mi away) & Future Home Owners transitioning; waiting on the Closing of their new Home. ${feeLabel}: ${feeText}. Guests enter Referral Number ${l.referralNumber} at booking; Referral Fees are paid 7 to 14 days after Guest checks out. Sincerely, Housing Management E:candsh@cashgroupproperties.com P:404-910-3194`;
+    return `C&SH Group Properties, LLC — Referral Letter (${l.referralNumber}): Hi ${recipientName}, we welcome short-term rental referrals for Traveling Nurses, Home Owners who experience Home Water, Fire, Smoke, and/or Mold damages needing temporary housing during repair, Flight Attendants, Musicians performing at St. James Live (5 mi away) & Future Home Owners transitioning; waiting on the Closing of their new Home. ${feeLabel}: ${feeText}. Future Guests can create bookings at RealCal Bookings (https://realcal-bookings-tjrz.onrender.com) using Referral Number ${l.referralNumber}; Referral Fees are paid 7 to 14 days after Guest checks out. Sincerely, Housing Management E:candsh@cashgroupproperties.com P:404-910-3194`;
   };
 
   const openSmsModal = (letterObj: ReferralLetter) => {
@@ -1785,8 +1786,28 @@ export const AdminReferralLetters: React.FC<AdminReferralLettersProps> = ({
                   <strong>{previewIsBus ? 'Bus. Referral Fee' : 'Ind. Referral Fee'}:</strong>{' '}
                   <span className="font-bold">{previewFeeFormatted}</span>
                 </div>
+                <div className="text-indigo-900">
+                  <strong>RealCal Bookings URL:</strong>{' '}
+                  <a
+                    href="https://realcal-bookings-tjrz.onrender.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-bold text-indigo-700 underline hover:text-indigo-900"
+                  >
+                    https://realcal-bookings-tjrz.onrender.com
+                  </a>
+                </div>
                 <p className="text-indigo-800/90 leading-relaxed">
-                  When a guest books a room using Referral Number <strong>{referralNumber}</strong>, the reservation is recorded in our Referral Commission Ledger and your referral fee is marked as owed to {previewRecipientName}. You will receive your Referral Fee <strong>7 to 14 days after the Guest checks out</strong>, along with an automated Email &amp; Text notification once a guest completes a booking with your referral number.
+                  Please let Future Guests know they can create their bookings at{' '}
+                  <a
+                    href="https://realcal-bookings-tjrz.onrender.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-bold underline hover:text-indigo-950"
+                  >
+                    RealCal Bookings (https://realcal-bookings-tjrz.onrender.com)
+                  </a>{' '}
+                  using Referral Number <strong>{referralNumber}</strong>. The reservation is recorded in our Referral Commission Ledger and your referral fee is marked as owed to {previewRecipientName}. You will receive your Referral Fee <strong>7 to 14 days after the Guest checks out</strong>, along with an automated Email &amp; Text notification once a guest completes a booking with your referral number.
                 </p>
               </div>
 
