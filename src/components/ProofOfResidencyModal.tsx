@@ -136,32 +136,195 @@ export const ProofOfResidencyModal: React.FC<ProofOfResidencyModalProps> = ({
     return bookings.filter(isPaidAndNotCancelled);
   }, [bookings]);
 
-  // Set initial selected booking or default to first qualifying booking
+  const GENERIC_GUEST_NAMES = new Set([
+    'guest',
+    'valued guest',
+    'unknown',
+    'unknown guest',
+    'unknown sponsor',
+    'n/a',
+    'none',
+    'admin',
+    'administrator',
+    'manual'
+  ]);
+
+  const normalizeGuestName = (raw?: string): string => {
+    const cleaned = (raw || '')
+      .replace(/[.,]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+    if (!cleaned || GENERIC_GUEST_NAMES.has(cleaned)) return '';
+    return cleaned;
+  };
+
+  const isAdminOrOverrideUser = (uid?: string): boolean => {
+    if (!uid) return true;
+    const low = uid.toLowerCase().trim();
+    if (low === 'admin-override' || low === 'admin' || low === 'manual') return true;
+    if (currentUser?.uid && uid === currentUser.uid) return true;
+    const u = users.find(x => x.uid === uid);
+    if (!u) return false;
+    const role = String(u.role || '').toLowerCase();
+    const email = String(u.email || '').toLowerCase();
+    return (
+      role === 'admin' ||
+      email.includes('admin') ||
+      email.includes('dlaniger') ||
+      email.endsWith('@cashgroupproperties.com') ||
+      email.endsWith('@cshproperties.com')
+    );
+  };
+
+  const getReservationGuestName = (b: Booking): string => {
+    const direct =
+      (b.guestName || '').trim() ||
+      (b.invoiceDetails?.guestName || '').trim() ||
+      (b.invoiceDetails?.sponsorName || '').trim();
+    if (direct) return direct;
+    if (!isAdminOrOverrideUser(b.userId)) {
+      const userObj = users.find(u => u.uid === b.userId);
+      if (userObj?.displayName?.trim()) return userObj.displayName.trim();
+    }
+    return 'Valued Guest';
+  };
+
+  const getReservationGuestEmail = (b: Booking): string => {
+    const direct =
+      (b.guestEmail || '').trim() ||
+      (b.invoiceDetails?.guestEmail || '').trim() ||
+      (b.invoiceDetails?.sponsorEmail || '').trim();
+    if (direct) return direct;
+    if (!isAdminOrOverrideUser(b.userId)) {
+      const userObj = users.find(u => u.uid === b.userId);
+      if (userObj?.email?.trim()) return userObj.email.trim();
+    }
+    return '';
+  };
+
+  const getReservationGuestPhone = (b: Booking): string => {
+    const direct =
+      (b.guestPhone || '').trim() ||
+      (b.invoiceDetails?.guestPhone || '').trim() ||
+      (b.invoiceDetails?.sponsorPhone || '').trim();
+    if (direct) return direct;
+    if (!isAdminOrOverrideUser(b.userId)) {
+      const userObj = users.find(u => u.uid === b.userId);
+      if (userObj?.phone?.trim()) return userObj.phone.trim();
+    }
+    return '';
+  };
+
+  // Strictly match additional paid reservations ONLY by the normalized name on the Selected Paid Reservation
+  const isSameReservationGuestByName = (selected: Booking, candidate: Booking): boolean => {
+    if (!selected || !candidate || selected.id === candidate.id) return false;
+    const selectedNorm = normalizeGuestName(getReservationGuestName(selected));
+    if (!selectedNorm) return false;
+    const candidateNorm = normalizeGuestName(getReservationGuestName(candidate));
+    if (!candidateNorm) return false;
+    return candidateNorm === selectedNorm;
+  };
+
+  // Build ONLY the paid, non-cancelled invoices belonging to the Selected Paid Reservation's named guest
+  const buildInvoicesForSelectedBooking = (b: Booking): InvoiceItem[] => {
+    const invList: InvoiceItem[] = [];
+    const seenBookingIds = new Set<string>();
+
+    const appendBookingInvoice = (target: Booking, isPrimary: boolean) => {
+      if (seenBookingIds.has(target.id)) return;
+      seenBookingIds.add(target.id);
+
+      if (target.invoiceDetails) {
+        const isCancelled = target.invoiceDetails.cancelled || target.status === 'cancelled';
+        const isPaid = target.invoiceDetails.paid === true;
+        if (isPaid && !isCancelled) {
+          const invNum =
+            target.invoiceDetails.invoiceNumber ||
+            `INV-${target.bookingRef || target.id.substring(0, 6).toUpperCase()}`;
+          const invTotal =
+            target.invoiceDetails.grandTotal !== undefined
+              ? target.invoiceDetails.grandTotal
+              : target.invoiceDetails.baseAmount || target.totalPrice / 100;
+          const invDate = target.invoiceDetails.sentAt
+            ? new Date(target.invoiceDetails.sentAt).toISOString().split('T')[0]
+            : target.checkIn
+            ? target.checkIn.split('T')[0]
+            : new Date().toISOString().split('T')[0];
+
+          invList.push({
+            id: isPrimary ? 'primary-inv' : `linked-inv-${target.id}`,
+            invoiceNumber: invNum,
+            date: invDate,
+            description: isPrimary
+              ? `Lodging Accommodations (${target.checkIn} to ${target.checkOut})`
+              : `Stay Extension / Renewal (${target.checkIn} to ${target.checkOut})`,
+            amount: Number(invTotal) || 0,
+            paid: true,
+            bookingId: target.id,
+            bookingRef: target.bookingRef
+          });
+        }
+      } else if (target.status === 'confirmed' && target.totalPrice) {
+        invList.push({
+          id: isPrimary ? 'booking-payment' : `linked-booking-${target.id}`,
+          invoiceNumber: `INV-${target.bookingRef || target.id.substring(0, 6).toUpperCase()}`,
+          date: target.checkIn ? target.checkIn.split('T')[0] : new Date().toISOString().split('T')[0],
+          description: isPrimary
+            ? `Full Accommodations Stay (${target.checkIn} to ${target.checkOut})`
+            : `Stay Extension / Additional Booking (${target.checkIn} to ${target.checkOut})`,
+          amount: target.totalPrice / 100,
+          paid: true,
+          bookingId: target.id,
+          bookingRef: target.bookingRef
+        });
+      }
+    };
+
+    // 1. Primary invoice from the Selected Paid Reservation
+    appendBookingInvoice(b, true);
+
+    // 2. Additional paid, non-cancelled bookings ONLY for the exact same guest name on the Selected Paid Reservation
+    const otherSameNameBookings = eligibleBookings
+      .filter((other) => isSameReservationGuestByName(b, other))
+      .sort((a, c) => (a.checkIn || '').localeCompare(c.checkIn || ''));
+
+    otherSameNameBookings.forEach((ob) => appendBookingInvoice(ob, false));
+
+    return invList;
+  };
+
+  // Set initial selected booking when modal opens or initialBooking changes (without overriding user dropdown selection on background updates)
   useEffect(() => {
+    if (!isOpen) return;
     if (initialBooking && isPaidAndNotCancelled(initialBooking)) {
       setSelectedBookingId(initialBooking.id);
-    } else if (eligibleBookings.length > 0) {
-      // Find first booking with > 5 days among paid, or simply first paid booking
-      const qualifying = eligibleBookings.find(b => calculateDays(b.checkIn, b.checkOut) > 5);
-      setSelectedBookingId(qualifying ? qualifying.id : eligibleBookings[0].id);
-    } else {
-      setSelectedBookingId('');
+      return;
     }
-  }, [initialBooking, eligibleBookings]);
+    setSelectedBookingId((prev) => {
+      if (prev && eligibleBookings.some((b) => b.id === prev)) {
+        return prev;
+      }
+      if (eligibleBookings.length > 0) {
+        const qualifying = eligibleBookings.find((b) => calculateDays(b.checkIn, b.checkOut) > 5);
+        return qualifying ? qualifying.id : eligibleBookings[0].id;
+      }
+      return '';
+    });
+  }, [isOpen, initialBooking?.id, eligibleBookings]);
 
-  // When selectedBookingId changes, populate fields
+  // When selectedBookingId changes, populate fields strictly for that reservation & named guest
   useEffect(() => {
     if (!selectedBookingId) return;
     const b = eligibleBookings.find(x => x.id === selectedBookingId);
     if (!b) return;
 
     const prop = properties.find(p => p.id === b.propertyId);
-    const userObj = users.find(u => u.uid === b.userId);
 
-    // Guest details
-    const gName = b.guestName || userObj?.displayName || b.invoiceDetails?.sponsorName || 'Valued Guest';
-    const gEmail = b.guestEmail || userObj?.email || b.invoiceDetails?.sponsorEmail || '';
-    const gPhone = b.guestPhone || userObj?.phone || b.invoiceDetails?.sponsorPhone || '';
+    // Guest details (strictly from the selected reservation, never leaking admin profile)
+    const gName = getReservationGuestName(b);
+    const gEmail = getReservationGuestEmail(b);
+    const gPhone = getReservationGuestPhone(b);
     setGuestName(gName);
     setGuestEmail(gEmail);
     setGuestPhone(gPhone);
@@ -196,94 +359,9 @@ export const ProofOfResidencyModal: React.FC<ProofOfResidencyModalProps> = ({
       setRoomsDescription(`Full Estate / Private Villa Buyout (${prop?.bedrooms?.length || 5} Bedrooms)`);
     }
 
-    // Invoices preparation - STRICTLY ONLY PAID & NON-CANCELLED INVOICES
-    const invList: InvoiceItem[] = [];
-
-    // 1. Primary invoice from booking (only if paid and non-cancelled)
-    if (b.invoiceDetails) {
-      const isCancelled = b.invoiceDetails.cancelled || b.status === 'cancelled';
-      const isPaid = b.invoiceDetails.paid === true;
-      if (isPaid && !isCancelled) {
-        const invNum = b.invoiceDetails.invoiceNumber || `INV-${b.bookingRef || b.id.substring(0, 6).toUpperCase()}`;
-        const invTotal = b.invoiceDetails.grandTotal !== undefined 
-          ? b.invoiceDetails.grandTotal 
-          : (b.invoiceDetails.baseAmount || (b.totalPrice / 100));
-        const invDate = b.invoiceDetails.sentAt 
-          ? new Date(b.invoiceDetails.sentAt).toISOString().split('T')[0]
-          : (b.checkIn ? b.checkIn.split('T')[0] : new Date().toISOString().split('T')[0]);
-
-        invList.push({
-          id: 'primary-inv',
-          invoiceNumber: invNum,
-          date: invDate,
-          description: `Lodging Accommodations (${b.checkIn} to ${b.checkOut})`,
-          amount: Number(invTotal) || 0,
-          paid: true,
-          bookingId: b.id,
-          bookingRef: b.bookingRef
-        });
-      }
-    } else if (b.status === 'confirmed' && b.totalPrice) {
-      invList.push({
-        id: 'booking-payment',
-        invoiceNumber: `INV-${b.bookingRef || b.id.substring(0, 6).toUpperCase()}`,
-        date: b.checkIn ? b.checkIn.split('T')[0] : new Date().toISOString().split('T')[0],
-        description: `Full Accommodations Stay (${b.checkIn} to ${b.checkOut})`,
-        amount: b.totalPrice / 100,
-        paid: true,
-        bookingId: b.id,
-        bookingRef: b.bookingRef
-      });
-    }
-
-    // 2. Check for other paid bookings/invoices by same guest (chained or extension stays)
-    // ONLY include paid bookings and non-cancelled invoices
-    const otherBookings = eligibleBookings.filter(other => 
-      other.id !== b.id &&
-      ((other.userId && other.userId === b.userId) || 
-       (other.guestEmail && other.guestEmail.toLowerCase() === gEmail.toLowerCase()) ||
-       (other.guestName && other.guestName.toLowerCase() === gName.toLowerCase()))
-    );
-
-    otherBookings.forEach((ob) => {
-      if (ob.invoiceDetails) {
-        const isCancelled = ob.invoiceDetails.cancelled || ob.status === 'cancelled';
-        const isPaid = ob.invoiceDetails.paid === true;
-        if (isPaid && !isCancelled) {
-          const oNum = ob.invoiceDetails.invoiceNumber || `INV-${ob.bookingRef || ob.id.substring(0, 6).toUpperCase()}`;
-          const oTotal = ob.invoiceDetails.grandTotal !== undefined 
-            ? ob.invoiceDetails.grandTotal 
-            : (ob.invoiceDetails.baseAmount || (ob.totalPrice / 100));
-          const oDate = ob.invoiceDetails.sentAt 
-            ? new Date(ob.invoiceDetails.sentAt).toISOString().split('T')[0]
-            : (ob.checkIn ? ob.checkIn.split('T')[0] : '');
-
-          invList.push({
-            id: `linked-inv-${ob.id}`,
-            invoiceNumber: oNum,
-            date: oDate,
-            description: `Stay Extension / Renewal (${ob.checkIn} to ${ob.checkOut})`,
-            amount: Number(oTotal) || 0,
-            paid: true,
-            bookingId: ob.id,
-            bookingRef: ob.bookingRef
-          });
-        }
-      } else if (ob.status === 'confirmed' && ob.totalPrice) {
-        invList.push({
-          id: `linked-booking-${ob.id}`,
-          invoiceNumber: `INV-${ob.bookingRef || ob.id.substring(0, 6).toUpperCase()}`,
-          date: ob.checkIn ? ob.checkIn.split('T')[0] : '',
-          description: `Stay Extension / Additional Booking (${ob.checkIn} to ${ob.checkOut})`,
-          amount: ob.totalPrice / 100,
-          paid: true,
-          bookingId: ob.id,
-          bookingRef: ob.bookingRef
-        });
-      }
-    });
-
-    setInvoices(invList);
+    // Invoices preparation - STRICTLY ONLY PAID & NON-CANCELLED INVOICES MATCHING THE SELECTED RESERVATION NAME
+    setInvoices(buildInvoicesForSelectedBooking(b));
+    setInspectingInvoice(null);
 
     // Verification Code
     const code = `VER-${(b.bookingRef || b.id.substring(0, 5)).toUpperCase()}-${new Date().getFullYear()}`;
@@ -337,101 +415,12 @@ export const ProofOfResidencyModal: React.FC<ProofOfResidencyModalProps> = ({
     }
   };
 
-  // Reload/Reset original paid invoices for the selected guest
+  // Reload/Reset original paid invoices strictly matching the name on the Selected Paid Reservation
   const handleReloadGuestInvoices = () => {
     if (!selectedBookingId) return;
     const b = eligibleBookings.find(x => x.id === selectedBookingId);
     if (!b) return;
-
-    const gName = b.guestName || b.invoiceDetails?.sponsorName || 'Guest';
-    const gEmail = b.guestEmail || b.invoiceDetails?.sponsorEmail || '';
-
-    const invList: InvoiceItem[] = [];
-
-    // Primary invoice from booking
-    if (b.invoiceDetails) {
-      const isCancelled = b.invoiceDetails.cancelled || b.status === 'cancelled';
-      const isPaid = b.invoiceDetails.paid === true;
-      if (isPaid && !isCancelled) {
-        const invNum = b.invoiceDetails.invoiceNumber || `INV-${b.bookingRef || b.id.substring(0, 6).toUpperCase()}`;
-        const invTotal = b.invoiceDetails.grandTotal !== undefined 
-          ? b.invoiceDetails.grandTotal 
-          : (b.invoiceDetails.baseAmount || (b.totalPrice / 100));
-        const invDate = b.invoiceDetails.sentAt 
-          ? new Date(b.invoiceDetails.sentAt).toISOString().split('T')[0]
-          : (b.checkIn ? b.checkIn.split('T')[0] : new Date().toISOString().split('T')[0]);
-
-        invList.push({
-          id: 'primary-inv',
-          invoiceNumber: invNum,
-          date: invDate,
-          description: `Lodging Accommodations (${b.checkIn} to ${b.checkOut})`,
-          amount: Number(invTotal) || 0,
-          paid: true,
-          bookingId: b.id,
-          bookingRef: b.bookingRef
-        });
-      }
-    } else if (b.status === 'confirmed' && b.totalPrice) {
-      invList.push({
-        id: 'booking-payment',
-        invoiceNumber: `INV-${b.bookingRef || b.id.substring(0, 6).toUpperCase()}`,
-        date: b.checkIn ? b.checkIn.split('T')[0] : new Date().toISOString().split('T')[0],
-        description: `Full Accommodations Stay (${b.checkIn} to ${b.checkOut})`,
-        amount: b.totalPrice / 100,
-        paid: true,
-        bookingId: b.id,
-        bookingRef: b.bookingRef
-      });
-    }
-
-    // Additional paid invoices for same guest
-    const otherBookings = eligibleBookings.filter(other => 
-      other.id !== b.id &&
-      ((other.userId && other.userId === b.userId) || 
-       (other.guestEmail && gEmail && other.guestEmail.toLowerCase() === gEmail.toLowerCase()) ||
-       (other.guestName && gName && other.guestName.toLowerCase() === gName.toLowerCase()))
-    );
-
-    otherBookings.forEach((ob) => {
-      if (ob.invoiceDetails) {
-        const isCancelled = ob.invoiceDetails.cancelled || ob.status === 'cancelled';
-        const isPaid = ob.invoiceDetails.paid === true;
-        if (isPaid && !isCancelled) {
-          const oNum = ob.invoiceDetails.invoiceNumber || `INV-${ob.bookingRef || ob.id.substring(0, 6).toUpperCase()}`;
-          const oTotal = ob.invoiceDetails.grandTotal !== undefined 
-            ? ob.invoiceDetails.grandTotal 
-            : (ob.invoiceDetails.baseAmount || (ob.totalPrice / 100));
-          const oDate = ob.invoiceDetails.sentAt 
-            ? new Date(ob.invoiceDetails.sentAt).toISOString().split('T')[0]
-            : (ob.checkIn ? ob.checkIn.split('T')[0] : '');
-
-          invList.push({
-            id: `linked-inv-${ob.id}`,
-            invoiceNumber: oNum,
-            date: oDate,
-            description: `Stay Extension / Renewal (${ob.checkIn} to ${ob.checkOut})`,
-            amount: Number(oTotal) || 0,
-            paid: true,
-            bookingId: ob.id,
-            bookingRef: ob.bookingRef
-          });
-        }
-      } else if (ob.status === 'confirmed' && ob.totalPrice) {
-        invList.push({
-          id: `linked-booking-${ob.id}`,
-          invoiceNumber: `INV-${ob.bookingRef || ob.id.substring(0, 6).toUpperCase()}`,
-          date: ob.checkIn ? ob.checkIn.split('T')[0] : '',
-          description: `Stay Extension / Additional Booking (${ob.checkIn} to ${ob.checkOut})`,
-          amount: ob.totalPrice / 100,
-          paid: true,
-          bookingId: ob.id,
-          bookingRef: ob.bookingRef
-        });
-      }
-    });
-
-    setInvoices(invList);
+    setInvoices(buildInvoicesForSelectedBooking(b));
   };
 
   // Resolve the underlying Booking record for any invoice row so Admin can verify ownership
@@ -1136,7 +1125,7 @@ Corporate Email: ${corporateEmail}
                   {eligibleBookings.map(b => {
                     const days = calculateDays(b.checkIn, b.checkOut);
                     const isOver5 = days > 5;
-                    const gName = b.guestName || b.invoiceDetails?.sponsorName || 'Guest';
+                    const gName = getReservationGuestName(b);
                     return (
                       <option key={b.id} value={b.id}>
                         {isOver5 ? '⭐ [>5 Days] ' : ''}{gName} &bull; {days} Days ({b.checkIn} - {b.checkOut}) [PAID]
@@ -1958,16 +1947,9 @@ Corporate Email: ${corporateEmail}
         const linked = resolveBookingForInvoice(inspectingInvoice);
         const invDetails = linked?.invoiceDetails;
         const linkedProp = linked ? properties.find(p => p.id === linked.propertyId) : undefined;
-        const linkedUser = linked ? users.find(u => u.uid === linked.userId) : undefined;
-        const linkedGuestName = linked
-          ? (linked.guestName || linkedUser?.displayName || invDetails?.sponsorName || 'Guest')
-          : '';
-        const linkedGuestEmail = linked
-          ? (linked.guestEmail || linkedUser?.email || invDetails?.sponsorEmail || '')
-          : '';
-        const linkedGuestPhone = linked
-          ? (linked.guestPhone || linkedUser?.phone || invDetails?.sponsorPhone || '')
-          : '';
+        const linkedGuestName = linked ? getReservationGuestName(linked) : '';
+        const linkedGuestEmail = linked ? getReservationGuestEmail(linked) : '';
+        const linkedGuestPhone = linked ? getReservationGuestPhone(linked) : '';
         const linkedRooms = linked
           ? (linked.selectedBedrooms && linked.selectedBedrooms.length > 0
               ? linked.selectedBedrooms.map((r: any) => `Room ${typeof r === 'object' && r !== null ? r.roomNumber : r}`).join(', ')
@@ -1981,11 +1963,7 @@ Corporate Email: ${corporateEmail}
           linked &&
           !isExactSelectedBooking &&
           selectedBookingRecord &&
-          (
-            (linked.userId && linked.userId === selectedBookingRecord.userId) ||
-            (linkedGuestEmail && guestEmail && linkedGuestEmail.toLowerCase() === guestEmail.toLowerCase()) ||
-            (linkedGuestName && guestName && linkedGuestName.toLowerCase() === guestName.toLowerCase())
-          )
+          isSameReservationGuestByName(selectedBookingRecord, linked)
         );
         const isPaidVerified = linked
           ? (invDetails ? invDetails.paid === true && !invDetails.cancelled && linked.status !== 'cancelled' : linked.status === 'confirmed')
