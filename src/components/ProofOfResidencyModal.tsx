@@ -117,6 +117,7 @@ export const ProofOfResidencyModal: React.FC<ProofOfResidencyModalProps> = ({
   const [inspectingInvoice, setInspectingInvoice] = useState<InvoiceItem | null>(null);
 
   const printAreaRef = useRef<HTMLDivElement>(null);
+  const lastPopulatedBookingKeyRef = useRef<string>('');
 
   // Filter ONLY paid and non-cancelled bookings for the verification process
   const isPaidAndNotCancelled = (b: Booking): boolean => {
@@ -313,11 +314,20 @@ export const ProofOfResidencyModal: React.FC<ProofOfResidencyModalProps> = ({
     });
   }, [isOpen, initialBooking?.id, eligibleBookings]);
 
-  // When selectedBookingId changes, populate fields strictly for that reservation & named guest
+  // Reset population tracker when modal closes so re-opening refreshes cleanly
   useEffect(() => {
-    if (!selectedBookingId) return;
+    if (!isOpen) {
+      lastPopulatedBookingKeyRef.current = '';
+    }
+  }, [isOpen]);
+
+  // When selectedBookingId changes (or modal opens), populate fields strictly for that reservation & named guest
+  useEffect(() => {
+    if (!isOpen || !selectedBookingId) return;
     const b = eligibleBookings.find(x => x.id === selectedBookingId);
     if (!b) return;
+    if (lastPopulatedBookingKeyRef.current === b.id) return;
+    lastPopulatedBookingKeyRef.current = b.id;
 
     const prop = properties.find(p => p.id === b.propertyId);
 
@@ -369,7 +379,17 @@ export const ProofOfResidencyModal: React.FC<ProofOfResidencyModalProps> = ({
 
     // Default email subject
     setEmailSubject(`Official Proof of Residency Letter - ${gName} - ${pName}`);
-  }, [selectedBookingId, eligibleBookings, properties, users]);
+  }, [isOpen, selectedBookingId, eligibleBookings, properties, users]);
+
+  // Allow Admin to edit Guest Name on the Professional Letter and keep default email subject synced
+  const handleGuestNameChange = (newName: string) => {
+    setGuestName(newName);
+    setEmailSubject((prev) =>
+      !prev || prev.startsWith('Official Proof of Residency Letter - ')
+        ? `Official Proof of Residency Letter - ${newName.trim() || 'Valued Guest'} - ${propertyName}`
+        : prev
+    );
+  };
 
   // Recipient preset handler
   const handleRecipientTypeChange = (type: 'bank' | 'insurance' | 'government' | 'general' | 'custom') => {
@@ -812,7 +832,11 @@ export const ProofOfResidencyModal: React.FC<ProofOfResidencyModalProps> = ({
       To Whom It May Concern:
     </p>
     <p class="body-paragraph">
-      This official letter certifies that <strong>${guestName}</strong> (${guestEmail ? `Email: ${guestEmail}` : ''}${guestPhone ? ` &bull; Tel: ${guestPhone}` : ''}) has established and maintained continuous, uninterrupted occupancy and physical residency at the residential estate address detailed below under our lawful property management administration.
+      This official letter certifies that <strong>${guestName}</strong>${
+        [guestEmail ? `Email: ${guestEmail}` : '', guestPhone ? `Tel: ${guestPhone}` : ''].filter(Boolean).length > 0
+          ? ` (${[guestEmail ? `Email: ${guestEmail}` : '', guestPhone ? `Tel: ${guestPhone}` : ''].filter(Boolean).join(' &bull; ')})`
+          : ''
+      } has established and maintained continuous, uninterrupted occupancy and physical residency at the residential estate address detailed below under our lawful property management administration.
     </p>
 
     <!-- Key Verification Data Grid -->
@@ -1133,6 +1157,61 @@ Corporate Email: ${corporateEmail}
                     );
                   })}
                 </select>
+              )}
+
+              {/* Editable Guest Name & Contact Info for the Professional Letter */}
+              {selectedBookingRecord && (
+                <div className="pt-2.5 mt-2 border-t border-slate-100 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label
+                      htmlFor="residency-guest-name"
+                      className="text-[10px] text-slate-500 font-bold uppercase tracking-wider flex items-center gap-1"
+                    >
+                      <User size={11} className="text-indigo-600" />
+                      Guest Name on Professional Letter:
+                    </label>
+                    {guestName.trim() !== getReservationGuestName(selectedBookingRecord).trim() && (
+                      <button
+                        type="button"
+                        onClick={() => handleGuestNameChange(getReservationGuestName(selectedBookingRecord))}
+                        className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer"
+                        title="Reset to the name stored on the selected reservation"
+                      >
+                        ↺ Reset
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    id="residency-guest-name"
+                    type="text"
+                    value={guestName}
+                    onChange={(e) => handleGuestNameChange(e.target.value)}
+                    placeholder="Enter Guest Full Name for Letter"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase">Guest Email:</span>
+                      <input
+                        type="email"
+                        value={guestEmail}
+                        onChange={(e) => setGuestEmail(e.target.value)}
+                        placeholder="guest@example.com"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none mt-0.5"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase">Guest Phone:</span>
+                      <input
+                        type="text"
+                        value={guestPhone}
+                        onChange={(e) => setGuestPhone(e.target.value)}
+                        placeholder="(404) 555-0199"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none mt-0.5"
+                      />
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
 
