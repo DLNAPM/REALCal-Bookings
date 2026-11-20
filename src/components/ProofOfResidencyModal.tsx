@@ -3,7 +3,7 @@ import { Booking, Property } from '../types';
 import { 
   X, Printer, Mail, Copy, Check, FileCheck, Building2, Calendar, 
   CreditCard, User, Phone, MapPin, ShieldCheck, AlertCircle, Plus, Trash2,
-  Send, Loader2, Sparkles, CheckCircle, ArrowRight
+  Send, Loader2, Sparkles, CheckCircle, ArrowRight, ExternalLink, FileText
 } from 'lucide-react';
 
 export interface ProofOfResidencyModalProps {
@@ -23,6 +23,8 @@ export interface InvoiceItem {
   description: string;
   amount: number;
   paid: boolean;
+  bookingId?: string;
+  bookingRef?: string;
 }
 
 export const ProofOfResidencyModal: React.FC<ProofOfResidencyModalProps> = ({
@@ -110,6 +112,9 @@ export const ProofOfResidencyModal: React.FC<ProofOfResidencyModalProps> = ({
 
   // Document Reference Code
   const [docVerificationCode, setDocVerificationCode] = useState<string>('');
+
+  // Invoice Verification Modal State (inspect an Invoice # before saving/printing)
+  const [inspectingInvoice, setInspectingInvoice] = useState<InvoiceItem | null>(null);
 
   const printAreaRef = useRef<HTMLDivElement>(null);
 
@@ -213,7 +218,9 @@ export const ProofOfResidencyModal: React.FC<ProofOfResidencyModalProps> = ({
           date: invDate,
           description: `Lodging Accommodations (${b.checkIn} to ${b.checkOut})`,
           amount: Number(invTotal) || 0,
-          paid: true
+          paid: true,
+          bookingId: b.id,
+          bookingRef: b.bookingRef
         });
       }
     } else if (b.status === 'confirmed' && b.totalPrice) {
@@ -223,7 +230,9 @@ export const ProofOfResidencyModal: React.FC<ProofOfResidencyModalProps> = ({
         date: b.checkIn ? b.checkIn.split('T')[0] : new Date().toISOString().split('T')[0],
         description: `Full Accommodations Stay (${b.checkIn} to ${b.checkOut})`,
         amount: b.totalPrice / 100,
-        paid: true
+        paid: true,
+        bookingId: b.id,
+        bookingRef: b.bookingRef
       });
     }
 
@@ -255,7 +264,9 @@ export const ProofOfResidencyModal: React.FC<ProofOfResidencyModalProps> = ({
             date: oDate,
             description: `Stay Extension / Renewal (${ob.checkIn} to ${ob.checkOut})`,
             amount: Number(oTotal) || 0,
-            paid: true
+            paid: true,
+            bookingId: ob.id,
+            bookingRef: ob.bookingRef
           });
         }
       } else if (ob.status === 'confirmed' && ob.totalPrice) {
@@ -265,7 +276,9 @@ export const ProofOfResidencyModal: React.FC<ProofOfResidencyModalProps> = ({
           date: ob.checkIn ? ob.checkIn.split('T')[0] : '',
           description: `Stay Extension / Additional Booking (${ob.checkIn} to ${ob.checkOut})`,
           amount: ob.totalPrice / 100,
-          paid: true
+          paid: true,
+          bookingId: ob.id,
+          bookingRef: ob.bookingRef
         });
       }
     });
@@ -354,7 +367,9 @@ export const ProofOfResidencyModal: React.FC<ProofOfResidencyModalProps> = ({
           date: invDate,
           description: `Lodging Accommodations (${b.checkIn} to ${b.checkOut})`,
           amount: Number(invTotal) || 0,
-          paid: true
+          paid: true,
+          bookingId: b.id,
+          bookingRef: b.bookingRef
         });
       }
     } else if (b.status === 'confirmed' && b.totalPrice) {
@@ -364,7 +379,9 @@ export const ProofOfResidencyModal: React.FC<ProofOfResidencyModalProps> = ({
         date: b.checkIn ? b.checkIn.split('T')[0] : new Date().toISOString().split('T')[0],
         description: `Full Accommodations Stay (${b.checkIn} to ${b.checkOut})`,
         amount: b.totalPrice / 100,
-        paid: true
+        paid: true,
+        bookingId: b.id,
+        bookingRef: b.bookingRef
       });
     }
 
@@ -395,7 +412,9 @@ export const ProofOfResidencyModal: React.FC<ProofOfResidencyModalProps> = ({
             date: oDate,
             description: `Stay Extension / Renewal (${ob.checkIn} to ${ob.checkOut})`,
             amount: Number(oTotal) || 0,
-            paid: true
+            paid: true,
+            bookingId: ob.id,
+            bookingRef: ob.bookingRef
           });
         }
       } else if (ob.status === 'confirmed' && ob.totalPrice) {
@@ -405,13 +424,36 @@ export const ProofOfResidencyModal: React.FC<ProofOfResidencyModalProps> = ({
           date: ob.checkIn ? ob.checkIn.split('T')[0] : '',
           description: `Stay Extension / Additional Booking (${ob.checkIn} to ${ob.checkOut})`,
           amount: ob.totalPrice / 100,
-          paid: true
+          paid: true,
+          bookingId: ob.id,
+          bookingRef: ob.bookingRef
         });
       }
     });
 
     setInvoices(invList);
   };
+
+  // Resolve the underlying Booking record for any invoice row so Admin can verify ownership
+  const resolveBookingForInvoice = (inv: InvoiceItem): Booking | undefined => {
+    if (inv.bookingId) {
+      const direct = bookings.find(b => b.id === inv.bookingId);
+      if (direct) return direct;
+    }
+    const norm = (inv.invoiceNumber || '').trim().toLowerCase();
+    if (!norm) return undefined;
+    return bookings.find((b) => {
+      const invNo = (b.invoiceDetails?.invoiceNumber || '').trim().toLowerCase();
+      const refNo = (b.bookingRef || '').trim().toLowerCase();
+      const synthInv = `inv-${refNo || b.id.substring(0, 6).toLowerCase()}`;
+      return (invNo && invNo === norm) || (refNo && refNo === norm) || synthInv === norm;
+    });
+  };
+
+  const selectedBookingRecord = useMemo(
+    () => bookings.find(b => b.id === selectedBookingId),
+    [bookings, selectedBookingId]
+  );
 
   // Invoice management
   const handleAddInvoice = () => {
@@ -1342,6 +1384,27 @@ Corporate Email: ${corporateEmail}
                             className="font-mono font-bold text-xs bg-white border border-slate-200 rounded px-1.5 py-0.5 text-indigo-700 w-24"
                             placeholder="Invoice #"
                           />
+                          {(() => {
+                            const linked = resolveBookingForInvoice(inv);
+                            const pdfHref = linked ? `/api/bookings/${linked.id}/invoice.pdf` : '#';
+                            return (
+                              <a
+                                href={pdfHref}
+                                target={linked ? '_blank' : undefined}
+                                rel={linked ? 'noopener noreferrer' : undefined}
+                                onClick={(e) => {
+                                  if (!e.metaKey && !e.ctrlKey && !e.shiftKey) {
+                                    e.preventDefault();
+                                    setInspectingInvoice(inv);
+                                  }
+                                }}
+                                className="inline-flex items-center gap-0.5 text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline underline-offset-2 px-1 py-0.5 rounded hover:bg-indigo-50 transition-colors"
+                                title={linked ? `Verify Invoice #${inv.invoiceNumber} against Selected Paid Reservation` : `Inspect Invoice #${inv.invoiceNumber}`}
+                              >
+                                Verify <ExternalLink size={10} />
+                              </a>
+                            );
+                          })()}
                         </div>
                         <div className="flex items-center gap-1">
                           <span className="text-[10px] text-slate-400 font-bold">$</span>
@@ -1640,31 +1703,58 @@ Corporate Email: ${corporateEmail}
                           </td>
                         </tr>
                       ) : (
-                        invoices.map((inv) => (
-                          <tr key={inv.id} className="hover:bg-slate-50/50">
-                            <td className="py-2 px-3 font-mono font-bold text-indigo-600">{inv.invoiceNumber}</td>
-                            <td className="py-2 px-3 text-slate-600">{inv.date || '—'}</td>
-                            <td className="py-2 px-3 text-slate-800">{inv.description}</td>
-                            <td className="py-2 px-3">
-                              <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded text-[10px] font-bold">
-                                &check; {inv.paid ? 'PAID IN FULL' : 'ACTIVE'}
-                              </span>
-                            </td>
-                            <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">
-                              ${Number(inv.amount).toFixed(2)}
-                            </td>
-                            <td className="py-2 px-3 text-center print:hidden">
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveInvoice(inv.id)}
-                                className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded transition-colors cursor-pointer"
-                                title="Remove this invoice from letter"
-                              >
-                                <Trash2 size={12} />
-                              </button>
-                            </td>
-                          </tr>
-                        ))
+                        invoices.map((inv) => {
+                          const linkedBooking = resolveBookingForInvoice(inv);
+                          const invoicePdfHref = linkedBooking
+                            ? `/api/bookings/${linkedBooking.id}/invoice.pdf`
+                            : '#';
+                          return (
+                            <tr key={inv.id} className="hover:bg-slate-50/50">
+                              <td className="py-2 px-3 font-mono font-bold text-indigo-600">
+                                <a
+                                  href={invoicePdfHref}
+                                  target={linkedBooking ? '_blank' : undefined}
+                                  rel={linkedBooking ? 'noopener noreferrer' : undefined}
+                                  onClick={(e) => {
+                                    if (!e.metaKey && !e.ctrlKey && !e.shiftKey) {
+                                      e.preventDefault();
+                                      setInspectingInvoice(inv);
+                                    }
+                                  }}
+                                  className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800 underline decoration-indigo-300 hover:decoration-indigo-700 underline-offset-2 transition-colors print:no-underline"
+                                  title={
+                                    linkedBooking
+                                      ? `Click to verify Invoice #${inv.invoiceNumber} belongs to the Selected Paid Reservation (Ctrl/Cmd+Click to open PDF)`
+                                      : `Click to inspect Invoice #${inv.invoiceNumber}`
+                                  }
+                                >
+                                  <span>{inv.invoiceNumber}</span>
+                                  <ExternalLink size={11} className="print:hidden opacity-75 flex-shrink-0" />
+                                </a>
+                              </td>
+                              <td className="py-2 px-3 text-slate-600">{inv.date || '—'}</td>
+                              <td className="py-2 px-3 text-slate-800">{inv.description}</td>
+                              <td className="py-2 px-3">
+                                <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded text-[10px] font-bold">
+                                  &check; {inv.paid ? 'PAID IN FULL' : 'ACTIVE'}
+                                </span>
+                              </td>
+                              <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">
+                                ${Number(inv.amount).toFixed(2)}
+                              </td>
+                              <td className="py-2 px-3 text-center print:hidden">
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveInvoice(inv.id)}
+                                  className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded transition-colors cursor-pointer"
+                                  title="Remove this invoice from letter"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })
                       )}
                       
                       {/* If more than one invoice, explicitly show Grand Total of all invoices combined */}
@@ -1862,6 +1952,292 @@ Corporate Email: ${corporateEmail}
           </div>
         </div>
       )}
+
+      {/* Invoice Verification Modal Overlay (Verify Invoice belongs to Selected Paid Reservation) */}
+      {inspectingInvoice && (() => {
+        const linked = resolveBookingForInvoice(inspectingInvoice);
+        const invDetails = linked?.invoiceDetails;
+        const linkedProp = linked ? properties.find(p => p.id === linked.propertyId) : undefined;
+        const linkedUser = linked ? users.find(u => u.uid === linked.userId) : undefined;
+        const linkedGuestName = linked
+          ? (linked.guestName || linkedUser?.displayName || invDetails?.sponsorName || 'Guest')
+          : '';
+        const linkedGuestEmail = linked
+          ? (linked.guestEmail || linkedUser?.email || invDetails?.sponsorEmail || '')
+          : '';
+        const linkedGuestPhone = linked
+          ? (linked.guestPhone || linkedUser?.phone || invDetails?.sponsorPhone || '')
+          : '';
+        const linkedRooms = linked
+          ? (linked.selectedBedrooms && linked.selectedBedrooms.length > 0
+              ? linked.selectedBedrooms.map((r: any) => `Room ${typeof r === 'object' && r !== null ? r.roomNumber : r}`).join(', ')
+              : linked.selectedBedroom
+              ? `Room ${typeof linked.selectedBedroom === 'object' && linked.selectedBedroom !== null ? linked.selectedBedroom.roomNumber : linked.selectedBedroom}`
+              : 'Full Property / Estate')
+          : '';
+
+        const isExactSelectedBooking = Boolean(linked && selectedBookingId && linked.id === selectedBookingId);
+        const isSameGuestLinkedBooking = Boolean(
+          linked &&
+          !isExactSelectedBooking &&
+          selectedBookingRecord &&
+          (
+            (linked.userId && linked.userId === selectedBookingRecord.userId) ||
+            (linkedGuestEmail && guestEmail && linkedGuestEmail.toLowerCase() === guestEmail.toLowerCase()) ||
+            (linkedGuestName && guestName && linkedGuestName.toLowerCase() === guestName.toLowerCase())
+          )
+        );
+        const isPaidVerified = linked
+          ? (invDetails ? invDetails.paid === true && !invDetails.cancelled && linked.status !== 'cancelled' : linked.status === 'confirmed')
+          : false;
+
+        return (
+          <div className="fixed inset-0 z-60 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto print:hidden">
+            <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-4">
+              {/* Modal Header */}
+              <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center gap-3">
+                <div>
+                  <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <FileText size={16} className="text-indigo-600" />
+                    Verify Invoice #{inspectingInvoice.invoiceNumber}
+                  </h4>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Confirm this invoice belongs to the Selected Paid Reservation before saving or emailing the letter.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setInspectingInvoice(null)}
+                  className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-200/70 transition-colors cursor-pointer"
+                  title="Close invoice verification"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4 text-xs max-h-[75vh] overflow-y-auto">
+                {/* Reservation Match Verification Banner */}
+                {linked ? (
+                  isExactSelectedBooking ? (
+                    <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 flex items-start gap-2.5">
+                      <CheckCircle size={18} className="text-emerald-600 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-bold text-emerald-900">
+                          Verified Match: Primary Selected Paid Reservation
+                        </div>
+                        <div className="text-[11px] text-emerald-800 mt-0.5">
+                          This invoice directly belongs to the currently selected reservation (Ref:{' '}
+                          <span className="font-mono font-bold">{linked.bookingRef || linked.id.substring(0, 8).toUpperCase()}</span>) for{' '}
+                          <strong>{linkedGuestName}</strong>.
+                        </div>
+                      </div>
+                    </div>
+                  ) : isSameGuestLinkedBooking ? (
+                    <div className="p-3.5 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-950 flex items-start gap-2.5">
+                      <CheckCircle size={18} className="text-indigo-600 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-bold text-indigo-900">
+                          Verified Same-Guest Linked Reservation (Extension / Additional Stay)
+                        </div>
+                        <div className="text-[11px] text-indigo-800 mt-0.5">
+                          This invoice belongs to another paid reservation (Ref:{' '}
+                          <span className="font-mono font-bold">{linked.bookingRef || linked.id.substring(0, 8).toUpperCase()}</span>) under the same guest{' '}
+                          <strong>{linkedGuestName}</strong>.
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-950 flex items-start gap-2.5">
+                      <AlertCircle size={18} className="text-rose-600 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-bold text-rose-900">
+                          Mismatch Warning: Different Reservation / Guest
+                        </div>
+                        <div className="text-[11px] text-rose-800 mt-0.5">
+                          This invoice belongs to <strong>{linkedGuestName}</strong> (Ref:{' '}
+                          <span className="font-mono font-bold">{linked.bookingRef || linked.id.substring(0, 8).toUpperCase()}</span>), which differs from the selected guest{' '}
+                          <strong>{guestName}</strong>. Remove it if it does not belong on this letter.
+                        </div>
+                      </div>
+                    </div>
+                  )
+                ) : (
+                  <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 flex items-start gap-2.5">
+                    <AlertCircle size={18} className="text-amber-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <div className="font-bold text-amber-900">
+                        Manual / Unlinked Invoice Entry
+                      </div>
+                      <div className="text-[11px] text-amber-800 mt-0.5">
+                        No matching booking record was found in reservations for Invoice #{inspectingInvoice.invoiceNumber}. Verify manually or remove it before saving.
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {linked ? (
+                  <>
+                    {/* Financial & Payment Summary */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Payment Status</div>
+                        <div className={`font-extrabold text-sm mt-1 ${isPaidVerified ? 'text-emerald-700' : 'text-amber-700'}`}>
+                          {isPaidVerified ? 'PAID IN FULL' : (linked.status || 'PENDING').toUpperCase()}
+                        </div>
+                        {invDetails?.paidAt && (
+                          <div className="text-[10px] text-slate-500 mt-0.5">
+                            Paid: {new Date(invDetails.paidAt).toLocaleDateString()}
+                          </div>
+                        )}
+                      </div>
+                      <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Invoice Grand Total</div>
+                        <div className="font-mono font-black text-base text-indigo-700 mt-0.5">
+                          ${(invDetails?.grandTotal !== undefined ? Number(invDetails.grandTotal) : (linked.totalPrice || 0) / 100).toFixed(2)} USD
+                        </div>
+                        {invDetails && (
+                          <div className="text-[10px] text-slate-500 font-mono">
+                            Base: ${Number(invDetails.baseAmount || 0).toFixed(2)} + Fee: ${Number(invDetails.stripeFee || 0).toFixed(2)}
+                          </div>
+                        )}
+                      </div>
+                      <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Booking Reference</div>
+                        <div className="font-mono font-bold text-sm text-slate-900 mt-1">
+                          {linked.bookingRef || linked.id.substring(0, 8).toUpperCase()}
+                        </div>
+                        <div className="text-[10px] text-slate-500 mt-0.5">
+                          Stay: {calculateDays(linked.checkIn, linked.checkOut)} Days
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Reservation & Billing Details Side-by-Side */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="p-4 rounded-2xl border border-slate-200 bg-white space-y-2">
+                        <div className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-1.5">
+                          Reservation Details
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 block">Guest Name</span>
+                          <span className="font-bold text-slate-900">{linkedGuestName}</span>
+                        </div>
+                        {linkedGuestEmail && (
+                          <div>
+                            <span className="text-[10px] text-slate-400 block">Guest Email</span>
+                            <span className="text-slate-700 break-all">{linkedGuestEmail}</span>
+                          </div>
+                        )}
+                        {linkedGuestPhone && (
+                          <div>
+                            <span className="text-[10px] text-slate-400 block">Guest Phone</span>
+                            <span className="text-slate-700 font-mono">{linkedGuestPhone}</span>
+                          </div>
+                        )}
+                        <div>
+                          <span className="text-[10px] text-slate-400 block">Property &amp; Rooms</span>
+                          <span className="font-semibold text-slate-800">
+                            {linked.propertyName || linkedProp?.name || 'Property'} &middot; {linkedRooms}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 block">Check-In &ndash; Check-Out</span>
+                          <span className="font-mono font-semibold text-slate-800">
+                            {linked.checkIn} to {linked.checkOut}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="p-4 rounded-2xl border border-slate-200 bg-white space-y-2">
+                        <div className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-1.5">
+                          Invoice &amp; Sponsor Record
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 block">Official Invoice #</span>
+                          <span className="font-mono font-bold text-indigo-700">
+                            {invDetails?.invoiceNumber || inspectingInvoice.invoiceNumber}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 block">Sponsor / Billing Name</span>
+                          <span className="font-bold text-slate-900">
+                            {invDetails?.sponsorName || linkedGuestName}
+                          </span>
+                        </div>
+                        {invDetails?.sponsorEmail && (
+                          <div>
+                            <span className="text-[10px] text-slate-400 block">Billing Email</span>
+                            <span className="text-slate-700 break-all">{invDetails.sponsorEmail}</span>
+                          </div>
+                        )}
+                        {invDetails?.sponsorPhone && (
+                          <div>
+                            <span className="text-[10px] text-slate-400 block">Billing Phone</span>
+                            <span className="text-slate-700 font-mono">{invDetails.sponsorPhone}</span>
+                          </div>
+                        )}
+                        {invDetails?.sponsorAddress && (
+                          <div>
+                            <span className="text-[10px] text-slate-400 block">Billing Address</span>
+                            <span className="text-slate-700 whitespace-pre-wrap">{invDetails.sponsorAddress}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Direct Links to Official Invoice PDF & Invoice Page */}
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <a
+                        href={`/api/bookings/${linked.id}/invoice.pdf`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold inline-flex items-center gap-1.5 transition-colors shadow-xs"
+                      >
+                        <FileText size={13} /> Open Official Invoice PDF <ExternalLink size={12} />
+                      </a>
+                      <a
+                        href={`/pay-invoice/${linked.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 font-bold inline-flex items-center gap-1.5 transition-colors"
+                      >
+                        <CreditCard size={13} /> View Invoice Page <ExternalLink size={12} />
+                      </a>
+                    </div>
+                  </>
+                ) : (
+                  <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50 space-y-1.5">
+                    <div><span className="text-slate-500">Invoice #:</span> <strong className="font-mono text-indigo-700">{inspectingInvoice.invoiceNumber}</strong></div>
+                    <div><span className="text-slate-500">Billing Date:</span> <strong>{inspectingInvoice.date || '—'}</strong></div>
+                    <div><span className="text-slate-500">Description:</span> <strong>{inspectingInvoice.description}</strong></div>
+                    <div><span className="text-slate-500">Amount:</span> <strong className="font-mono">${Number(inspectingInvoice.amount).toFixed(2)} USD</strong></div>
+                  </div>
+                )}
+              </div>
+
+              <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-between items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleRemoveInvoice(inspectingInvoice.id);
+                    setInspectingInvoice(null);
+                  }}
+                  className="px-3.5 py-2 text-xs font-bold text-rose-600 hover:text-rose-800 hover:bg-rose-50 border border-rose-200 rounded-xl inline-flex items-center gap-1.5 cursor-pointer transition-colors"
+                >
+                  <Trash2 size={13} /> Remove Invoice from Letter
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInspectingInvoice(null)}
+                  className="px-4 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-300 hover:bg-slate-100 rounded-xl cursor-pointer transition-colors"
+                >
+                  Done Verifying
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };
