@@ -2710,6 +2710,352 @@ async function createReferralLetterPDF(letter: any): Promise<Buffer> {
 }
 
 // ============================================================
+// PROOF OF RESIDENCY LETTER (PDF GENERATION & EMAIL DELIVERY)
+// ============================================================
+const PROOF_OF_RESIDENCY_FILE = path.resolve(process.cwd(), "data", "proof-of-residency-letters.json");
+
+function getLocalProofOfResidencyLetters(): any[] {
+  try {
+    if (fs.existsSync(PROOF_OF_RESIDENCY_FILE)) {
+      const raw = fs.readFileSync(PROOF_OF_RESIDENCY_FILE, "utf-8");
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    }
+  } catch (e) {
+    console.warn("[ProofOfResidency] Could not read local cache:", e);
+  }
+  return [];
+}
+
+function saveLocalProofOfResidencyLetter(record: any) {
+  try {
+    const dir = path.dirname(PROOF_OF_RESIDENCY_FILE);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const list = getLocalProofOfResidencyLetters().filter((x: any) => x.id !== record.id);
+    list.unshift(record);
+    fs.writeFileSync(PROOF_OF_RESIDENCY_FILE, JSON.stringify(list.slice(0, 100), null, 2), "utf-8");
+  } catch (e) {
+    console.error("[ProofOfResidency] Error writing local cache:", e);
+  }
+}
+
+async function getProofOfResidencyByIdMerged(id: string): Promise<any | null> {
+  const local = getLocalProofOfResidencyLetters().find((x: any) => x.id === id);
+  if (local) return local;
+  if (db) {
+    try {
+      const docSnap = await db.collection("proof_of_residency_letters").doc(id).get();
+      if (docSnap.exists) return { id: docSnap.id, ...docSnap.data() };
+    } catch {}
+  }
+  return null;
+}
+
+function sanitizeProofOfResidencyData(raw: any = {}, fallbackGuestName?: string, fallbackInstitution?: string) {
+  const invoices = Array.isArray(raw.invoices)
+    ? raw.invoices.map((inv: any) => ({
+        invoiceNumber: String(inv?.invoiceNumber || 'Manual').trim(),
+        date: String(inv?.date || 'N/A').trim(),
+        description: String(inv?.description || 'Lodging Accommodations').trim(),
+        amount: Number(inv?.amount) || 0,
+        paid: inv?.paid !== false,
+      }))
+    : [];
+  const computedTotal = invoices.reduce((sum: number, i: any) => sum + (Number(i.amount) || 0), 0);
+  const grandTotalAmount = raw.grandTotalAmount !== undefined ? Number(raw.grandTotalAmount) || 0 : computedTotal;
+
+  return {
+    companyName: String(raw.companyName || 'C&SH Group Properties, LLC').trim(),
+    corporateAddress: String(raw.corporateAddress || '9404 West 144th Place, Orland Park, IL 60462').trim(),
+    corporatePhone: String(raw.corporatePhone || '(404) 555-0199').trim(),
+    corporateEmail: String(raw.corporateEmail || 'admin@cshgroupproperties.com').trim(),
+    todayFormatted: String(
+      raw.todayFormatted ||
+        new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+    ).trim(),
+    docVerificationCode: String(raw.docVerificationCode || `VER-${Date.now().toString().slice(-5)}-${new Date().getFullYear()}`).trim(),
+    institutionName: String(raw.institutionName || fallbackInstitution || 'To Whom It May Concern').trim(),
+    attentionTo: String(raw.attentionTo || 'Official Verification & Records Department').trim(),
+    referenceNumber: String(raw.referenceNumber || '').trim(),
+    guestName: String(raw.guestName || fallbackGuestName || 'Valued Guest').trim(),
+    guestEmail: String(raw.guestEmail || '').trim(),
+    guestPhone: String(raw.guestPhone || '').trim(),
+    propertyName: String(raw.propertyName || 'Stonewall Villa').trim(),
+    propertyAddress: String(raw.propertyAddress || '3855 Stonewall Tell Rd, Atlanta, GA 30349').trim(),
+    roomsCount: Number(raw.roomsCount) || 1,
+    roomsDescription: String(raw.roomsDescription || 'Dedicated Residential Suite').trim(),
+    checkInDate: String(raw.checkInDate || '').trim(),
+    checkOutDate: String(raw.checkOutDate || '').trim(),
+    checkInFormatted: String(raw.checkInFormatted || raw.checkInDate || 'N/A').trim(),
+    checkOutFormatted: String(raw.checkOutFormatted || raw.checkOutDate || 'N/A').trim(),
+    consecutiveDays: Number(raw.consecutiveDays) || 0,
+    invoices,
+    grandTotalAmount,
+    signerName: String(raw.signerName || 'Housing Management').trim(),
+    signerTitle: String(raw.signerTitle || 'Property Operations Director & Authorized Corporate Officer').trim(),
+  };
+}
+
+function createProofOfResidencyPDF(rawData: any): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    try {
+      const d = sanitizeProofOfResidencyData(rawData);
+      const doc = new PDFDocument({ margin: 48, size: 'LETTER' });
+      const buffers: Buffer[] = [];
+      doc.on('data', buffers.push.bind(buffers));
+      doc.on('end', () => resolve(Buffer.concat(buffers)));
+
+      const left = 48;
+      const rightEdge = 564;
+      const contentWidth = rightEdge - left; // 516pt
+
+      const ensureSpace = (needed: number) => {
+        if (doc.y + needed > 730) {
+          doc.addPage();
+          doc.y = 48;
+        }
+      };
+
+      // 1. Official Letterhead Header
+      doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(17).text(d.companyName.toUpperCase(), left, 44, { width: 300 });
+      doc.fillColor('#4f46e5').font('Helvetica-Bold').fontSize(8).text('EXECUTIVE ACCOMMODATIONS  •  RESIDENTIAL MANAGEMENT DIVISION', left, doc.y + 2, { width: 310 });
+      doc.fillColor('#475569').font('Helvetica').fontSize(9.5).text(`Operating: ${d.propertyName}`, left, doc.y + 3, { width: 300 });
+      const leftBottom = doc.y;
+
+      doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(9).text('Corporate Administration', 354, 44, { width: 210, align: 'right' });
+      doc.fillColor('#475569').font('Helvetica').fontSize(8.5)
+        .text(d.corporateAddress, 354, 57, { width: 210, align: 'right' })
+        .text(`Phone: ${d.corporatePhone}`, 354, doc.y + 1, { width: 210, align: 'right' })
+        .text(`Email: ${d.corporateEmail}`, 354, doc.y + 1, { width: 210, align: 'right' });
+      const headerBottom = Math.max(leftBottom, doc.y) + 10;
+
+      doc.strokeColor('#4f46e5').lineWidth(1.8).moveTo(left, headerBottom).lineTo(rightEdge, headerBottom).stroke();
+
+      // 2. Date & Verification Code Bar
+      let y = headerBottom + 10;
+      doc.fillColor('#334155').font('Helvetica-Bold').fontSize(9).text('Date of Issuance: ', left, y, { continued: true });
+      doc.font('Helvetica').text(d.todayFormatted);
+      doc.fillColor('#4f46e5').font('Courier-Bold').fontSize(9).text(`Verification ID: ${d.docVerificationCode}`, 330, y, { width: 234, align: 'right' });
+
+      y += 16;
+      doc.strokeColor('#e2e8f0').lineWidth(0.8).moveTo(left, y).lineTo(rightEdge, y).stroke();
+      y += 12;
+
+      // 3. Recipient Box
+      const recHeight = d.referenceNumber ? 62 : 48;
+      doc.rect(left, y, contentWidth, recHeight).fillAndStroke('#f8fafc', '#e2e8f0');
+      doc.fillColor('#64748b').font('Helvetica-Bold').fontSize(7.5).text('OFFICIAL VERIFICATION PRESENTED TO:', left + 12, y + 8);
+      doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(11).text(d.institutionName, left + 12, y + 19, { width: contentWidth - 24 });
+      doc.fillColor('#475569').font('Helvetica').fontSize(9).text(`ATTN: ${d.attentionTo}`, left + 12, y + 33, { width: contentWidth - 24 });
+      if (d.referenceNumber) {
+        doc.fillColor('#4f46e5').font('Courier-Bold').fontSize(8.5).text(`Reference / Policy / Loan #: ${d.referenceNumber}`, left + 12, y + 46, { width: contentWidth - 24 });
+      }
+      y += recHeight + 14;
+
+      // 4. Subject Line
+      doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(10.5)
+        .text('RE: CERTIFICATION OF CONTINUOUS RESIDENCY & ACCOMMODATION VERIFICATION', left, y, { width: contentWidth });
+      y = doc.y + 4;
+      doc.strokeColor('#cbd5e1').lineWidth(1).moveTo(left, y).lineTo(rightEdge, y).stroke();
+      y += 10;
+
+      // 5. Certification Body Paragraph
+      doc.fillColor('#1e293b').font('Times-Roman').fontSize(10.5).text('To Whom It May Concern:', left, y);
+      y = doc.y + 6;
+
+      const guestContactParts = [
+        d.guestEmail ? `Email: ${d.guestEmail}` : '',
+        d.guestPhone ? `Tel: ${d.guestPhone}` : '',
+      ].filter(Boolean);
+      const guestContactSuffix = guestContactParts.length > 0 ? ` (${guestContactParts.join(' • ')})` : '';
+
+      doc.fillColor('#1e293b').font('Times-Roman').fontSize(10.5)
+        .text('This official letter certifies that ', left, y, { width: contentWidth, lineGap: 2.5, continued: true })
+        .font('Times-Bold').text(d.guestName, { continued: true })
+        .font('Times-Roman').text(
+          `${guestContactSuffix} has established and maintained continuous, uninterrupted occupancy and physical residency at the residential estate address detailed below under our lawful property management administration.`
+        );
+      y = doc.y + 12;
+
+      // 6. Verification Data Grid (Property + Rooms side by side, Stay Period full width)
+      const colGap = 12;
+      const halfW = (contentWidth - colGap) / 2;
+      const cardH = 56;
+      doc.rect(left, y, halfW, cardH).fillAndStroke('#f8fafc', '#e2e8f0');
+      doc.fillColor('#64748b').font('Helvetica-Bold').fontSize(7.5).text('1. PROPERTY & PHYSICAL ADDRESS', left + 10, y + 8);
+      doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(10).text(d.propertyName, left + 10, y + 20, { width: halfW - 20 });
+      doc.fillColor('#475569').font('Helvetica').fontSize(8.5).text(d.propertyAddress, left + 10, y + 34, { width: halfW - 20 });
+
+      const rightColX = left + halfW + colGap;
+      doc.rect(rightColX, y, halfW, cardH).fillAndStroke('#f8fafc', '#e2e8f0');
+      doc.fillColor('#64748b').font('Helvetica-Bold').fontSize(7.5).text('2. ROOM(S) RESERVED BY GUEST', rightColX + 10, y + 8);
+      doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(10)
+        .text(`${d.roomsCount} Dedicated Room${d.roomsCount > 1 ? 's' : ''}`, rightColX + 10, y + 20, { width: halfW - 20 });
+      doc.fillColor('#475569').font('Helvetica').fontSize(8.5).text(d.roomsDescription, rightColX + 10, y + 34, { width: halfW - 20 });
+
+      y += cardH + 10;
+
+      const stayCardH = 50;
+      doc.rect(left, y, contentWidth, stayCardH).fillAndStroke('#f8fafc', '#e2e8f0');
+      doc.fillColor('#64748b').font('Helvetica-Bold').fontSize(7.5).text('3. TIME PERIOD OF CONTINUOUS STAY', left + 10, y + 8);
+      doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(9.5)
+        .text(`${d.checkInFormatted}  through  ${d.checkOutFormatted}`, left + 10, y + 20, { width: contentWidth - 20 });
+      doc.fillColor('#065f46').font('Helvetica-Bold').fontSize(8.5)
+        .text(
+          `Verified Duration: ${d.consecutiveDays} Consecutive Days / Nights (${d.consecutiveDays > 5 ? 'Meets & Exceeds >5 Day Residency Threshold' : 'Authorized Residency'})`,
+          left + 10,
+          y + 34,
+          { width: contentWidth - 20 }
+        );
+      y += stayCardH + 14;
+
+      // 7. Financial & Invoicing Accounting Table
+      doc.y = y;
+      ensureSpace(95);
+      y = doc.y;
+      doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(9.5).text('4. FINANCIAL & INVOICING ACCOUNTING SUMMARY', left, y);
+      doc.fillColor('#4f46e5').font('Helvetica-Bold').fontSize(8.5)
+        .text(`Total Invoices Issued: ${d.invoices.length}`, left, y + 1, { width: contentWidth, align: 'right' });
+      y += 16;
+
+      // Table Header
+      const colInv = left;
+      const colDate = left + 96;
+      const colDesc = left + 166;
+      const colStatus = left + 368;
+      const colAmt = left + 436;
+
+      doc.rect(left, y, contentWidth, 20).fillAndStroke('#f1f5f9', '#cbd5e1');
+      doc.fillColor('#475569').font('Helvetica-Bold').fontSize(7.5);
+      doc.text('INVOICE #', colInv + 6, y + 6, { width: 88 });
+      doc.text('BILLING DATE', colDate + 4, y + 6, { width: 66 });
+      doc.text('DESCRIPTION OF ACCOMMODATIONS', colDesc + 4, y + 6, { width: 196 });
+      doc.text('STATUS', colStatus + 4, y + 6, { width: 64 });
+      doc.text('AMOUNT (USD)', colAmt, y + 6, { width: rightEdge - colAmt - 6, align: 'right' });
+      y += 20;
+
+      if (d.invoices.length === 0) {
+        doc.rect(left, y, contentWidth, 22).stroke('#e2e8f0');
+        doc.fillColor('#64748b').font('Helvetica-Oblique').fontSize(8.5).text('No invoices attached.', left + 8, y + 6);
+        y += 22;
+      } else {
+        for (const inv of d.invoices) {
+          doc.y = y;
+          ensureSpace(28);
+          y = doc.y;
+          const descHeight = doc.font('Helvetica').fontSize(8.5).heightOfString(inv.description, { width: 194 });
+          const rowH = Math.max(22, Math.ceil(descHeight) + 10);
+
+          doc.rect(left, y, contentWidth, rowH).stroke('#e2e8f0');
+          doc.fillColor('#4f46e5').font('Courier-Bold').fontSize(8.5).text(inv.invoiceNumber, colInv + 6, y + 6, { width: 88 });
+          doc.fillColor('#475569').font('Helvetica').fontSize(8.5).text(inv.date || 'N/A', colDate + 4, y + 6, { width: 66 });
+          doc.fillColor('#0f172a').font('Helvetica').fontSize(8.5).text(inv.description, colDesc + 4, y + 6, { width: 194 });
+          doc.fillColor('#065f46').font('Helvetica-Bold').fontSize(7.5).text(inv.paid ? 'PAID IN FULL' : 'PENDING', colStatus + 4, y + 7, { width: 64 });
+          doc.fillColor('#0f172a').font('Courier-Bold').fontSize(8.5).text(`$${Number(inv.amount).toFixed(2)}`, colAmt, y + 6, { width: rightEdge - colAmt - 6, align: 'right' });
+          y += rowH;
+        }
+      }
+
+      // Grand Total Row
+      doc.y = y;
+      ensureSpace(30);
+      y = doc.y;
+      doc.rect(left, y, contentWidth, 24).fillAndStroke('#eef2ff', '#c7d2fe');
+      const totalLabel = d.invoices.length > 1 ? `GRAND TOTAL OF ALL ${d.invoices.length} INVOICES COMBINED:` : 'TOTAL INVOICED & PAID:';
+      doc.fillColor('#312e81').font('Helvetica-Bold').fontSize(8.5).text(totalLabel, left + 8, y + 7, { width: 390, align: 'right' });
+      doc.fillColor('#4338ca').font('Courier-Bold').fontSize(10).text(`$${Number(d.grandTotalAmount).toFixed(2)} USD`, colAmt - 24, y + 6, { width: rightEdge - (colAmt - 24) - 8, align: 'right' });
+      y += 32;
+
+      // 8. Full-Settlement Statement
+      doc.y = y;
+      ensureSpace(140);
+      y = doc.y;
+      doc.fillColor('#334155').font('Times-Roman').fontSize(9.5).text(
+        'All lodging fees for the aforementioned duration have been reconciled in full with zero delinquent balance remaining. The resident has adhered to all house terms, maintaining authorized, verified occupancy throughout this timeline.',
+        left,
+        y,
+        { width: contentWidth, lineGap: 2 }
+      );
+      y = doc.y + 16;
+
+      // 9. Signature & Corporate Verification Seal
+      doc.fillColor('#475569').font('Helvetica').fontSize(9).text('Sincerely and Respectfully submitted,', left, y);
+      doc.fillColor('#0f172a').font('Times-BoldItalic').fontSize(20).text(d.signerName, left, y + 14);
+      doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(10).text(d.signerName, left, y + 40);
+      doc.fillColor('#475569').font('Helvetica').fontSize(8.5).text(d.signerTitle, left, y + 53, { width: 320 });
+      doc.fillColor('#4338ca').font('Helvetica-Bold').fontSize(8.5).text(d.companyName, left, doc.y + 2);
+      doc.fillColor('#64748b').font('Helvetica').fontSize(8).text(`Corporate Verification: ${d.corporatePhone}  •  ${d.corporateEmail}`, left, doc.y + 2);
+      const sigBottom = doc.y;
+
+      // Circular Seal on the Right
+      const sealCx = rightEdge - 52;
+      const sealCy = y + 42;
+      doc.save();
+      doc.circle(sealCx, sealCy, 44).fillAndStroke('#f5f3ff', '#4f46e5');
+      doc.fillColor('#4338ca').font('Helvetica-Bold').fontSize(7.5).text('C&SH GROUP', sealCx - 38, sealCy - 20, { width: 76, align: 'center' });
+      doc.fontSize(6.5).text('OFFICIAL CORPORATE', sealCx - 38, sealCy - 9, { width: 76, align: 'center' });
+      doc.text('VERIFICATION SEAL', sealCx - 38, sealCy, { width: 76, align: 'center' });
+      doc.fillColor('#4f46e5').font('Courier-Bold').fontSize(6.5).text(d.docVerificationCode, sealCx - 38, sealCy + 12, { width: 76, align: 'center' });
+      doc.restore();
+
+      const footerY = Math.max(sigBottom, sealCy + 48) + 14;
+      doc.strokeColor('#e2e8f0').lineWidth(0.7).moveTo(left, footerY).lineTo(rightEdge, footerY).stroke();
+      doc.fillColor('#64748b').font('Helvetica').fontSize(7.5).text(
+        `This document has been issued by ${d.companyName} (${d.corporateAddress}) for official presentation to financial lending institutions, insurance underwriters, and administrative agencies. For instant verification, contact administration directly at ${d.corporateEmail} or ${d.corporatePhone}.`,
+        left,
+        footerY + 8,
+        { width: contentWidth, align: 'center', lineGap: 1.5 }
+      );
+
+      doc.end();
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+function injectProofOfResidencyEmailPdfButton(rawHtml: string, pdfUrl: string): string {
+  if (!rawHtml) return '';
+  const safeHref = pdfUrl.replace(/"/g, '&quot;');
+  const downloadHref = `${safeHref}${safeHref.includes('?') ? '&' : '?'}download=1`;
+
+  const emailActionBar = `
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background: #0f172a; color: #ffffff; margin-bottom: 16px;">
+    <tr>
+      <td style="padding: 12px 18px; font-family: Arial, Helvetica, sans-serif; font-size: 13px; font-weight: bold; color: #ffffff;">
+        Official Proof of Residency Letter &bull; PDF Copy Attached
+      </td>
+      <td align="right" style="padding: 10px 18px; white-space: nowrap;">
+        <a href="${safeHref}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background: #4f46e5; color: #ffffff; text-decoration: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; font-family: Arial, Helvetica, sans-serif; font-size: 12px;">
+          Print / Save as PDF
+        </a>
+        &nbsp;
+        <a href="${downloadHref}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background: #1e293b; color: #e2e8f0; border: 1px solid #475569; text-decoration: none; padding: 7px 12px; border-radius: 6px; font-weight: bold; font-family: Arial, Helvetica, sans-serif; font-size: 12px;">
+          Download PDF
+        </a>
+      </td>
+    </tr>
+  </table>`;
+
+  // Replace the browser-only .print-bar div (which uses onclick="window.print()" that email clients strip)
+  const printBarRegex = /<div class="print-bar">[\s\S]*?<\/div>\s*/i;
+  if (printBarRegex.test(rawHtml)) {
+    return rawHtml.replace(printBarRegex, `${emailActionBar}\n`);
+  }
+
+  // Fallback: replace any standalone window.print() button
+  const buttonRegex = /<button[^>]*onclick=["']window\.print\(\)["'][^>]*>[\s\S]*?<\/button>/i;
+  if (buttonRegex.test(rawHtml)) {
+    return rawHtml.replace(
+      buttonRegex,
+      `<a href="${safeHref}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background: #4f46e5; color: #ffffff; text-decoration: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; font-family: Arial, Helvetica, sans-serif; font-size: 12px;">Print / Save as PDF</a>`
+    );
+  }
+
+  return `${emailActionBar}\n${rawHtml}`;
+}
+
+// ============================================================
 // EVENTS LINEUP PUBLICATION (AMEX-INSPIRED CONCIERGE EDITION)
 // ============================================================
 const EVENTS_LINEUP_FILE = path.resolve(process.cwd(), "data", "events-lineup.json");
@@ -3533,38 +3879,110 @@ async function startServer() {
     }
   });
 
+  // GET /api/proof-of-residency/pdf/:id/:filename - Serve Proof of Residency Letter PDF for email "Print / Save as PDF" button & direct download
+  app.get("/api/proof-of-residency/pdf/:id/:filename", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const record = await getProofOfResidencyByIdMerged(id);
+      if (!record || !record.letterData) {
+        return res.status(404).send("Proof of Residency Letter PDF not found.");
+      }
+      const safeGuest = (record.letterData.guestName || 'Guest').replace(/[^a-zA-Z0-9_-]/g, '-');
+      const pdfBuffer = await createProofOfResidencyPDF(record.letterData);
+      const isDownload = req.query.download === '1' || req.query.download === 'true';
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `${isDownload ? 'attachment' : 'inline'}; filename="Proof-of-Residency-${safeGuest}.pdf"`
+      );
+      res.send(pdfBuffer);
+    } catch (err: any) {
+      console.error("[API] Proof of Residency PDF serve error:", err);
+      res.status(500).send(`Failed to generate Proof of Residency PDF: ${err.message}`);
+    }
+  });
+
   app.post("/api/send-proof-of-residency-email", async (req, res) => {
     console.log("[API] Send Proof of Residency Email hit");
     try {
-      const { to, cc, subject, html, text, guestName } = req.body;
+      const { to, cc, subject, html, text, guestName, institutionName, letterData } = req.body;
       const smtpHost = process.env.SMTP_HOST;
 
       if (!to) {
         return res.status(400).json({ error: "Recipient email address is required." });
       }
 
-      if (!smtpHost) {
-        console.warn("[API] SMTP_HOST is not configured. Simulating successful Proof of Residency email dispatch.");
-        return res.json({ 
-          success: true, 
-          simulated: true, 
-          message: `Proof of Residency Letter dispatch simulated to ${to} (SMTP_HOST not set).` 
-        });
+      const sanitizedData = sanitizeProofOfResidencyData(letterData || {}, guestName, institutionName);
+      const safeGuest = (sanitizedData.guestName || 'Guest').replace(/[^a-zA-Z0-9_-]/g, '-');
+      const letterId = `por-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 8)}`;
+      const pdfFilename = `Proof-of-Residency-${safeGuest}.pdf`;
+
+      const record = {
+        id: letterId,
+        createdAt: new Date().toISOString(),
+        letterData: sanitizedData,
+      };
+      saveLocalProofOfResidencyLetter(record);
+      if (db) {
+        try {
+          await db.collection("proof_of_residency_letters").doc(letterId).set(record, { merge: true });
+        } catch (dbErr: any) {
+          console.warn("[API] Firestore Proof of Residency cache warning:", dbErr.message);
+        }
       }
 
-      const emailSubject = subject || `Official Proof of Residency Letter - ${guestName || 'Guest'} - C&SH Group Properties, LLC`;
-      const emailText = text || `Please review the attached Official Proof of Residency Letter for ${guestName || 'the guest'}.`;
+      const pdfBuffer = await createProofOfResidencyPDF(sanitizedData);
+
+      const configuredBase = (process.env.APP_URL || '').trim().replace(/\/$/, '');
+      const proto = (req.get('x-forwarded-proto') || req.protocol || 'https').split(',')[0].trim();
+      const host = (req.get('x-forwarded-host') || req.get('host') || 'localhost:3000').split(',')[0].trim();
+      const baseUrl = configuredBase || `${proto}://${host}`;
+      const pdfUrl = `${baseUrl}/api/proof-of-residency/pdf/${encodeURIComponent(letterId)}/${encodeURIComponent(pdfFilename)}`;
+
+      const emailHtml = injectProofOfResidencyEmailPdfButton(html || '', pdfUrl);
+      const emailSubject = subject || `Official Proof of Residency Letter - ${sanitizedData.guestName} - ${sanitizedData.companyName}`;
+      const emailText = text
+        ? `${text}\n\nPrint / Save as PDF: ${pdfUrl}\n(A PDF copy is also attached to this email.)`
+        : `Please review the attached Official Proof of Residency Letter for ${sanitizedData.guestName}.\n\nPrint / Save as PDF: ${pdfUrl}`;
+
+      if (!smtpHost) {
+        console.warn("[API] SMTP_HOST is not configured. Simulating successful Proof of Residency email + PDF attachment dispatch.");
+        return res.json({
+          success: true,
+          simulated: true,
+          letterId,
+          pdfFilename,
+          pdfUrl,
+          pdfAttached: true,
+          message: `Proof of Residency Letter + PDF (${pdfFilename}) dispatch simulated to ${to} (SMTP_HOST not set).`
+        });
+      }
 
       const result = await sendSmtpEmail({
         to,
         cc,
         subject: emailSubject,
         text: emailText,
-        html: html
+        html: emailHtml,
+        attachments: [
+          {
+            filename: pdfFilename,
+            content: pdfBuffer,
+            contentType: 'application/pdf',
+          },
+        ],
       });
 
-      console.log(`[API] Proof of Residency Email successfully sent to ${to}:`, result);
-      res.json({ success: true, result, message: `Proof of Residency Letter successfully emailed to ${to}` });
+      console.log(`[API] Proof of Residency Email + PDF (${pdfFilename}) successfully sent to ${to}:`, result);
+      res.json({
+        success: true,
+        result,
+        letterId,
+        pdfFilename,
+        pdfUrl,
+        pdfAttached: true,
+        message: `Proof of Residency Letter emailed with PDF attachment (${pdfFilename}) to ${to}`
+      });
     } catch (err: any) {
       console.error("[API] Proof of Residency Email Error:", err);
       res.status(500).json({ error: err.message });

@@ -957,9 +957,8 @@ export const ProofOfResidencyModal: React.FC<ProofOfResidencyModalProps> = ({
 </html>`;
   };
 
-  // Copy plain text formatted letter
-  const handleCopyText = () => {
-    const text = `
+  // Build plain text formatted letter (used for Copy & Email text fallback)
+  const buildPlainTextLetter = () => `
 PROOF OF RESIDENCY LETTER
 Date: ${todayFormatted}
 Verification Code: ${docVerificationCode}
@@ -1001,14 +1000,16 @@ ${signerTitle}
 ${companyName}
 Corporate Phone: ${corporatePhone}
 Corporate Email: ${corporateEmail}
-    `.trim();
+  `.trim();
 
-    navigator.clipboard.writeText(text);
+  // Copy plain text formatted letter
+  const handleCopyText = () => {
+    navigator.clipboard.writeText(buildPlainTextLetter());
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
   };
 
-  // Dispatch Email
+  // Dispatch Email with official PDF attachment + working Print / Save as PDF link
   const handleSendEmail = async () => {
     if (!emailTo || !emailTo.trim()) {
       setEmailSendError("Recipient email address is required.");
@@ -1021,6 +1022,41 @@ Corporate Email: ${corporateEmail}
 
     try {
       const htmlContent = generatePrintableHtml();
+      const textContent = buildPlainTextLetter();
+      const letterData = {
+        companyName,
+        corporateAddress,
+        corporatePhone,
+        corporateEmail,
+        todayFormatted,
+        docVerificationCode,
+        institutionName,
+        attentionTo,
+        referenceNumber,
+        guestName,
+        guestEmail,
+        guestPhone,
+        propertyName,
+        propertyAddress,
+        roomsCount,
+        roomsDescription,
+        checkInDate,
+        checkOutDate,
+        checkInFormatted: formatLetterDate(checkInDate),
+        checkOutFormatted: formatLetterDate(checkOutDate),
+        consecutiveDays,
+        invoices: invoices.map(inv => ({
+          invoiceNumber: inv.invoiceNumber,
+          date: inv.date,
+          description: inv.description,
+          amount: Number(inv.amount) || 0,
+          paid: inv.paid
+        })),
+        grandTotalAmount,
+        signerName,
+        signerTitle
+      };
+
       const res = await fetch('/api/send-proof-of-residency-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1029,8 +1065,10 @@ Corporate Email: ${corporateEmail}
           cc: emailCc ? emailCc.trim() : undefined,
           subject: emailSubject,
           html: htmlContent,
+          text: textContent,
           guestName: guestName,
-          institutionName: institutionName
+          institutionName: institutionName,
+          letterData
         })
       });
 
@@ -1039,7 +1077,9 @@ Corporate Email: ${corporateEmail}
         throw new Error(data.error || 'Failed to dispatch Proof of Residency email.');
       }
 
-      setEmailSendSuccess(`Proof of Residency Letter successfully emailed to ${emailTo}!`);
+      setEmailSendSuccess(
+        data.message || `Proof of Residency Letter + PDF attachment successfully emailed to ${emailTo}!`
+      );
       setTimeout(() => {
         setShowEmailModal(false);
         setEmailSendSuccess(null);
@@ -1988,7 +2028,7 @@ Corporate Email: ${corporateEmail}
               </div>
 
               <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-500 text-[11px] leading-relaxed">
-                The full formatted HTML Proof of Residency Letter with official letterhead, verified stay dates, room reservations, itemized invoices &amp; grand total, and executive signature will be transmitted directly to the recipient.
+                Sends the formatted HTML Proof of Residency Letter with a working <strong>Print / Save as PDF</strong> button plus an official <strong>PDF attachment</strong> (letterhead, verified stay dates, rooms, itemized invoices &amp; grand total, and corporate signature).
               </div>
             </div>
 
@@ -2012,7 +2052,7 @@ Corporate Email: ${corporateEmail}
                   </>
                 ) : (
                   <>
-                    <Send size={14} /> Send Letter
+                    <Send size={14} /> Send Letter + PDF
                   </>
                 )}
               </button>
